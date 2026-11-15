@@ -2,24 +2,25 @@
 // 페이지가 선택(Focus)마다 key를 바꿔 다시 만든다 — 고른 노트는 선택이 바뀌면 처음으로 돌아가고 재생은 멈춘다.
 // 화면 이동의 목적지(id="rp-focus")는 다시 만들어지지 않는 바깥 틀에 페이지가 둔다.
 // 재생기는 페이지가 useSegmentPlayer로 만들어 내려준다. AI 문구(description·detail·tip)는 고치지 않고 그대로 보인다.
-// 타이밍이 어긋난 노트는 빠름 ◀ · 늦음 ▶로 나눠 그리고 센다(설계 COACH-002-report-timing-direction D3·D4).
+// 타이밍이 어긋난 노트는 빠름 ◀ · 늦음 ▶로 나눠 그리고 센다(설계 COACH-002-report-timing-direction D3·D4). 구간 글자는 격자가 있으면 마디를 앞에 붙인다(D8).
 import { useEffect, useState } from 'react';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
 import { ALL_PADS, PAD_META } from '@/domain/kit/pads';
 import { levelBadge, segmentLevel, type ReportNote } from '@/domain/play/report';
 import {
   clockHundredth,
-  clockRange,
   clockTenth,
   deltaText,
   focusBasis,
   focusHeadline,
+  focusRangeText,
   noteVerdict,
   notesInRange,
   VERDICT_LABEL,
   verdictCounts,
   type Focus,
   type NoteVerdict,
+  type ReportGrid,
 } from '@/features/result/domain/reportView';
 import { planSegment } from '@/features/result/domain/segmentPlayback';
 import './report.css';
@@ -32,6 +33,8 @@ interface Props {
   notesFailed?: boolean;
   player: UseSegmentPlayer;
   accompanimentUrl: string | null;
+  /** 마디 격자. 있으면 제목과 구간 줄에 마디를 같이 적는다 */
+  grid?: ReportGrid | null;
 }
 
 const MARK_CLASS: Record<NoteVerdict, string> = { PERFECT: 'perfect', EARLY: 'early', LATE: 'late', MISS: 'miss' };
@@ -42,13 +45,13 @@ function readoutVerdict(n: ReportNote): string {
   return (verdict === 'EARLY' || verdict === 'LATE') && deltaText(n.deltaMs) !== '' ? '' : VERDICT_LABEL[verdict];
 }
 
-export function FocusPanel({ focus, notes, notesFailed = false, player, accompanimentUrl }: Props) {
+export function FocusPanel({ focus, notes, notesFailed = false, player, accompanimentUrl, grid = null }: Props) {
   const [selected, setSelected] = useState(0);
   const { stop } = player;
   // 선택이 바뀌어 이 패널이 사라지면 재생을 멈춘다
   useEffect(() => () => stop(), [stop]);
 
-  const [line1, line2] = focusHeadline(focus);
+  const [line1, line2] = focusHeadline(focus, grid);
   const basis = focusBasis(focus, notes);
   const seg = focus.segment;
   const badge = seg ? levelBadge(segmentLevel(seg)) : null;
@@ -98,7 +101,7 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
           <>
             <div className="rp-detail-header">
               <h3>
-                {focus.kind === 'transition' ? '구간 예시' : '확대 구간'} {clockRange(focus.fromMs, focus.toMs)}
+                {focus.kind === 'transition' ? '구간 예시' : '확대 구간'} {focusRangeText(focus, grid)}
               </h3>
               {notes && <span className="rp-small">{inWindow.length}개 노트</span>}
             </div>

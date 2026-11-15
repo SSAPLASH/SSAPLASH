@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
 import type { PadId } from '@/domain/kit/pads';
 import type { PadStat, Report, ReportNote, WeakSegment } from '@/domain/play/report';
-import { flowBins, focusOfBin, focusOfCluster, focusOfTransition } from '@/features/result/domain/reportView';
+import { flowBins, focusOfBin, focusOfCluster, focusOfTransition, type ReportGrid } from '@/features/result/domain/reportView';
 import { FocusPanel } from './FocusPanel';
 import { NoteFlowChart } from './NoteFlowChart';
 import { AnalysisNotice, ObservationList, PadTable, StatsLine } from './ReportSections';
@@ -43,6 +43,9 @@ const NOTES = [
   note(46240, 'SNARE', 'MISS'),
   note(46480, 'HIHAT', 'PERFECT', 13),
 ];
+
+/** BPM 120·4박·원점 0 — 한 마디 2초 */
+const GRID: ReportGrid = { bpm: 120, beatsPerBar: 4, originMs: 0 };
 
 function fakePlayer(over: Partial<UseSegmentPlayer> = {}): UseSegmentPlayer {
   return { playingKey: null, rate: 1, loop: false, play: vi.fn(), stop: vi.fn(), toggleRate: vi.fn(), toggleLoop: vi.fn(), ...over };
@@ -115,6 +118,13 @@ describe('NoteFlowChart', () => {
     expect([...within(screen.getByLabelText('판정 범례')).getAllByText(/./)].map((e) => e.textContent)).toEqual(['정확', '빠름·늦음', '놓침']);
     expect(container.querySelector('.rp-bin')!.querySelectorAll('span')).toHaveLength(3);
     expect(container.textContent).not.toContain('타이밍 차이');
+  });
+
+  it('마디 격자가 있으면 놓친 구간 버튼의 시각 앞에 마디가 붙는다. 5초 칸의 이름은 시각만이다(D8)', () => {
+    draw({ grid: GRID });
+    const marker = within(screen.getByLabelText('놓친 노트가 모인 구간')).getByRole('button');
+    expect(marker.textContent).toBe('7~9마디 · 0:12.3–0:17.33개 놓침');
+    expect(screen.getByRole('button', { name: '0:10–0:15: 정확 0, 빠름 0, 늦음 0, 놓침 2' })).toBeTruthy();
   });
 
   it('칸이 많은 긴 곡은 칸 사이 간격을 줄인다', () => {
@@ -205,6 +215,16 @@ describe('FocusPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '다음 노트' }));
     expect(screen.getByText('0:13.00 · 킥 · 놓침')).toBeTruthy();
     expect(container.textContent).not.toContain('타이밍 차이');
+  });
+
+  it('마디 격자가 있으면 제목과 구간 줄에 마디가 붙는다(D8)', () => {
+    render(<FocusPanel focus={focusOfCluster(cluster())} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} grid={GRID} />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('7~9마디 · 0:12–0:17놓친 노트 확인');
+    cleanup();
+    const t = cluster({ pattern: 'TRANSITION_MISS', pads: ['KICK', 'SNARE'], fromMs: 1000, toMs: 50000, metrics: { transitionCount: 58, missCount: 57, missRate: 0.98 } });
+    render(<FocusPanel focus={focusOfTransition(t, NOTES)} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} grid={GRID} />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('킥 → 스네어전환 연습');
+    expect(screen.getByRole('heading', { level: 3 }).textContent).toBe('구간 예시 24~27마디 · 0:46–0:54');
   });
 
   it('정답 듣기: 확대 창 범위를 재생하고, 재생 중이면 정지로 바뀐다(A6)', () => {
