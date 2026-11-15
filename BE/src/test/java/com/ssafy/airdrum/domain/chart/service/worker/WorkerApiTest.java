@@ -12,11 +12,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import com.ssafy.airdrum.global.error.BusinessException;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -28,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -213,6 +216,44 @@ class WorkerApiTest {
         assertThat(json.readTree(done).path("jobStatus").asString()).isEqualTo("DONE");
         assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?",String.class,song)).isEqualTo("READY");
     }
+    @Test void retryKeepsAccompanimentAndFinalFailureDeletesItsFile(@TempDir Path bucket) throws Exception {
+        UUID first = prepareTranscription();
+        String key = db.queryForObject("SELECT accompaniment_key FROM songs WHERE id=?", String.class, song);
+        Path backing = bucket.resolve(key);
+        Files.createDirectories(backing.getParent());
+        try (var flac = getClass().getResourceAsStream("/worker/one-second.flac")) {
+            Files.copy(Objects.requireNonNull(flac), backing);
+        }
+        when(store.exists(WorkerStore.Bucket.ACCOMPANIMENT, key)).thenAnswer(call -> Files.exists(backing));
+        doAnswer(call -> {
+            Files.delete(backing);
+            return null;
+        }).when(store).delete(WorkerStore.Bucket.ACCOMPANIMENT, key);
+
+        assertThat(db.update("""
+                UPDATE file_cleanup_tasks SET next_attempt_at=now()
+                WHERE job_id=? AND object_key=? AND file_role='ACCOMPANIMENT'
+                """, job, key)).isOne();
+        raw(path("/failure"), T1, Map.of("attemptId", first, "eventSeq", 1, "stage", "TRANSCRIBING",
+                "code", "MODEL_FAILED", "retryable", true, "summary", "retry"), 200);
+        ReflectionTestUtils.invokeMethod(cleanup, "runOnce");
+        assertThat(db.queryForObject("SELECT accompaniment_key FROM songs WHERE id=?", String.class, song)).isEqualTo(key);
+        assertThat(backing).isRegularFile();
+
+        db.update("UPDATE chart_jobs SET next_attempt_at=now() WHERE id=?", job);
+        var next = claim("worker2", T2, UUID.randomUUID(), 200);
+        assertThat(next.path("resumeStage").asString()).isEqualTo("TRANSCRIBING");
+        raw(path("/failure"), T2, Map.of("attemptId", attempt(next), "eventSeq", 1, "stage", "TRANSCRIBING",
+                "code", "INPUT_INVALID", "retryable", false, "summary", "failed", "reason", "NOT_TRANSCRIBABLE"), 200);
+        assertThat(db.queryForObject("SELECT status FROM songs WHERE id=?", String.class, song)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT accompaniment_key FROM songs WHERE id=?", String.class, song)).isNull();
+        assertThat(backing).isRegularFile();
+        ReflectionTestUtils.invokeMethod(cleanup, "runOnce");
+        assertThat(backing).doesNotExist();
+        assertThat(db.queryForObject("SELECT status FROM file_cleanup_tasks WHERE object_key=?", String.class, key))
+                .isEqualTo("DELETED");
+    }
+
     @Test void retryAfterFailureReachesDoneAndRejectsStaleCallback() throws Exception {
         UUID old=prepareTranscription();
         var stale=envelope(old,UUID.randomUUID(),transcription());
