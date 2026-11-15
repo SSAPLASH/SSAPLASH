@@ -127,6 +127,14 @@ describe('NoteFlowChart', () => {
     expect(screen.getByRole('button', { name: '0:10–0:15: 정확 0, 빠름 0, 늦음 0, 놓침 2' })).toBeTruthy();
   });
 
+  it('연습 속도로 친 기록에만 「시각은 원래 빠르기 기준이에요」를 보인다(D7)', () => {
+    draw({ slow: true });
+    expect(screen.getByText('시각은 원래 빠르기 기준이에요')).toBeTruthy();
+    cleanup();
+    draw();
+    expect(screen.queryByText('시각은 원래 빠르기 기준이에요')).toBeNull();
+  });
+
   it('칸이 많은 긴 곡은 칸 사이 간격을 줄인다', () => {
     const gap = (totalMs: number) => {
       const { container } = render(<NoteFlowChart bins={flowBins([], totalMs)} totalMs={totalMs} clusters={[]} focus={null} onPickBin={() => {}} onPickCluster={() => {}} />);

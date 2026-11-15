@@ -34,6 +34,8 @@ interface Props {
   notice?: ReactNode;
   /** 마디 격자. 있으면 구간 버튼에 마디를 같이 적는다 */
   grid?: ReportGrid | null;
+  /** 연습 속도로 친 기록이면 시각이 원래 빠르기 기준임을 알린다(D7) */
+  slow?: boolean;
 }
 
 interface Tip {
@@ -54,7 +56,7 @@ const barGap = (count: number) => (count > 120 ? 0 : count > 60 ? 1 : 3);
 
 const pct = (ms: number, totalMs: number) => (totalMs > 0 ? (100 * ms) / totalMs : 0);
 
-export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPickCluster, notice, grid = null }: Props) {
+export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPickCluster, notice, grid = null, slow = false }: Props) {
   const [tip, setTip] = useState<Tip | null>(null);
   const max = Math.max(1, ...bins.map(binTotal));
   const tipBin = tip ? bins[tip.index] : null;
@@ -64,7 +66,10 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
   return (
     <section className="rp-flow" aria-labelledby="rp-flow-title">
       <div className="rp-flow-header">
-        <h2 id="rp-flow-title">전체 노트 흐름</h2>
+        <div className="rp-flow-title">
+          <h2 id="rp-flow-title">전체 노트 흐름</h2>
+          {slow && <span className="rp-flow-note">시각은 원래 빠르기 기준이에요</span>}
+        </div>
         <div className="rp-legend" role="group" aria-label="판정 범례">
           <span className="p">{VERDICT_LABEL.PERFECT}</span>
           <span className="g">{OFF_BEAT_LABEL}</span>

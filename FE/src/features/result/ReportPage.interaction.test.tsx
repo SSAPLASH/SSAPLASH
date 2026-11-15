@@ -330,6 +330,17 @@ describe('리포트 화면 구성', () => {
     expect(screen.getByRole('button', { name: /^0:10–0:15: / })).toBeTruthy();
   });
 
+  it('연습 속도로 친 리포트에만 「시각은 원래 빠르기 기준이에요」가 보인다(D7)', async () => {
+    setReport(report({ playbackRate: 0.7, weakSegments: [] }));
+    show();
+    expect(await screen.findByText('시각은 원래 빠르기 기준이에요')).toBeTruthy();
+    cleanup();
+    setReport(report({ playbackRate: 1, weakSegments: [] }));
+    show();
+    await screen.findByRole('button', { name: /^0:10–0:15: / });
+    expect(screen.queryByText('시각은 원래 빠르기 기준이에요')).toBeNull();
+  });
+
   it('패드 전환 관찰의 [예시 보기]를 누르면 그 전환이 든 구간으로 바뀌고, 구간 버튼으로 되돌아온다', async () => {
     setReport(report({ weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
     show();
