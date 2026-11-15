@@ -6,7 +6,7 @@ import type { Judgement } from '@/domain/play/judgement';
 /** 이펙트가 나오는 화면. 1단계에서는 미리보기·랩의 크기 조정에만 쓴다 */
 export type FxMode = 'free' | 'game' | 'sheet' | 'lab' | 'preview';
 
-/** 타격 한 번의 이펙트 입력. 판정·빠름/느림·콤보는 2·3단계가 채운다(1단계는 항상 null) */
+/** 타격 한 번의 이펙트 입력. 판정·빠름/늦음·콤보는 2·3단계가 채운다(1단계는 항상 null) */
 export interface FxEvent {
   /** 타격마다 유일(liveStore hitSeq, 랩·미리보기는 자체 증가). 결정적 난수 씨앗 */
   seq: number;

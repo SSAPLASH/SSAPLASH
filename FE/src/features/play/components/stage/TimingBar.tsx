@@ -34,7 +34,7 @@ export interface TimingBarProps {
   missSource?: MissSource;
   /** 얇은 모양(막대 화면 6px). 얇으면 색을 진하게 그린다 — 같은 농도면 구역이 보이지 않는다(악보 연습, 설계 MODE-003-practice-speed D18) */
   thin?: boolean;
-  /** 막대 양 끝에 「빠름」·「느림」 글자를 단다(D19) */
+  /** 막대 양 끝에 「빠름」·「늦음」 글자를 단다(D19. 낱말은 리포트와 같은 「늦음」 — 설계 COACH-002-report-timing-direction D10) */
   labels?: boolean;
 }
 
@@ -163,7 +163,7 @@ export function TimingBar({ source, perfectMs, goodMs, resetToken, missSource, t
     <div className={thin ? 'timing-bar-row thin' : 'timing-bar-row'} aria-hidden="true">
       <span className="timing-bar-cap">빠름</span>
       {canvas}
-      <span className="timing-bar-cap">느림</span>
+      <span className="timing-bar-cap">늦음</span>
     </div>
   );
 }

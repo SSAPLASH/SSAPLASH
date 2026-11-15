@@ -15,7 +15,7 @@
 .timing-bar.thin {
   aspect-ratio: 624 / 18;
 }
-/* 양 끝 글자(「빠름」·「느림」): 막대 높이 가운데에 맞춘다. 두 칸의 폭이 같아야 막대가 가운데에 온다 */
+/* 양 끝 글자(「빠름」·「늦음」): 막대 높이 가운데에 맞춘다. 두 칸의 폭이 같아야 막대가 가운데에 온다 */
 .timing-bar-row {
   display: flex;
   align-items: flex-start;

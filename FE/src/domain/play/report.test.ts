@@ -16,6 +16,16 @@ describe('segmentBars', () => {
     expect(segmentBars(0, 1, 120, 4)).toEqual([0, 0]);
     expect(segmentBars(1999, 2000, 120, 4)).toEqual([1, 1]);
   });
+
+  it('격자 원점을 주면 원점을 뺀 시각으로 센다(원점 500: 12500~18500 = 7~9마디)', () => {
+    expect(segmentBars(12500, 18500, 120, 4, 500)).toEqual([6, 8]);
+    expect(segmentBars(12000, 18000, 120, 4)).toEqual([6, 8]);
+    expect(segmentBars(12500, 17500, 120, 4)).toEqual([6, 8]);
+    expect(segmentBars(4000, 6000, 120, 4)).toEqual([2, 2]);
+    // 원점보다 앞(리드인)은 첫 마디로 센다
+    expect(segmentBars(0, 400, 120, 4, 500)).toEqual([0, 0]);
+    expect(segmentBars(4000, 6000, 120, 4, Number.NaN)).toEqual([2, 2]);
+  });
 });
 
 describe('isTooShortForAnalysis', () => {

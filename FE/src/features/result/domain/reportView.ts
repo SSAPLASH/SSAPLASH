@@ -1,9 +1,8 @@
 // 리포트 화면용 계산 (설계 COACH-002 리포트 화면 개편 3장). React·DOM·네트워크를 모르는 순수 함수.
 // 노트 목록을 5초 칸으로 묶고, AI 약점을 화면 자리(놓친 구간·패드 전환·그 밖)로 나누고, 확대해서 볼 구간(Focus)과 그 문구를 만든다.
 // 약점 문구는 서버 값을 그대로 쓰고, 숫자(metrics)는 있으면 쓰고 없으면 그 문구만 뺀다(D5).
-import type { Judgement } from '@/domain/play/judgement';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import type { PadStat, ReportNote, WeakSegment } from '@/domain/play/report';
+import { segmentBars, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
 
 /** 전체 노트 흐름의 칸 폭(ms) */
 export const FLOW_BIN_MS = 5000;
@@ -12,8 +11,30 @@ export const TRANSITION_WINDOW_MS = 8000;
 /** 패드별 기록 표에서 접지 않고 보이는 줄 수 */
 export const PAD_MAIN_ROWS = 3;
 
-/** 리포트 화면의 판정 이름(D7) */
-export const JUDGEMENT_LABEL: Record<Judgement, string> = { PERFECT: '정확', GOOD: '타이밍 차이', MISS: '놓침' };
+/**
+ * 리포트 화면의 노트 구분(설계 COACH-002-report-timing-direction D3). 판정의 GOOD을 오차 부호로 나눈다 —
+ * 「타이밍이 어긋났다」가 아니라 빨랐는지 늦었는지를 보인다. 놓침은 오차가 없어 방향을 알 수 없다
+ */
+export type NoteVerdict = 'PERFECT' | 'EARLY' | 'LATE' | 'MISS';
+
+/** 구분의 화면 이름 */
+export const VERDICT_LABEL: Record<NoteVerdict, string> = { PERFECT: '정확', EARLY: '빠름', LATE: '늦음', MISS: '놓침' };
+
+/** 5초 막대 범례에서 빠름·늦음을 한 색으로 묶은 이름(D5 — 막대는 색 3개 그대로다) */
+export const OFF_BEAT_LABEL = `${VERDICT_LABEL.EARLY}·${VERDICT_LABEL.LATE}`;
+
+/** GOOD이고 오차가 음수면 빠름, GOOD의 나머지는 늦음(오차가 0이거나 없는 GOOD은 서버 계약상 오지 않는다) */
+export function noteVerdict(n: Pick<ReportNote, 'judgement' | 'deltaMs'>): NoteVerdict {
+  if (n.judgement !== 'GOOD') return n.judgement;
+  return n.deltaMs !== null && n.deltaMs < 0 ? 'EARLY' : 'LATE';
+}
+
+/** 구분별 노트 수 */
+export function verdictCounts(notes: readonly Pick<ReportNote, 'judgement' | 'deltaMs'>[]): Record<NoteVerdict, number> {
+  const counts: Record<NoteVerdict, number> = { PERFECT: 0, EARLY: 0, LATE: 0, MISS: 0 };
+  for (const n of notes) counts[noteVerdict(n)] += 1;
+  return counts;
+}
 
 const safe = (ms: number) => (Number.isFinite(ms) && ms > 0 ? ms : 0);
 const two = (n: number) => String(n).padStart(2, '0');
@@ -44,6 +65,40 @@ export function clockRange(fromMs: number, toMs: number): string {
   return `${clockSecond(fromMs)}–${clockSecond(toMs)}`;
 }
 
+/**
+ * 구간을 마디로 세는 데 쓰는 값(D9). 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다.
+ * 위치가 곡 시각이므로 연습 속도로 친 기록도 원래 BPM으로 세면 된다. 빠르기가 바뀌는 곡은 근사값이다(결과 화면의 약점 마디와 같은 식)
+ */
+export interface ReportGrid {
+  bpm: number;
+  /** 한 마디의 박 수 */
+  beatsPerBar: number;
+  /** 격자 원점(1마디 1박, ms) */
+  originMs: number;
+}
+
+/** 연주 기록 → 마디 격자. 기록이 없거나 BPM·박자가 양수가 아니면 null(시각만 보인다) */
+export function reportGrid(log: { bpm?: number; beatsPerBar?: number; offsetMs?: number } | null | undefined): ReportGrid | null {
+  if (!log) return null;
+  const { bpm, beatsPerBar } = log;
+  if (typeof bpm !== 'number' || typeof beatsPerBar !== 'number' || !(bpm > 0) || !(beatsPerBar > 0)) return null;
+  return { bpm, beatsPerBar, originMs: typeof log.offsetMs === 'number' && Number.isFinite(log.offsetMs) ? log.offsetMs : 0 };
+}
+
+/** 구간 → 「7~9마디」·「3마디」(1부터). 격자가 없으면 null */
+export function barsText(fromMs: number, toMs: number, grid: ReportGrid | null): string | null {
+  const bars = grid ? segmentBars(fromMs, toMs, grid.bpm, grid.beatsPerBar, grid.originMs) : null;
+  if (!bars) return null;
+  const [from, to] = bars;
+  return from === to ? `${from + 1}마디` : `${from + 1}~${to + 1}마디`;
+}
+
+/** 구간 글자 앞에 마디를 붙인다: 「7~9마디 · 0:12–0:17」(D8). 격자가 없으면 시각 글자 그대로 */
+export function withBars(clock: string, fromMs: number, toMs: number, grid: ReportGrid | null): string {
+  const bars = barsText(fromMs, toMs, grid);
+  return bars === null ? clock : `${bars} · ${clock}`;
+}
+
 /** 오차 → 「39ms 빠름」·「13ms 늦음」·「정시」. 없으면 빈 글자 */
 export function deltaText(deltaMs: number | null): string {
   if (deltaMs === null || !Number.isFinite(deltaMs)) return '';
@@ -59,7 +114,12 @@ const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 export interface FlowBin {
   fromMs: number;
   perfect: number;
+  /** 빠름 + 늦음(막대의 한 토막) */
   good: number;
+  /** good 중 박보다 빨리 친 수 */
+  early: number;
+  /** good 중 박보다 늦게 친 수 */
+  late: number;
   miss: number;
 }
 
@@ -73,12 +133,17 @@ export function flowTotalMs(notes: readonly ReportNote[], durationMs: number | n
 /** 노트를 5초 칸으로 묶는다(시작 포함, 끝 미포함). 축 밖 노트는 양 끝 칸에 넣는다 */
 export function flowBins(notes: readonly ReportNote[], totalMs: number): FlowBin[] {
   const count = Math.max(1, Math.ceil(totalMs / FLOW_BIN_MS));
-  const bins: FlowBin[] = Array.from({ length: count }, (_, i) => ({ fromMs: i * FLOW_BIN_MS, perfect: 0, good: 0, miss: 0 }));
+  const bins: FlowBin[] = Array.from({ length: count }, (_, i) => ({ fromMs: i * FLOW_BIN_MS, perfect: 0, good: 0, early: 0, late: 0, miss: 0 }));
   for (const n of notes) {
     const bin = bins[Math.min(count - 1, Math.max(0, Math.floor(n.timeMs / FLOW_BIN_MS)))];
-    if (n.judgement === 'PERFECT') bin.perfect += 1;
-    else if (n.judgement === 'GOOD') bin.good += 1;
-    else bin.miss += 1;
+    const verdict = noteVerdict(n);
+    if (verdict === 'PERFECT') bin.perfect += 1;
+    else if (verdict === 'MISS') bin.miss += 1;
+    else {
+      bin.good += 1;
+      if (verdict === 'EARLY') bin.early += 1;
+      else bin.late += 1;
+    }
   }
   return bins;
 }
@@ -140,10 +205,10 @@ function transitionCountText(seg: WeakSegment): string | null {
   return mean === null ? null : `전환 ${times}번 · 평균 ${deltaText(mean)}`;
 }
 
-/** 관찰 목록 한 줄(패드 전환 관찰·그 밖의 관찰) */
-export function observationText(seg: WeakSegment): { label: string; count: string } {
+/** 관찰 목록 한 줄(패드 전환 관찰·그 밖의 관찰). 구간이 있는 약점은 격자가 있으면 마디를 앞에 붙인다 */
+export function observationText(seg: WeakSegment, grid: ReportGrid | null = null): { label: string; count: string } {
   if (isTransition(seg)) return { label: transitionLabel(seg), count: transitionCountText(seg) ?? seg.description };
-  return { label: seg.description, count: seg.scope === 'WHOLE' ? '연주 전체' : clockRange(seg.fromMs, seg.toMs) };
+  return { label: seg.description, count: seg.scope === 'WHOLE' ? '연주 전체' : withBars(clockRange(seg.fromMs, seg.toMs), seg.fromMs, seg.toMs, grid) };
 }
 
 /**
@@ -238,10 +303,15 @@ export function initialFocus(groups: SegmentGroups, notes: readonly ReportNote[]
   return focusOfBin(best.fromMs);
 }
 
+/** 확대 구간 글자: 「7~9마디 · 0:12–0:17」, 격자가 없으면 「0:12–0:17」 */
+export function focusRangeText(focus: Pick<Focus, 'fromMs' | 'toMs'>, grid: ReportGrid | null): string {
+  return withBars(clockRange(focus.fromMs, focus.toMs), focus.fromMs, focus.toMs, grid);
+}
+
 /** 확대 영역 큰 제목 두 줄 */
-export function focusHeadline(focus: Focus): [string, string] {
+export function focusHeadline(focus: Focus, grid: ReportGrid | null = null): [string, string] {
   if (focus.kind === 'transition' && focus.segment) return [transitionLabel(focus.segment), '전환 연습'];
-  const range = clockRange(focus.fromMs, focus.toMs);
+  const range = focusRangeText(focus, grid);
   if (focus.kind === 'cluster') return [range, '놓친 노트 확인'];
   if (focus.kind === 'segment') return [range, '구간 확인'];
   return [range, '노트 확인'];
