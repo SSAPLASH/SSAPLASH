@@ -1,5 +1,5 @@
 // water 테마 — 한 타 = 연속 그림 1회 재생(막 → 가닥 → 방울) + 입자 몇 개.
-// 그림이 덩어리를 맡고, 입자는 헤드 반짝임·잔물결·그림 밖으로 날아가는 방울·앞 보케만 맡는다.
+// 그림이 덩어리를 맡고, 입자는 헤드 반짝임·잔물결·그림 밖으로 날아가는 방울·앞 보케(심벌은 보케 없음)만 맡는다.
 // 그림은 파티클 배열의 맨 앞에 둔다(상한에 걸리면 뒤의 입자부터 빠진다). 그림 속 색이 구워져 있어 팔레트는 쓰지 않는다.
 import type { PadShape } from '@/domain/kit/drumKit';
 import { pickSheet } from '../sheets';
@@ -122,19 +122,19 @@ export function spawnWater(event: FxEvent, geo: FxGeo, shape: PadShape, intensit
   } else if (shape === 'cymbal') {
     // 가장자리 반짝임 고리(일반 합성)
     out.push(particle({ kind: 'ring', x: cx, y: cy, rx, ry, size0: 1, size1: 1.03, alpha0: 0.8 * a, alpha1: 0, w0: 3.5, w1: 0, color: WATER.tint, lifeMs: 110, ease: 'expo', blend: 'normal' }));
-    const drops = Math.ceil(Math.round(12 * I.count) / 3);
+    const drops = Math.ceil(Math.round(9 * I.count) / 3);
     for (let i = 0; i < drops; i++) {
       const ang = rand() * TAU;
       const c = Math.cos(ang);
       const s = Math.sin(ang);
       const u = rand();
-      const sp = (520 + 760 * u * u) * k * hs * SHEET_BASE_SCALE;
+      const sp = (390 + 570 * u * u) * k * hs * SHEET_BASE_SCALE;
       out.push(
         flyingDrop({
           x: cx + c * rx * 0.95,
           y: cy + s * ry * 0.95,
           vx: c * sp,
-          vy: s * sp * 0.4 - (260 + 340 * rand()) * k * hs * SHEET_BASE_SCALE,
+          vy: s * sp * 0.4 - (195 + 255 * rand()) * k * hs * SHEET_BASE_SCALE,
           ay: 620 * k,
           drag: 9,
           size: (0.8 + 1.1 * rand()) * I.size,
@@ -144,14 +144,7 @@ export function spawnWater(event: FxEvent, geo: FxGeo, shape: PadShape, intensit
         }),
       );
     }
-    out.push(particle({ kind: 'ring', x: cx, y: cy, rx, ry, size0: 0.95, size1: 1.22, alpha0: 0.5 * a, alpha1: 0, w0: 1.3, w1: 0.3, color: WATER.tint, delayMs: 0, lifeMs: 380, blend: 'normal' }));
-    if (bokehOn) {
-      for (let i = 0; i < 2; i++) {
-        const s = (6 + 4 * rand()) * I.size;
-        const dir = rand() < 0.5 ? -1 : 1;
-        out.push(bokeh({ x: cx + dir * rx * 0.6, y: cy, vx: dir * (300 + 400 * rand()) * k, vy: -(300 + 300 * rand()) * k * hs, ay: 380 * k, drag: 8, s0: s, s1: s * 1.25, alpha: 0.2 * a, hold: 0.35, lifeMs: 350 + Math.round(149 * rand()) }));
-      }
-    }
+    out.push(particle({ kind: 'ring', x: cx, y: cy, rx, ry, size0: 0.95, size1: 1.16, alpha0: 0.5 * a, alpha1: 0, w0: 1.3, w1: 0.3, color: WATER.tint, delayMs: 0, lifeMs: 380, blend: 'normal' }));
   } else {
     // 킥: 헤드 반짝임 + 방울(정면 그림)
     out.push(particle({ kind: 'blob', x: cx, y: cy, rx, ry, size0: 0.9, size1: 1.02, alpha0: 0.4 * a, alpha1: 0, color: WATER.tint, lifeMs: 110, ease: 'expo', blend: 'normal' }));
