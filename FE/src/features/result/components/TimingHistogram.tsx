@@ -1,4 +1,4 @@
-// Figma Feedback / TimingHistogram 126:4267 — 타이밍 분포 막대(퍼펙트 범위 --perfect, 그 밖 --good)와 빠름·정확·느림 축.
+// Figma Feedback / TimingHistogram 126:4267 — 타이밍 분포 막대(퍼펙트 범위 --perfect, 그 밖 --good)와 빠름·정확·늦음 축.
 import { Card } from '@/components/ui/layout/Card';
 import './result.css';
 
@@ -34,7 +34,7 @@ export function TimingHistogram({ counts, perfectIdx, goodMs, meanDeltaMs, detai
       <div className="result-hist-axis">
         <span>빠름 −{goodMs}ms</span>
         <span>정확 0ms</span>
-        <span>느림 +{goodMs}ms</span>
+        <span>늦음 +{goodMs}ms</span>
       </div>
     </Card>
   );
