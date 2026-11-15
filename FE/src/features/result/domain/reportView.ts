@@ -2,7 +2,7 @@
 // 노트 목록을 5초 칸으로 묶고, AI 약점을 화면 자리(놓친 구간·패드 전환·그 밖)로 나누고, 확대해서 볼 구간(Focus)과 그 문구를 만든다.
 // 약점 문구는 서버 값을 그대로 쓰고, 숫자(metrics)는 있으면 쓰고 없으면 그 문구만 뺀다(D5).
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import type { PadStat, ReportNote, WeakSegment } from '@/domain/play/report';
+import { segmentBars, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
 
 /** 전체 노트 흐름의 칸 폭(ms) */
 export const FLOW_BIN_MS = 5000;
@@ -63,6 +63,40 @@ export function clockSecond(ms: number): string {
 /** 구간 → 「0:12–0:17」 */
 export function clockRange(fromMs: number, toMs: number): string {
   return `${clockSecond(fromMs)}–${clockSecond(toMs)}`;
+}
+
+/**
+ * 구간을 마디로 세는 데 쓰는 값(D9). 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다.
+ * 위치가 곡 시각이므로 연습 속도로 친 기록도 원래 BPM으로 세면 된다. 빠르기가 바뀌는 곡은 근사값이다(결과 화면의 약점 마디와 같은 식)
+ */
+export interface ReportGrid {
+  bpm: number;
+  /** 한 마디의 박 수 */
+  beatsPerBar: number;
+  /** 격자 원점(1마디 1박, ms) */
+  originMs: number;
+}
+
+/** 연주 기록 → 마디 격자. 기록이 없거나 BPM·박자가 양수가 아니면 null(시각만 보인다) */
+export function reportGrid(log: { bpm?: number; beatsPerBar?: number; offsetMs?: number } | null | undefined): ReportGrid | null {
+  if (!log) return null;
+  const { bpm, beatsPerBar } = log;
+  if (typeof bpm !== 'number' || typeof beatsPerBar !== 'number' || !(bpm > 0) || !(beatsPerBar > 0)) return null;
+  return { bpm, beatsPerBar, originMs: typeof log.offsetMs === 'number' && Number.isFinite(log.offsetMs) ? log.offsetMs : 0 };
+}
+
+/** 구간 → 「7~9마디」·「3마디」(1부터). 격자가 없으면 null */
+export function barsText(fromMs: number, toMs: number, grid: ReportGrid | null): string | null {
+  const bars = grid ? segmentBars(fromMs, toMs, grid.bpm, grid.beatsPerBar, grid.originMs) : null;
+  if (!bars) return null;
+  const [from, to] = bars;
+  return from === to ? `${from + 1}마디` : `${from + 1}~${to + 1}마디`;
+}
+
+/** 구간 글자 앞에 마디를 붙인다: 「7~9마디 · 0:12–0:17」(D8). 격자가 없으면 시각 글자 그대로 */
+export function withBars(clock: string, fromMs: number, toMs: number, grid: ReportGrid | null): string {
+  const bars = barsText(fromMs, toMs, grid);
+  return bars === null ? clock : `${bars} · ${clock}`;
 }
 
 /** 오차 → 「39ms 빠름」·「13ms 늦음」·「정시」. 없으면 빈 글자 */
@@ -171,10 +205,10 @@ function transitionCountText(seg: WeakSegment): string | null {
   return mean === null ? null : `전환 ${times}번 · 평균 ${deltaText(mean)}`;
 }
 
-/** 관찰 목록 한 줄(패드 전환 관찰·그 밖의 관찰) */
-export function observationText(seg: WeakSegment): { label: string; count: string } {
+/** 관찰 목록 한 줄(패드 전환 관찰·그 밖의 관찰). 구간이 있는 약점은 격자가 있으면 마디를 앞에 붙인다 */
+export function observationText(seg: WeakSegment, grid: ReportGrid | null = null): { label: string; count: string } {
   if (isTransition(seg)) return { label: transitionLabel(seg), count: transitionCountText(seg) ?? seg.description };
-  return { label: seg.description, count: seg.scope === 'WHOLE' ? '연주 전체' : clockRange(seg.fromMs, seg.toMs) };
+  return { label: seg.description, count: seg.scope === 'WHOLE' ? '연주 전체' : withBars(clockRange(seg.fromMs, seg.toMs), seg.fromMs, seg.toMs, grid) };
 }
 
 /**
@@ -269,10 +303,15 @@ export function initialFocus(groups: SegmentGroups, notes: readonly ReportNote[]
   return focusOfBin(best.fromMs);
 }
 
+/** 확대 구간 글자: 「7~9마디 · 0:12–0:17」, 격자가 없으면 「0:12–0:17」 */
+export function focusRangeText(focus: Pick<Focus, 'fromMs' | 'toMs'>, grid: ReportGrid | null): string {
+  return withBars(clockRange(focus.fromMs, focus.toMs), focus.fromMs, focus.toMs, grid);
+}
+
 /** 확대 영역 큰 제목 두 줄 */
-export function focusHeadline(focus: Focus): [string, string] {
+export function focusHeadline(focus: Focus, grid: ReportGrid | null = null): [string, string] {
   if (focus.kind === 'transition' && focus.segment) return [transitionLabel(focus.segment), '전환 연습'];
-  const range = clockRange(focus.fromMs, focus.toMs);
+  const range = focusRangeText(focus, grid);
   if (focus.kind === 'cluster') return [range, '놓친 노트 확인'];
   if (focus.kind === 'segment') return [range, '구간 확인'];
   return [range, '노트 확인'];

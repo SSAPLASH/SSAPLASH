@@ -21,15 +21,16 @@ import { RecommendRow } from '@/features/result/components/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { recommendationPathOf } from '@/domain/song/recommendation';
 import {
-  clockRange,
   flowBins,
   flowTotalMs,
   focusOfBin,
   focusOfCluster,
   focusOfSegment,
   focusOfTransition,
+  focusRangeText,
   initialFocus,
   observationText,
+  reportGrid,
   splitSegments,
   transitionWindow,
   type Focus,
@@ -104,6 +105,8 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const noteList = notes.s === 'ok' ? notes.v : null;
   const totalMs = useMemo(() => flowTotalMs(noteList ?? [], log?.durationMs ?? null), [noteList, log?.durationMs]);
   const bins = useMemo(() => flowBins(noteList ?? [], totalMs), [noteList, totalMs]);
+  // 구간을 마디로 세는 격자. 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다 — 기록이 없으면 구간을 시각만으로 보인다
+  const grid = useMemo(() => reportGrid(log), [log]);
 
   // 추천: API 곡 소스 + 로그인일 때만, 리포트가 처음 OK가 된 뒤 요청한다(D1·D6). 중복은 store가 막는다(D2)
   const navigate = useNavigate();
@@ -248,16 +251,16 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     const w = transitionWindow(noteList ?? [], seg, seg.pattern === 'TRANSITION_MISS');
     return {
       key: `${f.key}:${i}`,
-      ...observationText(seg),
+      ...observationText(seg, grid),
       // 열 구간이 없으면(전환 노트를 못 찾았고 약점 구간도 비어 있음) 버튼을 두지 않는다
-      action: w.toMs > w.fromMs ? { text: `${clockRange(w.fromMs, w.toMs)} 예시 보기`, onClick: () => openFocus(f), pressed: focus?.key === f.key } : undefined,
+      action: w.toMs > w.fromMs ? { text: `${focusRangeText(w, grid)} 예시 보기`, onClick: () => openFocus(f), pressed: focus?.key === f.key } : undefined,
     };
   });
   const otherRows: ObservationRow[] = groups.others.map((seg: WeakSegment, i) => {
     const f = focusOfSegment(seg);
     return {
       key: `${f.key}:${i}`,
-      ...observationText(seg),
+      ...observationText(seg, grid),
       action: seg.scope === 'WHOLE' ? undefined : { text: '구간 보기', onClick: () => openFocus(f), pressed: focus?.key === f.key },
     };
   });
@@ -290,6 +293,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           onPickBin={(fromMs) => setPicked(focusOfBin(fromMs))}
           onPickCluster={(seg) => setPicked(focusOfCluster(seg))}
           notice={notice}
+          grid={grid}
         />
       ) : (
         <section className="rp-flow" aria-labelledby="rp-flow-title">
@@ -308,7 +312,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
 
       {/* 화면 이동의 목적지는 이 틀이다. 안쪽 FocusPanel은 선택마다 다시 만들어져서, 거기로 부드럽게 옮기면 도중에 목적지가 사라져 이동이 끊긴다 */}
       <div id="rp-focus" className="rp-focus-anchor">
-        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} />}
+        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} grid={grid} />}
       </div>
 
       <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />

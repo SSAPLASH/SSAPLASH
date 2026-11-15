@@ -49,13 +49,17 @@ export interface WeakSegment {
 /** 판정 수 합(PERFECT+GOOD+MISS)이 이 값보다 적으면 서버가 짧은 곡으로 보고 분석하지 않는다(AI 확정, 10/28 회신 2) */
 export const MIN_NOTES_FOR_ANALYSIS = 20;
 
-/** 구간을 마디 번호(0부터, 양쪽 포함)로 환산한다. bpm·박자가 없으면 null. feedback.ts의 barOf와 같은 식 */
-export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerBar: number): [number, number] | null {
+/**
+ * 구간을 마디 번호(0부터, 양쪽 포함)로 환산한다. bpm·박자가 없으면 null. feedback.ts의 barOf와 같은 식.
+ * originMs는 격자 원점(1마디 1박의 시각, 없으면 0) — 마디는 원점을 뺀 격자 시각으로 센다(악보 화면의 마디 번호와 같다)
+ */
+export function segmentBars(fromMs: number, toMs: number, bpm: number, beatsPerBar: number, originMs = 0): [number, number] | null {
   if (!(bpm > 0) || !(beatsPerBar > 0)) return null;
   const barMs = (60000 / bpm) * beatsPerBar;
+  const origin = Number.isFinite(originMs) ? originMs : 0;
   // 끝 미포함이므로 마지막 포함 시각 toMs − 1이 속한 마디. 시작은 feedback.ts의 barOf와 같은 식
-  const fromBar = Math.max(0, Math.floor((fromMs + 1) / barMs));
-  const toBar = Math.max(fromBar, Math.floor((toMs - 1) / barMs));
+  const fromBar = Math.max(0, Math.floor((fromMs - origin + 1) / barMs));
+  const toBar = Math.max(fromBar, Math.floor((toMs - origin - 1) / barMs));
   return [fromBar, toBar];
 }
 
