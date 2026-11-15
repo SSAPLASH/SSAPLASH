@@ -1,6 +1,7 @@
 // 플레이 기록 한 행 (설계 COACH-연주-기록-화면-개편, 시안 v7). 라이브러리 목록 행과 같은 골격이다.
 // 행은 누르는 곳이 아니고 오른쪽 링크(테두리 상자의 리포트·결과)만 이동한다. 왼쪽 모드 그림은 두지 않는다.
 // 아직 서버에 없는 기록은 같은 자리에 저장 상태(저장 중… · 저장 실패 + [다시 시도] · 저장 안 됨)를 보인다.
+import { rateLabel } from '@/domain/song/practiceRate';
 import { Link } from 'react-router-dom';
 import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
@@ -119,6 +120,7 @@ export function PlayLogRow({ row, onRetry }: PlayLogRowProps) {
           <span>{formatPlayClock(row.at)}</span>
           {row.durationMs == null ? null : <span className="history-num">{formatRecordingLength(row.durationMs)}</span>}
           {row.wideGoodMs == null ? null : <span>판정 여유 ±{row.wideGoodMs}ms</span>}
+          {row.rate == null ? null : <span>{rateLabel(row.rate)} 속도</span>}
         </div>
       </div>
       <Accuracy row={row} />

@@ -16,9 +16,9 @@ describe('stickMinPeak', () => {
     useSettings.setState({ stickMinPeak: [null, null], stickAnchors: [null, null], presetAnchors: {}, activePresetId: 'system', calibratedAt: null });
   });
 
-  it('기본값은 [null, null]이고 설정 버전은 그대로 25', () => {
+  it('기본값은 [null, null]이고 설정 버전은 그대로 27', () => {
     expect(useSettings.getInitialState().stickMinPeak).toEqual([null, null]);
-    expect(SETTINGS_VERSION).toBe(25);
+    expect(SETTINGS_VERSION).toBe(27);
   });
 
   it('setStickMinPeak는 그 손만 바꾸고 null로 지운다. 범위 밖 값은 null', () => {

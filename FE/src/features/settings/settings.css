@@ -24,19 +24,12 @@
   font-weight: 700;
   line-height: 1.4;
 }
-@media (min-width: 861px) {
-  .settings-grid {
-    grid-template-areas: "audio play" "account play";
-    grid-template-rows: max-content minmax(0, 1fr);
-  }
-  .settings-grid.has-data {
-    grid-template-areas: "audio play" "account play" "data play";
-    grid-template-rows: max-content max-content minmax(0, 1fr);
-  }
-  .settings-section--audio { grid-area: audio; }
-  .settings-section--play { grid-area: play; }
-  .settings-section--account { grid-area: account; }
-  .settings-section--data { grid-area: data; }
+/* 한 열에 쌓는 구역 묶음. 왼쪽 소리·메트로놈·판정·진행, 오른쪽 화면 표시·꾸미기. 계정·데이터 활용은 그 아래 줄에 놓인다 */
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  min-width: 0;
 }
 @media (max-width: 860px) {
   .settings-grid {

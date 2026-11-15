@@ -5,6 +5,7 @@ import type { Difficulty } from '@/domain/song/chart';
 import { historyRowLevel, historyRowLink, saveStatusOf, type HistoryRowLink, type SaveStatus } from '@/domain/play/playLogView';
 import type { PlayLog } from '@/domain/play/playLog';
 import { wideGoodMs } from '@/domain/play/judgement';
+import { slowRateOf } from '@/domain/song/practiceRate';
 
 /** 제목 옆 칩. ABORTED 끝까지 치지 않음 · DELETED 삭제된 곡(로컬 판정) · UNAVAILABLE 접근할 수 없는 곡(서버 판정) */
 export type PlayRowChip = 'ABORTED' | 'DELETED' | 'UNAVAILABLE';
@@ -26,6 +27,8 @@ export interface PlayRowView {
   score: number | null;
   /** 기본보다 넓혀 연주한 판의 GOOD 폭(ms). 아니면 null */
   wideGoodMs: number | null;
+  /** 연습 속도로 친 판의 배율(0~1). 원래 빠르기면 null */
+  rate: number | null;
   chips: PlayRowChip[];
   /** 아직 서버에 없는 기록의 저장 상태. 서버 기록과 로그인 없는 빌드는 null */
   save: SaveStatus | null;
@@ -59,6 +62,7 @@ export function serverRowView(play: PlaySummary, hasLocal: boolean, local?: Pick
     accuracy: play.accuracy,
     score: play.mode === 'SHEET' ? null : play.score,
     wideGoodMs: local ? wideGoodMs(local.timing) : null,
+    rate: slowRateOf(play.playbackRate),
     chips,
     save: null,
     link: historyRowLink({ playId: play.playId, hasReport: play.hasReport, hasLocal }),
@@ -88,6 +92,7 @@ export function localRowView(log: PlayLog, o: LocalRowOptions): PlayRowView {
     accuracy: Math.round(log.summary.accuracy * 10000) / 100,
     score: log.mode === 'SHEET' ? null : log.summary.score,
     wideGoodMs: wideGoodMs(log.timing),
+    rate: slowRateOf(log.playbackRate),
     chips: o.deleted ? ['DELETED'] : [],
     save: o.showSave ? saveStatusOf(o.upload) : null,
     link: historyRowLink({ playId: log.playId, hasReport: false, hasLocal: true }),

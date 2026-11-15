@@ -39,6 +39,8 @@ export interface PlaySummary {
   accuracy: number | null;
   maxCombo: number | null;
   hasReport: boolean;
+  /** 연주 배율(연습 속도). 배율이 없던 옛 기록은 1. 이 필드가 생기기 전 서버 응답에는 없다 */
+  playbackRate?: number;
 }
 
 /** `GET /api/v1/plays` 조건(BE 309). 서버가 검색·기간·모드·정렬을 처리한다 */

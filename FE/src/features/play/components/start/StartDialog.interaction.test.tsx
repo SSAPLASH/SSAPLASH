@@ -71,6 +71,31 @@ describe('StartDialog play', () => {
     expect(p.onStart).toHaveBeenCalledTimes(1);
   });
 
+  it('옵션 줄의 스위치·선택 칸에 초점이 있어도 Enter = 플레이(스위치가 바뀌지 않는다)', () => {
+    const onToggle = vi.fn();
+    const p = setup({
+      options: (
+        <>
+          <button type="button" role="switch" aria-checked="false" aria-label="메트로놈" onClick={onToggle} />
+          <button type="button" role="radio" aria-checked="true" aria-label="자동" onClick={onToggle} />
+        </>
+      ),
+    });
+    for (const name of ['메트로놈', '자동']) {
+      const el = screen.getByLabelText(name);
+      el.focus();
+      const notPrevented = fireEvent.keyDown(el, { key: 'Enter' });
+      expect(notPrevented).toBe(false);
+    }
+    expect(p.onStart).toHaveBeenCalledTimes(2);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('스크림은 일시정지 창과 같은 모양의 클래스를 쓴다', () => {
+    setup();
+    expect(screen.getByRole('dialog').parentElement?.className).toBe('dialog-backdrop start-dialog-backdrop');
+  });
+
   it('취소 버튼에 초점이 있을 때 Enter는 플레이로 새지 않는다', () => {
     const p = setup();
     const cancel = screen.getByRole('button', { name: '취소' });

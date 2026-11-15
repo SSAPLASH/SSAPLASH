@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayLog } from './playLog';
-import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, localPrevBest, mergePrevBest, prevBestFor, recordBadgeOf } from './bestRecord';
+import { bestAccuracyByChart, bestAccuracyBySong, bestRecordDelta, bestScoreByChart, bestScoreBySong, isSlowedLog, localPrevBest, mergePrevBest, prevBestFor, recordBadgeOf } from './bestRecord';
 
 /** 필요한 필드만 채운 로그 */
 function log(p: {
@@ -248,3 +248,28 @@ describe('recordBadgeOf', () => {
     expect(b?.text).toBe('최고 기록 갱신 · 이전 90.0% → 현재 96.8%');
   });
 });
+
+describe('연습 속도로 친 판은 최고 기록에 세지 않는다 (MODE-003)', () => {
+  const slow = (p: Parameters<typeof log>[0], rate: number) => ({ ...log(p), playbackRate: rate }) as PlayLog;
+
+  it('배율이 없거나 1이면 원래 빠르기다', () => {
+    expect(isSlowedLog({})).toBe(false);
+    expect(isSlowedLog({ playbackRate: 1 })).toBe(false);
+    expect(isSlowedLog({ playbackRate: 0.7 })).toBe(true);
+  });
+
+  it('곡별·채보별 최고 점수와 정확도에서 빠진다', () => {
+    const logs = [log({ song: 1, chart: 10, score: 100, accuracy: 0.5 }), slow({ song: 1, chart: 10, score: 300, accuracy: 0.99 }, 0.7)];
+    expect(bestScoreBySong(logs, 'RHYTHM').get(1)).toBe(100);
+    expect(bestScoreByChart(logs, 'RHYTHM').get(10)).toBe(100);
+    expect(bestAccuracyByChart(logs, 'RHYTHM').get(10)).toBe(0.5);
+    expect(bestAccuracyBySong(logs, 'RHYTHM').get(1)).toBe(0.5);
+  });
+
+  it('느린 판만 있으면 기록이 없다', () => {
+    const logs = [slow({ mode: 'SHEET', song: 1, chart: 10, accuracy: 0.9 }, 0.5)];
+    expect(bestAccuracyByChart(logs, 'SHEET').size).toBe(0);
+    expect(localPrevBest(logs, { mode: 'SHEET', songNumericId: 1, chartId: 10, songId: 's', difficulty: 'EASY' })).toEqual({ score: null, accuracy: null });
+  });
+});
+

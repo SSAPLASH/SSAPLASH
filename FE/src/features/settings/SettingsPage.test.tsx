@@ -99,14 +99,18 @@ describe('SettingsPage 토글·슬라이더 바인딩', () => {
     expect(switchChecked(html, '실시간 코칭')).toBe('false');
   });
 
-  it('음량 %와 지연 보정 표시', () => {
-    put(useSettings, { volume: 0.65, audioOffsetMs: 20 });
+  it('메트로놈 구역에 메트로놈 박 분할(자동·4분음표·8분음표)이 있고 설정 값을 따른다', () => {
+    const html = render();
+    const group = /<div role="radiogroup" aria-label="메트로놈 박 분할".*?<\/div>/.exec(html)?.[0] ?? '';
+    expect(group).toMatch(/aria-checked="true"[^>]*>자동</);
+    expect(group).toContain('4분음표');
+    expect(group).toContain('8분음표');
+    expect(html).toContain('자동은 BPM 90 미만에서 8분음표로 울려요.');
+  });
+
+  it('음량 % 표시', () => {
+    put(useSettings, { volume: 0.65 });
     expect(render()).toContain('65%');
-    expect(render()).toContain('+20ms');
-    put(useSettings, { audioOffsetMs: 0 });
-    expect(render()).toContain('>0ms<');
-    put(useSettings, { audioOffsetMs: -10 });
-    expect(render()).toContain('-10ms');
   });
 });
 
@@ -158,30 +162,27 @@ describe('SettingsPage 드럼·노래 음량', () => {
     expect(html).toContain('max="2"');
   });
 
-  it('안내 문구는 메트로놈만 Dock에 있다고 말한다', () => {
+  it('안내 문구는 메트로놈 음량·빠르기가 Dock에 있다고 말한다', () => {
     const html = render();
-    expect(html).toContain('메트로놈은 연주 화면 상단 Dock에서도 바꿀 수 있어요.');
-    expect(html).not.toContain('음량과 메트로놈은');
+    expect(html).toContain('메트로놈 음량과 빠르기는 연주 화면 상단 Dock에서 바꿀 수 있어요.');
   });
 });
 
 describe('SettingsPage 설정 순서', () => {
-  it('오디오·연주·계정·데이터 순으로 표시하고 기기 카드와 프리셋 요약은 없다', () => {
+  it('소리·메트로놈·판정·진행·화면 표시·꾸미기·계정·데이터 순으로 표시하고 기기 카드와 프리셋 요약은 없다', () => {
     const html = render();
-    const headings = ['오디오', '연주', '계정', '데이터 활용'].map((name) => html.indexOf(`>${name}</h3>`));
+    const headings = ['소리', '메트로놈', '판정·진행', '화면 표시', '꾸미기', '계정', '데이터 활용'].map((name) => html.indexOf(`>${name}</h3>`));
     expect(headings.every((index) => index >= 0)).toBe(true);
     expect(headings).toEqual([...headings].sort((a, b) => a - b));
     expect(html).not.toContain('>기기</h3>');
     expect(html).not.toContain('드럼 세팅 열기');
     expect(html).not.toContain('프리셋 · 보정');
-    expect(html).toContain('settings-grid has-data');
   });
 
-  it('비로그인에서는 데이터 구역과 그리드 예약 행을 두지 않는다', () => {
+  it('비로그인에서는 데이터 구역을 두지 않는다', () => {
     put(useAuth, { status: 'anonymous', user: null });
     const html = render();
     expect(html).toContain('class="settings-grid"');
-    expect(html).not.toContain('settings-grid has-data');
     expect(html).not.toContain('settings-data');
     expect(html).not.toContain('회원 탈퇴');
   });
@@ -245,56 +246,40 @@ describe('SettingsPage 데이터 활용 카드', () => {
   });
 });
 
-describe('SettingsPage 박자 맞추기', () => {
-  const rec = { measuredAt: new Date(2026, 10, 11).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40 };
-
-  it('맞춘 적이 없으면 안내와 [맞추기] 버튼', () => {
+describe('SettingsPage 드럼 세팅에서 옮겨 온 값', () => {
+  it('플레이 중 메트로놈·카운트다운 토글이 store 값을 따른다', () => {
+    put(useSettings, { metronome: true, countInBars: 0 });
     const html = render();
-    expect(html).toContain('아직 박자를 맞추지 않았어요');
-    expect(html).toMatch(/<button[^>]*>맞추기<\/button>/);
+    expect(switchChecked(html, '플레이 중 메트로놈')).toBe('true');
+    expect(switchChecked(html, '카운트다운')).toBe('false');
+  });
+
+  it('판정 폭 Perfect·Good과 노트 낙하 시간이 기존 범위·단위로 보인다', () => {
+    put(useSettings, { timing: { perfectMs: 30, goodMs: 80 }, scrollMs: 1500 });
+    const html = render();
+    expect(html).toContain('±30ms');
+    expect(html).toContain('±80ms');
+    expect(html).toContain('1500ms');
+    expect(html).toMatch(/min="10"[^>]*max="60"|max="60"[^>]*min="10"/);
+    expect(html).toMatch(/min="30"[^>]*max="150"|max="150"[^>]*min="30"/);
+    expect(html).toMatch(/min="600"[^>]*max="3000"|max="3000"[^>]*min="600"/);
+  });
+});
+
+describe('SettingsPage 박자 맞추기·판정 타이밍은 드럼 세팅으로 옮겼다', () => {
+  it('박자 맞추기 버튼·기록과 스틱·킥 판정 타이밍이 없고 드럼 세팅 링크가 있다', () => {
+    put(useSettings, {
+      sensorKind: 'serial',
+      timingCal: { measuredAt: new Date(2026, 10, 11).getTime(), medianMs: -66, madMs: 8, pairs: 12, input: 'sensor', outputLatencyMs: 40 },
+      audioOffsetMs: -65,
+    });
+    const html = render();
+    expect(html).not.toContain('스틱 판정 타이밍');
+    expect(html).not.toContain('킥 판정 타이밍');
     expect(html).not.toContain('다시 맞추기');
-  });
-
-  it('맞춘 뒤에는 날짜·입력과 [다시 맞추기]', () => {
-    put(useSettings, { sensorKind: 'serial', timingCal: rec, audioOffsetMs: -65 });
-    const html = render();
-    expect(html).toContain('11월 11일에 스틱으로 맞췄어요');
-    expect(html).toContain('다시 맞추기');
-    expect(html).toContain('-65ms');
-    expect(html).not.toContain('다시 맞춰 주세요');
-  });
-
-  it('킥 기록이 있으면 박자 맞추기 기록 줄에 킥 값도 보인다', () => {
-    put(useSettings, { sensorKind: 'serial', timingCal: { ...rec, kick: { medianMs: -41, madMs: 5, pairs: 12 } } });
-    expect(render()).toContain('11월 11일에 스틱으로 맞췄어요 · 킥 -40ms');
-  });
-
-  it('킥 값이 없으면 킥 슬라이더는 스틱 값을 보여 주고, 있으면 킥 값을 보인다', () => {
-    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: null });
-    const html = render();
-    expect(html.match(/-65ms/g)).toHaveLength(2);
-    put(useSettings, { audioOffsetMs: -65, kickOffsetMs: -40 });
-    const html2 = render();
-    expect(html2.match(/-65ms/g)).toHaveLength(1);
-    expect(html2).toContain('-40ms');
-  });
-
-  it('스틱으로 맞췄는데 지금 키보드만이면 다시 맞추라고 안내한다', () => {
-    put(useSettings, { sensorKind: 'none', timingCal: rec });
-    expect(render()).toContain('스틱으로 맞춘 값이에요. 키보드로 칠 때는 다시 맞춰 주세요.');
-  });
-
-  it('수동 칸은 스틱·킥 판정 타이밍이고 범위 −250~+100, 5ms 단위다', () => {
-    const html = render();
-    expect(html).toContain('스틱 판정 타이밍');
-    expect(html).toContain('킥 판정 타이밍');
-    expect(html).toContain('킥 페달 판정만 따로 맞춰요.');
-    expect(html.match(/min="-250"/g)).toHaveLength(2);
-    expect(html).toContain('판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요');
-    expect(html).not.toContain('타격음 지연 보정');
-    expect(html).toMatch(/min="-250"/);
-    expect(html).toMatch(/max="100"/);
-    expect(html).toMatch(/step="5"/);
+    expect(html).not.toContain('맞췄어요');
+    expect(html).not.toContain('min="-250"');
+    expect(html).toContain('href="/setup"');
   });
 });
 

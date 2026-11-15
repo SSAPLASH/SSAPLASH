@@ -176,11 +176,12 @@ export function GlassDock() {
               <Slide key="extra" className="dock-slide-extra">
                 <span className="dock-divider" />
                 <Popover.Anchor asChild>
-                  <div className={`dock-metro-chip${locked ? ' locked' : ''}`}>
+                  <div className={`dock-metro-chip${locked ? ' locked' : ''}${panelOpen ? ' open' : ''}`}>
                     <Popover.Trigger asChild>
                       <button type="button" className="dock-metro-body" aria-label="메트로놈 설정" title="메트로놈 설정">
                         <MetroIcon />
-                        <span className="dock-bpm">{met.bpm}</span>
+                        {/* 곡 BPM이 소수(78.43)여도 칸(40px)을 넘지 않게 정수로 보인다. 계산은 원래 값을 쓴다 */}
+                        <span className="dock-bpm">{Math.round(met.bpm)}</span>
                       </button>
                     </Popover.Trigger>
                     <button
@@ -250,9 +251,9 @@ export function GlassDock() {
               collisionPadding={12}
               aria-label="메트로놈 설정"
               onOpenAutoFocus={(e) => {
-                // 열릴 때 첫 조작(켜기 토글)으로 초점 — 닫힐 때는 Radix 기본대로 칩으로 돌아간다
+                // 열릴 때 첫 조작(박자에서 고른 칸, 잠겨 있으면 박 분할)으로 초점 — 닫힐 때는 Radix 기본대로 칩으로 돌아간다
                 e.preventDefault();
-                panelRef.current?.querySelector<HTMLElement>('[role="switch"]')?.focus();
+                panelRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]:not(:disabled)')?.focus();
               }}
               // 칩 안의 켜기 스위치 클릭은 패널을 닫지 않는다(기존 동작). 칩 본체는 트리거가 직접 토글한다
               onInteractOutside={(e) => {

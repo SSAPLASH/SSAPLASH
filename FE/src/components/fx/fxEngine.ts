@@ -8,9 +8,16 @@ import { BRAND_FALLBACK, hitFxThemeDef } from '@/domain/hitFx/themes';
 import { MAX_SPAWN } from '@/domain/hitFx/spawn/util';
 import type { FxEvent, FxLocate, FxLocation, FxParticle, HitFxTheme, JudgeColors } from '@/domain/hitFx/types';
 import { drawFrame, type FxLive, type FxView } from './fxDraw';
+import { fxSheets, type FxSheetStore } from './fxSheets';
 
 /** 전체 파티클 기본 상한(D10) */
 export const MAX_PARTICLES = 200;
+/** 동시에 재생하는 연속 그림(sheet) 상한. 넘으면 가장 오래된 것부터 뺀다 */
+export const MAX_SHEETS = 12;
+/** 한 프레임 넘김의 이펙트 시계 간격(ms) */
+export const STEP_FRAME_MS = 16.7;
+/** 이펙트 시계 배율 범위 */
+export const MIN_TIME_SCALE = 0.1;
 /** 통계 창(ms) */
 const STATS_WINDOW_MS = 2000;
 const FRAME_RING = 512;
@@ -23,6 +30,8 @@ export interface FxEngineOptions {
   /** 프레임 예약/취소. 테스트에서 가짜로 넣는다. 기본 requestAnimationFrame */
   raf?: (cb: (ts: number) => void) => number;
   caf?: (handle: number) => void;
+  /** 연속 그림 보관소. 테스트에서 가짜를 넣는다. 기본은 앱에 하나인 보관소 */
+  sheets?: FxSheetStore;
 }
 
 export interface FxStats {
@@ -61,6 +70,12 @@ export interface FxEngine {
   setMaxParticles(n: number): void;
   /** 발광 스프라이트·번개 테두리 사용 여부(랩 비교용, 기본 true) */
   setGlow(flag: boolean): void;
+  /** 이펙트 시계 배율 0.1~1(기본 1). 파티클의 시작 시각·나이만 느려지고 소리·판정 시각에는 영향이 없다(랩용) */
+  setTimeScale(k: number): void;
+  /** 이펙트 시계를 멈추거나 다시 흐르게 한다. 멈추면 마지막 그림이 그대로 남고 rAF 루프도 멈춘다(랩용) */
+  setPaused(flag: boolean): void;
+  /** 멈춘 상태에서 이펙트 시계를 16.7ms 앞으로 보내고 한 번 그린다. 멈춘 상태가 아니면 아무것도 안 한다(랩용) */
+  stepFrame(): void;
   /** 프레임 통계·버린 수를 0으로 되돌린다(랩 측정용) */
   resetStats(): void;
   stats(): FxStats;
@@ -72,6 +87,7 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
   const now = options.now ?? (() => performance.now());
   const raf = options.raf ?? ((cb) => requestAnimationFrame(cb));
   const caf = options.caf ?? ((h) => cancelAnimationFrame(h));
+  const store = options.sheets ?? fxSheets;
 
   let theme: HitFxTheme = 'auto';
   let skin: KitSkin = 'acoustic';
@@ -88,6 +104,18 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
   let dropped = 0;
   let handle: number | null = null;
 
+  // 가상 시계(ms): 파티클의 시작 시각·나이는 이 시계로 잰다. 통계(frameMs·fps)는 실제 시계 그대로다
+  let vt = 0;
+  let lastReal = now();
+  let timeScale = 1;
+  let paused = false;
+  /** 실제 시계가 흐른 만큼 가상 시계를 배율대로 앞으로 보낸다(멈춘 동안은 보내지 않는다) */
+  function advanceClock(real: number) {
+    const dt = real - lastReal;
+    lastReal = real;
+    if (!paused && dt > 0) vt += dt * timeScale;
+  }
+
   // 최근 프레임 처리 시간 링 버퍼
   const frameAt = new Float64Array(FRAME_RING);
   const frameMs = new Float64Array(FRAME_RING);
@@ -98,23 +126,30 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     if (handle === null) handle = raf(tick);
   }
 
-  function tick() {
-    handle = null;
-    const t0 = now();
+  /** 수명이 끝난 파티클을 걸러 내고 한 번 그린다 */
+  function renderFrame() {
     // 수명이 끝난 파티클을 제자리에서 걸러 낸다(할당 없음)
     let j = 0;
     for (let i = 0; i < pool.length; i++) {
       const l = pool[i] as FxLive;
-      if (t0 - l.t0 < l.p.delayMs + l.p.lifeMs) pool[j++] = l;
+      if (vt - l.t0 < l.p.delayMs + l.p.lifeMs) pool[j++] = l;
     }
     pool.length = j;
-    if (ctx && view) drawFrame(ctx, pool, t0, view, glow);
+    if (ctx && view) drawFrame(ctx, pool, vt, view, glow, store);
+  }
+
+  function tick() {
+    handle = null;
+    const t0 = now();
+    advanceClock(t0);
+    renderFrame();
     const t1 = now();
     frameAt[frameHead] = t1;
     frameMs[frameHead] = t1 - t0;
     frameHead = (frameHead + 1) % FRAME_RING;
     if (frameCount < FRAME_RING) frameCount++;
-    if (pool.length > 0) schedule();
+    // 멈춘 동안에는 루프를 돌리지 않는다(마지막 그림 유지)
+    if (pool.length > 0 && !paused) schedule();
   }
 
   /** 기본 위치 찾기: 킷 좌표의 패드 헤드. 패드가 없는 킷이면 null */
@@ -127,35 +162,62 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     const loc = locate ? locate(event) : kitLocate(event);
     if (!loc) return;
     const def = hitFxThemeDef(theme);
-    // 판정 이펙트(테마 무관)를 먼저 두고, 테마 이펙트는 패드에서 판정된·비판정 타격에만 더한다. 합쳐서 상한 24
+    // 판정 이펙트(테마 무관)를 먼저 두고, 테마 이펙트는 패드에서 판정된·비판정 타격에만 더한다. 합쳐서 상한 = 판정 수 + 테마 maxSpawn
     const list: FxParticle[] = judgeFx(event, loc, judgeColors, reduced);
     const judgeN = list.length;
     if (loc.shape !== 'lane' && loc.shape !== 'head' && !event.stray && event.judgement !== 'MISS') {
-      const run = reduced ? def.spawnReduced : def.spawn;
+      // 모션 줄이기는 그림 없이 덩어리만, 그림이 아직 준비되지 않았으면 입자만의 대체 함수
+      const run = reduced ? def.spawnReduced : store.ready(def.sheets) ? def.spawn : def.spawnLite;
       const themed = run(event, loc.geo, loc.shape, fxIntensity(event), createRand(event.seq), def.palette(skin, loc.shape, brand));
       for (let i = 0; i < themed.length; i++) list.push(themed[i]!);
     }
-    const n = Math.min(list.length, MAX_SPAWN);
-    const t = now();
-    const additive = !reduced && def.blend === 'additive';
-    for (let i = 0; i < n; i++) pool.push({ p: list[i]!, t0: t, additive: additive && i >= judgeN });
-    const over = pool.length - max;
-    if (over > 0) {
-      pool.splice(0, over);
-      dropped += over;
+    const n = Math.min(list.length, judgeN + def.maxSpawn);
+    advanceClock(now());
+    const t = vt;
+    const themeAdditive = !reduced && def.blend === 'additive';
+    for (let i = 0; i < n; i++) {
+      const p = list[i]!;
+      // 합성: 판정은 일반, 그림은 항상 더하기, 나머지는 파티클의 blend → 없으면 테마
+      const additive = i >= judgeN && (p.kind === 'sheet' || (p.blend ? p.blend === 'add' : themeAdditive));
+      pool.push({ p, t0: t, additive });
     }
+    trimSheets();
+    trimPool();
     if (pool.length > 0) schedule();
   }
 
-  function spawn(particles: readonly FxParticle[]) {
-    const t = now();
-    const n = Math.min(particles.length, MAX_SPAWN);
-    for (let i = 0; i < n; i++) pool.push({ p: particles[i]!, t0: t, additive: false });
+  /** 살아 있는 sheet가 MAX_SHEETS를 넘으면 가장 오래된 sheet부터 뺀다 */
+  function trimSheets() {
+    let count = 0;
+    for (let i = 0; i < pool.length; i++) if (pool[i]!.p.kind === 'sheet') count++;
+    let over = count - MAX_SHEETS;
+    if (over <= 0) return;
+    let j = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const l = pool[i] as FxLive;
+      if (over > 0 && l.p.kind === 'sheet') {
+        over--;
+        dropped++;
+      } else pool[j++] = l;
+    }
+    pool.length = j;
+  }
+
+  /** 전체 상한을 넘으면 오래된 것부터 버린다 */
+  function trimPool() {
     const over = pool.length - max;
     if (over > 0) {
       pool.splice(0, over);
       dropped += over;
     }
+  }
+
+  function spawn(particles: readonly FxParticle[]) {
+    advanceClock(now());
+    const t = vt;
+    const n = Math.min(particles.length, MAX_SPAWN);
+    for (let i = 0; i < n; i++) pool.push({ p: particles[i]!, t0: t, additive: false });
+    trimPool();
     if (pool.length > 0) schedule();
   }
 
@@ -176,9 +238,11 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     return { frameMsAvg: avg, frameMsP95: p95, fps: n / (STATS_WINDOW_MS / 1000), alive: pool.length, dropped, running: handle !== null };
   }
 
-  return {
+  const engine: FxEngine = {
     attach(c, v) {
       view = v;
+      // detach로 놓았던 그림을 다시 요청한다(크기 변경 등으로 attach가 다시 불릴 때)
+      store.use(engine, hitFxThemeDef(theme).sheets);
       // jsdom·happy-dom에는 2D 컨텍스트가 없다 — 없으면 아무것도 그리지 않는다
       try {
         ctx = c ? c.getContext('2d') : null;
@@ -196,11 +260,13 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
       pool.length = 0;
       ctx = null;
       view = null;
+      store.use(engine, []);
     },
     emit,
     spawn,
     setTheme(id) {
       theme = id;
+      store.use(engine, hitFxThemeDef(id).sheets);
     },
     setSkin(s, v = 'persp') {
       skin = s;
@@ -220,14 +286,27 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     },
     setMaxParticles(n) {
       max = Math.max(1, Math.floor(n));
-      const over = pool.length - max;
-      if (over > 0) {
-        pool.splice(0, over);
-        dropped += over;
-      }
+      trimPool();
     },
     setGlow(flag) {
       glow = flag;
+    },
+    setTimeScale(k) {
+      advanceClock(now());
+      timeScale = Math.min(1, Math.max(MIN_TIME_SCALE, Number.isFinite(k) ? k : 1));
+    },
+    setPaused(flag) {
+      if (flag === paused) return;
+      // 멈추기 전에 시계를 지금까지 보내 두고, 다시 흐를 때는 멈춘 시간을 건너뛴다
+      advanceClock(now());
+      paused = flag;
+      lastReal = now();
+      if (!paused && pool.length > 0) schedule();
+    },
+    stepFrame() {
+      if (!paused) return;
+      vt += STEP_FRAME_MS;
+      renderFrame();
     },
     resetStats() {
       dropped = 0;
@@ -236,4 +315,5 @@ export function createFxEngine(options: FxEngineOptions = {}): FxEngine {
     },
     stats,
   };
+  return engine;
 }

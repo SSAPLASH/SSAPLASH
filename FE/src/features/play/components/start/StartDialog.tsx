@@ -1,6 +1,7 @@
 // 시작 확인 창 (설계 MODE-001-MODE-003-picker-quick-start, Figma 905:4457 `Play / StartDialog`).
 // 악보 연습은 곡 카드의 [플레이]를 누르면 항상 이 창이 열린다. 리듬 게임은 기기 준비·불러오기 실패·재정렬일 때만 뜨고 옵션 줄이 없다. 두 변형 중 하나:
 //  - play: 곡 한 줄 요약 · 연주 옵션 · 안내 · [취소] [▶ 플레이]. Enter = 플레이(불러오는 중·오류에는 막음)
+// 모양은 일시정지 창(PauseOverlay)과 같은 톤이다: 같은 스크림·면·모서리 32·캡슐 버튼(설계 MODE-002-MODE-003-metronome-subdivision D13·D16)
 //  - setup: 「기기 준비가 필요해요」 · 빠진 항목 · [취소] [다시 연결] [드럼 세팅으로]. 플레이 버튼 없음
 // props만 받는다 — 스토어 구독·준비 조건 계산·이동은 페이지가 한다. 초점 가둠·Esc는 ui/Dialog(useDialogFocus)가 맡는다.
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -75,7 +76,8 @@ export function StartDialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const canStart = variant === 'play' && !loading && !error;
 
-  // Enter = 플레이. 버튼에 초점이 있으면 그 버튼의 기본 클릭에 맡기고, 그 밖(체크 줄·창·body)에서만 처리한다
+  // Enter = 플레이. 버튼에 초점이 있으면 그 버튼의 기본 클릭에 맡기고, 그 밖(옵션 줄·창·body)에서만 처리한다.
+  // 옵션 줄의 스위치·선택 칸도 버튼이지만 Enter는 플레이로 본다(바꾸는 키는 Space·화살표)
   const startRefFn = useRef(onStart);
   useEffect(() => {
     startRefFn.current = onStart;
@@ -84,7 +86,8 @@ export function StartDialog({
     if (!open || !canStart) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented || e.repeat) return;
-      if ((e.target as HTMLElement | null)?.closest?.('button, a[href]')) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('button, a[href]') && !target.closest('[role="switch"], [role="radio"]')) return;
       e.preventDefault();
       startRefFn.current();
     };
@@ -113,6 +116,7 @@ export function StartDialog({
   return (
     <Dialog
       className={`start-dialog start-dialog-${variant}`}
+      backdropClassName="start-dialog-backdrop"
       labelledBy="start-dialog-title"
       initialFocusRef={isPlay && canStart ? startRef : cancelRef}
       onClose={onClose}

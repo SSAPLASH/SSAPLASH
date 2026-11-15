@@ -14,6 +14,8 @@ interface BaseProps {
   /** 연습 단계 */
   level: Difficulty;
   bpm?: number;
+  /** 연습 속도 배지 문구(「70%」). 원래 빠르기면 넘기지 않는다 */
+  rateLabel?: string;
   elapsedMs: number;
   durationMs: number;
 }
@@ -152,7 +154,7 @@ function ComboValue({ combo }: { combo: number }) {
 }
 
 export function PlayHud(props: PlayHudProps) {
-  const { variant, title, artist, coverUrl = null, level, bpm, elapsedMs, durationMs } = props;
+  const { variant, title, artist, coverUrl = null, level, bpm, rateLabel, elapsedMs, durationMs } = props;
   const ratio = progressRatio(elapsedMs, durationMs);
   return (
     <div className={`play-hud ${variant}`}>
@@ -167,6 +169,11 @@ export function PlayHud(props: PlayHudProps) {
             </h1>
             <LevelBadge level={level} />
             {bpm !== undefined && <span className="play-hud-bpm">BPM {Math.round(bpm)}</span>}
+            {rateLabel && (
+              <span className="play-hud-rate" title="연습 속도">
+                {rateLabel}
+              </span>
+            )}
           </div>
           {artist && <p className="play-hud-artist">{artist}</p>}
           <div className="play-hud-progress">
