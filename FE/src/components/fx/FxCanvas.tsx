@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { DRUM_KIT_W, kitBoxFor, type KitSkin, type KitView } from '@/domain/kit/drumKit';
+import { hitFxThemeDef } from '@/domain/hitFx/themes';
 import type { FxLocate, FxMode, FxSource, HitFxTheme } from '@/domain/hitFx/types';
 import { MAX_PARTICLES, createFxEngine, type FxEngine } from './fxEngine';
 import type { FxView } from './fxDraw';
@@ -31,6 +32,8 @@ export interface FxCanvasProps {
   source?: FxSource;
   mode?: FxMode;
   bleed?: number;
+  /** 킷 좌표 공간에서 위쪽 여백(킷 높이 비율). 없으면 테마 정의 값. 좌우·아래는 bleed */
+  bleedTop?: number;
   /** 엔진을 바깥에서 쓰고 싶을 때(랩의 통계 표시). 없으면 안에서 만든다 */
   engineRef?: { current: FxEngine | null };
   /** 모션 줄이기 강제(랩). 없으면 OS 설정을 따른다 */
@@ -41,7 +44,7 @@ export interface FxCanvasProps {
   glow?: boolean;
 }
 
-export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', space = 'kit', locate, source, mode = 'free', bleed = DEFAULT_BLEED, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
+export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', space = 'kit', locate, source, mode = 'free', bleed = DEFAULT_BLEED, bleedTop: bleedTopProp, engineRef, reduced: reducedProp, maxParticles, glow = true }: FxCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine] = useState(() => createFxEngine());
   const osReduced = useReducedMotion() ?? false;
@@ -80,6 +83,7 @@ export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', sp
 
   // 캔버스 크기·좌표: 부모(킷 래퍼)의 실제 렌더 크기 + bleed 여백
   const boxH = kitBoxFor(skin, view).h;
+  const bleedTop = bleedTopProp ?? hitFxThemeDef(theme).bleedTop;
   useEffect(() => {
     const canvas = canvasRef.current;
     const host = canvas?.parentElement;
@@ -99,10 +103,12 @@ export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', sp
       if (!(h > 0)) return;
       const bx = pixel ? 0 : Math.round(w * bleed);
       const by = pixel ? 0 : Math.round(h * bleed);
+      // 위쪽 여백만 테마(또는 prop)가 따로 정한다. 그림이 헤드 위로 솟기 때문이다
+      const top = pixel ? 0 : Math.round(h * bleedTop);
       const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
-      const view: FxView = { width: w + bx * 2, height: h + by * 2, scale, offsetX: bx, offsetY: by, dpr };
+      const view: FxView = { width: w + bx * 2, height: h + top + by, scale, offsetX: bx, offsetY: top, dpr };
       canvas.style.left = `${-bx}px`;
-      canvas.style.top = `${-by}px`;
+      canvas.style.top = `${-top}px`;
       canvas.style.width = `${view.width}px`;
       canvas.style.height = `${view.height}px`;
       const pw = Math.round(view.width * dpr);
@@ -123,7 +129,7 @@ export function FxCanvas({ skin = 'acoustic', view = 'persp', theme = 'auto', sp
       ro?.disconnect();
       engine.detach();
     };
-  }, [engine, bleed, space, boxH]);
+  }, [engine, bleed, bleedTop, space, boxH]);
 
   // 이벤트 구독: 타격마다 React를 거치지 않고 엔진으로 간다
   useEffect(() => src((e) => engine.emit(e)), [engine, src]);

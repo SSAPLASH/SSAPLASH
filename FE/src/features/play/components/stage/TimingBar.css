@@ -10,3 +10,40 @@
   aspect-ratio: 624 / 28; /* 높이 14 × 2 */
   pointer-events: none;
 }
+
+/* 얇은 모양(악보 연습): 312×9 기본 크기의 2배 = 624×18. 막대는 위에서 4~10px에 있다 */
+.timing-bar.thin {
+  aspect-ratio: 624 / 18;
+}
+/* 양 끝 글자(「빠름」·「늦음」): 막대 높이 가운데에 맞춘다. 두 칸의 폭이 같아야 막대가 가운데에 온다 */
+.timing-bar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+  pointer-events: none;
+}
+.timing-bar-row > .timing-bar {
+  flex: 0 1 624px;
+  min-width: 0;
+}
+.timing-bar-cap {
+  flex: none;
+  width: 34px;
+  /* 보통 모양: 막대가 위에서 4~20px → 가운데 12px. 글자 줄 높이 24 */
+  height: 24px;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.timing-bar-cap:first-child {
+  text-align: right;
+}
+/* 얇은 모양: 막대 가운데가 위에서 7px */
+.timing-bar-row.thin > .timing-bar-cap {
+  height: 14px;
+  line-height: 14px;
+}

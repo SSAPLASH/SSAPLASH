@@ -21,6 +21,8 @@ type Side = 'a' | 'b';
 type View = 'ab' | 'single';
 
 const MAX_PARTICLE_CHOICES = [50, 100, 200, 400] as const;
+/** 이펙트 재생 속도 선택(이펙트 시계만 느려진다. 소리·판정 시각은 그대로) */
+const TIME_SCALE_CHOICES = [1, 0.5, 0.25, 0.1] as const;
 /** 성능 표시 갱신 주기(ms). 이 표시용 setState는 타격 경로와 무관하다 */
 const STATS_MS = 250;
 /** 패턴 시계 간격(ms) */
@@ -40,6 +42,12 @@ export interface FxLabApi {
   setPattern(id: LabPatternId): void;
   /** 킷 A/B의 테마 */
   setTheme(side: Side, id: HitFxTheme): void;
+  /** 이펙트 재생 속도(0.1~1) */
+  setTimeScale(k: number): void;
+  /** 이펙트 일시정지 / 해제 */
+  setPaused(on: boolean): void;
+  /** 멈춘 상태에서 한 프레임(16.7ms) 넘김 */
+  stepFrame(): void;
   /** 킷 파티클 상한(50/100/200/400 등 임의 양수) */
   setMaxParticles(n: number): void;
   /** 발광(스프라이트·번개 테두리) 켜기/끄기 */
@@ -106,6 +114,8 @@ export function FxLabPage() {
   const [reduced, setReduced] = useState(false);
   const [glow, setGlow] = useState(true);
   const [maxParticles, setMaxParticlesState] = useState<number>(200);
+  const [timeScale, setTimeScaleState] = useState<number>(1);
+  const [paused, setPausedState] = useState(false);
   const [snap, setSnap] = useState<FxLabSnapshot | null>(null);
 
   const engineA = useRef<FxEngine | null>(null);
@@ -218,6 +228,19 @@ export function FxLabPage() {
     return () => window.clearInterval(id);
   }, [getSnap]);
 
+  // 재생 속도·일시정지를 두 킷 엔진에 반영한다(킷 B는 단일 보기에서 사라졌다 다시 생길 수 있어 보기가 바뀔 때도 다시 건다)
+  useEffect(() => {
+    for (const r of [engineA, engineB]) {
+      r.current?.setTimeScale(timeScale);
+      r.current?.setPaused(paused);
+    }
+  }, [timeScale, paused, view]);
+
+  const stepFrame = useCallback(() => {
+    engineA.current?.stepFrame();
+    engineB.current?.stepFrame();
+  }, []);
+
   // 숫자 키 1~6: 킷 A 테마
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -250,6 +273,9 @@ export function FxLabPage() {
         (side === 'a' ? setThemeA : setThemeB)(id);
         (side === 'a' ? engineA : engineB).current?.setTheme(id);
       },
+      setTimeScale: (k) => setTimeScaleState(k),
+      setPaused: (on) => setPausedState(on),
+      stepFrame,
       setMaxParticles: (n) => {
         setMaxParticlesState(n);
         both((e) => e.setMaxParticles(n));
@@ -284,7 +310,7 @@ export function FxLabPage() {
     return () => {
       delete window.__fxLab;
     };
-  }, [applyPattern, getSnap, setJudge, playCombo, celebrateNow]);
+  }, [applyPattern, getSnap, setJudge, playCombo, celebrateNow, stepFrame]);
 
   const fxOptions = { reduced: reduced ? true : undefined, maxParticles, glow };
 
@@ -356,6 +382,22 @@ export function FxLabPage() {
                 {p.label}
               </button>
             ))}
+          </div>
+        </div>
+        <div className="fxlab-group">
+          재생 속도
+          <div className="fxlab-row">
+            {TIME_SCALE_CHOICES.map((k) => (
+              <button key={k} type="button" aria-pressed={timeScale === k} onClick={() => setTimeScaleState(k)}>
+                {k}배
+              </button>
+            ))}
+            <button type="button" aria-pressed={paused} onClick={() => setPausedState((p) => !p)}>
+              일시정지
+            </button>
+            <button type="button" disabled={!paused} onClick={stepFrame}>
+              한 프레임 넘김
+            </button>
           </div>
         </div>
         <div className="fxlab-group">

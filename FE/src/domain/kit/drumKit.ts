@@ -129,13 +129,16 @@ export const SHEET_KIT_TOP_H = 210;
 
 /**
  * 작은 연주 킷(리듬 게임·악보 연습)의 그림 종류와 scale.
- * 실물은 위에서 본 그림을 화면별 높이(게임 200 · 악보 210px)에 맞추고, 전자·네온은 기존 scale 그대로다
+ * 실물은 위에서 본 그림을 화면별 높이(게임 200 · 악보 210px)에 맞추고, 전자·네온은 기존 scale 그대로다.
+ * `fit`(쓸 수 있는 상자, CSS px)을 주면 그 상자에 들어가는 만큼 키운다 — 기본 크기보다 작아지지는 않는다(악보 연습, 설계 MODE-003-practice-speed D18)
  */
-export function smallKitSpec(screen: 'play' | 'sheet', skin: KitSkin): { view: KitView; scale: number } {
+export function smallKitSpec(screen: 'play' | 'sheet', skin: KitSkin, fit?: { width: number; height: number }): { view: KitView; scale: number } {
   const flatScale = screen === 'play' ? 0.5 : 0.7;
-  if (skin !== 'acoustic') return { view: 'persp', scale: flatScale };
-  const h = screen === 'play' ? PLAY_KIT_TOP_H : SHEET_KIT_TOP_H;
-  return { view: 'top', scale: h / kitBoxFor('acoustic', 'top').h };
+  const view: KitView = skin === 'acoustic' ? 'top' : 'persp';
+  const box = kitBoxFor(skin, view);
+  const base = skin === 'acoustic' ? (screen === 'play' ? PLAY_KIT_TOP_H : SHEET_KIT_TOP_H) / box.h : flatScale;
+  if (!fit) return { view, scale: base };
+  return { view, scale: Math.max(base, Math.min(fit.width / box.w, fit.height / box.h)) };
 }
 
 /** 부모 가용 폭에 맞는 scale. maxScale을 넘지 않고, 폭이 0 이하면 0 */

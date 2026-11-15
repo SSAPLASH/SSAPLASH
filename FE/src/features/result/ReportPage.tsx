@@ -4,6 +4,7 @@
 // AI 약점은 유형으로 자리를 나누되(놓침이 몰린 구간·패드 전환·그 밖) 문구는 서버 값을 그대로 쓴다.
 // 리포트에 songId가 있으면 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
 // 하단 "추천 곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
+import { rateLabel, slowRateOf } from '@/domain/song/practiceRate';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getChartAssets } from '@/api/song/charts';
@@ -20,15 +21,16 @@ import { RecommendRow } from '@/features/result/components/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { recommendationPathOf } from '@/domain/song/recommendation';
 import {
-  clockRange,
   flowBins,
   flowTotalMs,
   focusOfBin,
   focusOfCluster,
   focusOfSegment,
   focusOfTransition,
+  focusRangeText,
   initialFocus,
   observationText,
+  reportGrid,
   splitSegments,
   transitionWindow,
   type Focus,
@@ -103,6 +105,8 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const noteList = notes.s === 'ok' ? notes.v : null;
   const totalMs = useMemo(() => flowTotalMs(noteList ?? [], log?.durationMs ?? null), [noteList, log?.durationMs]);
   const bins = useMemo(() => flowBins(noteList ?? [], totalMs), [noteList, totalMs]);
+  // 구간을 마디로 세는 격자. 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다 — 기록이 없으면 구간을 시각만으로 보인다
+  const grid = useMemo(() => reportGrid(log), [log]);
 
   // 추천: API 곡 소스 + 로그인일 때만, 리포트가 처음 OK가 된 뒤 요청한다(D1·D6). 중복은 store가 막는다(D2)
   const navigate = useNavigate();
@@ -183,12 +187,15 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   }, [playId, pending, pollRun]);
 
   const title = log?.title ? `${log.title} 연주 리포트` : '연주 리포트';
+  const slowRate = slowRateOf(report.s === 'ok' ? report.v.playbackRate : undefined) ?? slowRateOf(log?.playbackRate);
   const meta =
     report.s === 'ok'
       ? [
           MODE_LABEL[report.v.mode] ?? report.v.mode,
           report.v.difficulty ? (DIFFICULTY_LABEL[report.v.difficulty] ?? report.v.difficulty) : (log?.difficulty ?? ''),
           INPUT_LABEL[report.v.inputSource] ?? report.v.inputSource,
+          // 연습 속도로 친 판이면 배율을 적는다(서버 응답 playbackRate, 없으면 이 브라우저의 로그)
+          slowRate !== null ? `${rateLabel(slowRate)} 속도로 연습` : '',
           log ? new Date(log.startedAt).toLocaleString('ko-KR') : '',
         ].filter((t) => t !== '')
       : [];
@@ -244,16 +251,16 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     const w = transitionWindow(noteList ?? [], seg, seg.pattern === 'TRANSITION_MISS');
     return {
       key: `${f.key}:${i}`,
-      ...observationText(seg),
+      ...observationText(seg, grid),
       // 열 구간이 없으면(전환 노트를 못 찾았고 약점 구간도 비어 있음) 버튼을 두지 않는다
-      action: w.toMs > w.fromMs ? { text: `${clockRange(w.fromMs, w.toMs)} 예시 보기`, onClick: () => openFocus(f), pressed: focus?.key === f.key } : undefined,
+      action: w.toMs > w.fromMs ? { text: `${focusRangeText(w, grid)} 예시 보기`, onClick: () => openFocus(f), pressed: focus?.key === f.key } : undefined,
     };
   });
   const otherRows: ObservationRow[] = groups.others.map((seg: WeakSegment, i) => {
     const f = focusOfSegment(seg);
     return {
       key: `${f.key}:${i}`,
-      ...observationText(seg),
+      ...observationText(seg, grid),
       action: seg.scope === 'WHOLE' ? undefined : { text: '구간 보기', onClick: () => openFocus(f), pressed: focus?.key === f.key },
     };
   });
@@ -286,6 +293,8 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           onPickBin={(fromMs) => setPicked(focusOfBin(fromMs))}
           onPickCluster={(seg) => setPicked(focusOfCluster(seg))}
           notice={notice}
+          grid={grid}
+          slow={slowRate !== null}
         />
       ) : (
         <section className="rp-flow" aria-labelledby="rp-flow-title">
@@ -304,7 +313,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
 
       {/* 화면 이동의 목적지는 이 틀이다. 안쪽 FocusPanel은 선택마다 다시 만들어져서, 거기로 부드럽게 옮기면 도중에 목적지가 사라져 이동이 끊긴다 */}
       <div id="rp-focus" className="rp-focus-anchor">
-        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} />}
+        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} grid={grid} />}
       </div>
 
       <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />

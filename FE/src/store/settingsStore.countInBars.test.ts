@@ -5,8 +5,8 @@ type Rec = Record<string, unknown>;
 const run = (countInBars: unknown, version = 20) => (migrateSettings({ countInBars }, version) as unknown as Rec).countInBars;
 
 describe('countInBars (카운트다운 끔·켬, MODE-001)', () => {
-  it('설정 버전은 25, 기본값은 1(켬)', () => {
-    expect(SETTINGS_VERSION).toBe(25);
+  it('설정 버전은 27, 기본값은 1(켬)', () => {
+    expect(SETTINGS_VERSION).toBe(27);
     expect(useSettings.getInitialState().countInBars).toBe(1);
   });
 

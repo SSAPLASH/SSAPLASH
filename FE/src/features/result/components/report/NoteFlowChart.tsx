@@ -1,9 +1,23 @@
 // 「전체 노트 흐름」 (설계 COACH-002 리포트 화면 개편 2·4장). 곡 전체를 5초 칸으로 묶은 판정 막대와 놓친 구간 버튼 줄.
 // 막대(칸)를 누르거나 구간 버튼을 누르면 페이지에 알린다. 선택 상태는 페이지가 든다.
 // 칸에 마우스를 올리거나 초점을 주면 그 5초의 시각과 판정 수가 뜬다.
+// 막대는 색 3개(정확 · 빠름·늦음 · 놓침)이고, 빠름과 늦음의 수는 툴팁과 읽어 주는 글에서 나눈다(설계 COACH-002-report-timing-direction D5).
+// 구간 버튼은 마디 격자가 있으면 시각 앞에 마디를 붙인다(D8). 5초 칸과 시간축은 시각만 쓴다 — 칸이 마디와 맞지 않는다.
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { WeakSegment } from '@/domain/play/report';
-import { binTotal, clockSecond, clockTenth, FLOW_BIN_MS, JUDGEMENT_LABEL, metricNumber, type FlowBin, type Focus } from '@/features/result/domain/reportView';
+import {
+  binTotal,
+  clockSecond,
+  clockTenth,
+  FLOW_BIN_MS,
+  metricNumber,
+  OFF_BEAT_LABEL,
+  VERDICT_LABEL,
+  withBars,
+  type FlowBin,
+  type Focus,
+  type ReportGrid,
+} from '@/features/result/domain/reportView';
 import './report.css';
 
 interface Props {
@@ -18,6 +32,10 @@ interface Props {
   onPickCluster: (seg: WeakSegment) => void;
   /** 구간 버튼 줄 아래에 둘 분석 상태 안내 */
   notice?: ReactNode;
+  /** 마디 격자. 있으면 구간 버튼에 마디를 같이 적는다 */
+  grid?: ReportGrid | null;
+  /** 연습 속도로 친 기록이면 시각이 원래 빠르기 기준임을 알린다(D7) */
+  slow?: boolean;
 }
 
 interface Tip {
@@ -29,26 +47,33 @@ interface Tip {
 /** 구간 버튼 한 줄의 높이(px) */
 const MARKER_ROW = 48;
 const MARKER_TOP = 12;
+/** 구간 버튼이 오른쪽 끝을 넘지 않게 남겨 두는 폭(px). 마디를 같이 적으면 그만큼 넓다 */
+const MARKER_ROOM = 190;
+const MARKER_ROOM_BARS = 300;
 
 /** 칸 사이 간격(px). 긴 곡은 칸이 많아 간격이 막대를 다 차지하므로 줄인다(5분 초과 1px, 10분 초과 0) */
 const barGap = (count: number) => (count > 120 ? 0 : count > 60 ? 1 : 3);
 
 const pct = (ms: number, totalMs: number) => (totalMs > 0 ? (100 * ms) / totalMs : 0);
 
-export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPickCluster, notice }: Props) {
+export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPickCluster, notice, grid = null, slow = false }: Props) {
   const [tip, setTip] = useState<Tip | null>(null);
   const max = Math.max(1, ...bins.map(binTotal));
   const tipBin = tip ? bins[tip.index] : null;
   const range = (b: FlowBin) => `${clockSecond(b.fromMs)}–${clockSecond(b.fromMs + FLOW_BIN_MS)}`;
+  const markerRoom = grid ? MARKER_ROOM_BARS : MARKER_ROOM;
 
   return (
     <section className="rp-flow" aria-labelledby="rp-flow-title">
       <div className="rp-flow-header">
-        <h2 id="rp-flow-title">전체 노트 흐름</h2>
+        <div className="rp-flow-title">
+          <h2 id="rp-flow-title">전체 노트 흐름</h2>
+          {slow && <span className="rp-flow-note">시각은 원래 빠르기 기준이에요</span>}
+        </div>
         <div className="rp-legend" role="group" aria-label="판정 범례">
-          <span className="p">{JUDGEMENT_LABEL.PERFECT}</span>
-          <span className="g">{JUDGEMENT_LABEL.GOOD}</span>
-          <span className="m">{JUDGEMENT_LABEL.MISS}</span>
+          <span className="p">{VERDICT_LABEL.PERFECT}</span>
+          <span className="g">{OFF_BEAT_LABEL}</span>
+          <span className="m">{VERDICT_LABEL.MISS}</span>
         </div>
       </div>
 
@@ -60,7 +85,7 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
               type="button"
               className="rp-bin"
               style={{ '--rp-delay': `${i * 8}ms` } as CSSProperties}
-              aria-label={`${range(b)}: ${JUDGEMENT_LABEL.PERFECT} ${b.perfect}, ${JUDGEMENT_LABEL.GOOD} ${b.good}, ${JUDGEMENT_LABEL.MISS} ${b.miss}`}
+              aria-label={`${range(b)}: ${VERDICT_LABEL.PERFECT} ${b.perfect}, ${VERDICT_LABEL.EARLY} ${b.early}, ${VERDICT_LABEL.LATE} ${b.late}, ${VERDICT_LABEL.MISS} ${b.miss}`}
               aria-pressed={focus?.kind === 'bin' && focus.fromMs === b.fromMs}
               onClick={() => onPickBin(b.fromMs)}
               onPointerEnter={(e) => setTip({ index: i, x: e.clientX, y: e.clientY })}
@@ -110,14 +135,12 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
                 <button
                   type="button"
                   className="rp-marker"
-                  style={{ top, left: `min(${left}%, calc(100% - 190px))` }}
+                  style={{ top, left: `min(${left}%, calc(100% - ${markerRoom}px))` }}
                   aria-controls="rp-focus"
                   aria-pressed={pressed}
                   onClick={() => onPickCluster(c)}
                 >
-                  <span>
-                    {clockTenth(c.fromMs)}–{clockTenth(c.toMs)}
-                  </span>
+                  <span>{withBars(`${clockTenth(c.fromMs)}–${clockTenth(c.toMs)}`, c.fromMs, c.toMs, grid)}</span>
                   {missed !== null && <span className="rp-marker-count">{missed}개 놓침</span>}
                 </button>
               </span>
@@ -133,13 +156,16 @@ export function NoteFlowChart({ bins, totalMs, clusters, focus, onPickBin, onPic
           <strong>{range(tipBin)}</strong>
           <span className="total">{binTotal(tipBin) > 0 ? `총 ${binTotal(tipBin)}개` : '노트 없음'}</span>
           <span>
-            {JUDGEMENT_LABEL.PERFECT} {tipBin.perfect}
+            {VERDICT_LABEL.PERFECT} {tipBin.perfect}
           </span>
           <span>
-            {JUDGEMENT_LABEL.GOOD} {tipBin.good}
+            {VERDICT_LABEL.EARLY} {tipBin.early}
           </span>
           <span>
-            {JUDGEMENT_LABEL.MISS} {tipBin.miss}
+            {VERDICT_LABEL.LATE} {tipBin.late}
+          </span>
+          <span>
+            {VERDICT_LABEL.MISS} {tipBin.miss}
           </span>
         </div>
       )}

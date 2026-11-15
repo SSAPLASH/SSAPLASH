@@ -45,6 +45,9 @@ export function buildPlayLog(args: {
     beatsPerBar: number;
     offsetMs?: number;
     sourceNoteCount?: number;
+    /** 연습 속도로 늘린 채보면 배율과 원래 길이·빠르기·원점(domain/song/practiceRate.scaleChart가 넣는다) */
+    playbackRate?: number;
+    sourceTiming?: { durationMs: number; bpm: number; offsetMs: number };
   };
   inputSource: InputSourceKind;
   timing: TimingWindows;
@@ -70,6 +73,10 @@ export function buildPlayLog(args: {
   liveCoachEvents?: LiveCoachEvent[];
 }): PlayLog {
   const { snapshot: s } = args;
+  // 연습 속도(늘린 채보)로 친 판: 위치 값은 원래 채보의 축(곡 시각)으로 되돌려 남긴다. 오차(deltaMs)·판정 폭·경과 시간은 실제 시간 그대로다
+  const rate = args.chart.playbackRate ?? 1;
+  const timing = args.chart.sourceTiming ?? { durationMs: args.chart.durationMs, bpm: args.chart.bpm, offsetMs: args.chart.offsetMs ?? 0 };
+  const song = (ms: number) => (rate === 1 ? ms : ms * rate);
   return {
     playId: newPlayId(),
     songId: args.chart.songId,
@@ -78,7 +85,7 @@ export function buildPlayLog(args: {
     mode: args.mode ?? 'RHYTHM',
     inputSource: args.inputSource,
     startedAt: args.startedAt.toISOString(),
-    durationMs: args.chart.durationMs,
+    durationMs: timing.durationMs,
     timing: args.timing,
     // 앵커 캘리브레이션을 없앴다. 프리셋 스냅샷은 ACCT-002에서 넣는다
     calibrationId: null,
@@ -87,13 +94,14 @@ export function buildPlayLog(args: {
     chartId: args.chartId,
     presetId: args.presetId,
     consent: args.consent,
-    bpm: args.chart.bpm,
+    ...(rate !== 1 ? { playbackRate: rate } : {}),
+    bpm: timing.bpm,
     beatsPerBar: args.chart.beatsPerBar,
-    offsetMs: args.chart.offsetMs ?? 0,
-    hits: args.hits,
+    offsetMs: timing.offsetMs,
+    hits: rate === 1 ? args.hits : args.hits.map((h) => (h.tSongMs === undefined ? h : { ...h, tSongMs: song(h.tSongMs) })),
     notes: args.notes.map((n) => ({
       index: n.index,
-      timeMs: n.note.timeMs,
+      timeMs: n.note.sourceTimeMs ?? n.note.timeMs,
       pad: n.note.pad,
       ...(n.note.pad === 'HIHAT' && n.note.hihatOpen === true ? { hihatOpen: true as const } : {}),
       judgement: n.judgement,
@@ -112,11 +120,13 @@ export function buildPlayLog(args: {
     endedAt: (args.endedAt ?? new Date()).toISOString(),
     audioOffsetMs: args.audioOffsetMs ?? 0,
     ...(args.kickOffsetMs !== undefined ? { kickOffsetMs: args.kickOffsetMs } : {}),
-    lastSongTimeMs: s.songTimeMs,
+    lastSongTimeMs: song(s.songTimeMs),
     elapsedActiveMs: Math.max(0, s.songTimeMs + (args.countInMs ?? 0)),
     sourceNoteCount: args.chart.sourceNoteCount ?? null,
     ...(args.hihatPedalCoverage ? { hihatPedalCoverage: args.hihatPedalCoverage } : {}),
-    ...(args.liveCoachEvents ? { liveCoachEvents: args.liveCoachEvents } : {}),
+    ...(args.liveCoachEvents
+      ? { liveCoachEvents: rate === 1 ? args.liveCoachEvents : args.liveCoachEvents.map((e) => ({ ...e, tMs: song(e.tMs) })) }
+      : {}),
   };
 }
 

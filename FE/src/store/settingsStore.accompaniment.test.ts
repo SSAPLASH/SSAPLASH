@@ -2,25 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { migrateSettings, useSettings } from './settingsStore';
 
 describe('accompaniment 설정', () => {
-  it('기본값은 켬', () => {
-    expect(useSettings.getState().accompaniment).toBe(true);
+  it('기본값은 끔(반주를 끄면 연습 속도를 고를 수 있다, MODE-003)', () => {
+    expect(useSettings.getInitialState().accompaniment).toBe(false);
   });
 
-  it('setter로 끄고 켠다', () => {
-    useSettings.getState().setAccompaniment(false);
-    expect(useSettings.getState().accompaniment).toBe(false);
+  it('setter로 켜고 끈다', () => {
     useSettings.getState().setAccompaniment(true);
     expect(useSettings.getState().accompaniment).toBe(true);
+    useSettings.getState().setAccompaniment(false);
+    expect(useSettings.getState().accompaniment).toBe(false);
   });
 
-  it('v21 저장값 → v22에서 true로 채운다', () => {
-    const out = migrateSettings({ volume: 0.5 }, 21) as unknown as Record<string, unknown>;
-    expect(out.accompaniment).toBe(true);
-    expect(out.volume).toBe(0.5);
+  it('v26까지의 저장값은 v27에서 한 번 끔으로 되돌린다(다른 값은 그대로)', () => {
+    for (const from of [20, 21, 22, 26]) {
+      const out = migrateSettings({ volume: 0.5, accompaniment: true }, from) as unknown as Record<string, unknown>;
+      expect(out.accompaniment).toBe(false);
+      expect(out.volume).toBe(0.5);
+    }
+    expect((migrateSettings({ accompaniment: 'x' }, 20) as unknown as Record<string, unknown>).accompaniment).toBe(false);
   });
 
-  it('boolean이 아닌 값은 true, v22 이상 저장값은 그대로', () => {
-    expect((migrateSettings({ accompaniment: 'x' }, 20) as unknown as Record<string, unknown>).accompaniment).toBe(true);
-    expect((migrateSettings({ accompaniment: false }, 22) as unknown as Record<string, unknown>).accompaniment).toBe(false);
+  it('v27 이상에서 켠 값은 그대로 남는다', () => {
+    expect((migrateSettings({ accompaniment: true }, 27) as unknown as Record<string, unknown>).accompaniment).toBe(true);
   });
 });

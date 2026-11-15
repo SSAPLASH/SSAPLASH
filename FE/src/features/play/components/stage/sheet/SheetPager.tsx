@@ -8,7 +8,7 @@ import type { FxEvent, FxLocation, FxSource } from '@/domain/hitFx/types';
 import type { Chart } from '@/domain/song/chart';
 import type { Judgement } from '@/domain/play/judgement';
 import { buildSheet, gridTimeAt, layoutBar, songTimeAtGrid, type BarLayout } from '@/domain/song/sheet';
-import { barsPerPage, cursorPos, flowGeometry, noteHeadAt, OVERLAY_RESERVE_PX, pagerSlots, snapToBeat, staffOffsetY, staffScale, type PagerSlot } from './sheetPagerMath';
+import { barsPerPage, cursorPos, flowGeometry, noteHeadAt, OVERLAY_RESERVE_PX, overlayLift, pagerSlots, snapToBeat, staffOffsetY, staffScale, type PagerSlot } from './sheetPagerMath';
 import { xInBar } from '@/components/sheetmusic/sheetStripMath';
 import { drawBeatLabel, drawCursor, drawEmptyBar, drawSheet, HEAD_RX, HEAD_RY, headY, readColors, STAFF_BOTTOM_Y, STAFF_TOP_Y, type HitMark } from '@/components/sheetmusic/sheetStripDraw';
 
@@ -108,6 +108,7 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
     let raf = 0;
     // 정지 후 시간이 null이어도 마지막 프레임 위치를 유지한다.
     let lastRaw = 0;
+    let lastLift = -1;
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const p = live.current;
@@ -125,7 +126,13 @@ export function SheetPager({ chart, noteStates, strayHits, getSongTime, openWarn
       // 악보를 배율 k로 그린다: 이후 좌표는 모두 논리 크기(W×H = 칸 ÷ k)이고 변환이 한 번에 키운다
       // 타이밍 막대가 있으면 그 자리(칸 아래)를 빼고 악보를 맞춘다: 박 번호가 막대 밑에 깔리지 않는다
       const reservePx = p.hasOverlay ? OVERLAY_RESERVE_PX : 0;
-      const k = staffScale(height - reservePx);
+      const k = staffScale(height - reservePx, width);
+      // 칸이 악보보다 높으면 타이밍 막대를 박 번호 바로 아래로 올린다(값이 바뀔 때만 쓴다)
+      const lift = p.hasOverlay ? Math.round(overlayLift(height, k, reservePx)) : 0;
+      if (lift !== lastLift) {
+        lastLift = lift;
+        wrap.style.setProperty('--sheet-overlay-lift', `${lift}px`);
+      }
       const W = width / k;
       const H = height / k;
       ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
