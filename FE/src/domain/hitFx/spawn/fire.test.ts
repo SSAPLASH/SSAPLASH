@@ -127,4 +127,40 @@ describe('fire 테마(연속 그림 + 입자)', () => {
     const v = (shape: 'drum' | 'kick') => Math.max(...runGeo(shape, 70, 70, 4, 100).filter((p) => p.kind === 'dot').map((p) => -p.vy));
     expect(v('kick')).toBeLessThan(v('drum'));
   });
+
+  it('심벌 한 타: 가장 센 세기·판정 배율에서도 maxSpawn 이하, 수명(지연 포함)은 maxLifeMs 이하', () => {
+    for (const v of [0, 60, 127]) {
+      for (const mode of ['lab', 'game', 'sheet'] as const) {
+        for (const j of [null, 'PERFECT', 'GOOD'] as const) {
+          for (let seq = 1; seq <= 30; seq++) {
+            const e: FxEvent = { seq, pad: 'CRASH', velocity: v, mode, judgement: j, deltaMs: j ? 0 : null, combo: null };
+            const geo = { cx: 300, cy: 200, rx: 80, ry: 20, k: 80 / 57 };
+            const list = def.spawn(e, geo, 'cymbal', fxIntensity(e), createRand(seq), def.palette('acoustic', 'cymbal', 'x'));
+            expect(list.length).toBeLessThanOrEqual(def.maxSpawn);
+            for (const x of list) expect(x.lifeMs + x.delayMs).toBeLessThanOrEqual(def.maxLifeMs);
+          }
+        }
+      }
+    }
+  });
+
+  it('심벌: 불똥(drop)이 식의 개수만큼 사방으로 튄다, 드럼은 위로 뜨는 dot 불티', () => {
+    for (let seq = 1; seq <= 10; seq++) {
+      const e: FxEvent = { seq, pad: 'CRASH', velocity: 100, mode: 'lab', judgement: null, deltaMs: null, combo: null };
+      const list = runGeo('cymbal', 80, 20, seq, 100);
+      const drops = list.filter((p) => p.kind === 'drop');
+      expect(drops).toHaveLength(Math.min(9, Math.round(7 * fxIntensity(e).count)));
+      expect(list.filter((p) => p.kind === 'dot')).toHaveLength(0);
+      expect(list.filter((p) => p.kind === 'blob')).toHaveLength(2);
+      expect(drops.some((p) => p.vx > 0)).toBe(true);
+      expect(drops.some((p) => p.vx < 0)).toBe(true);
+      // 위쪽 가장자리(시작 y가 중심보다 위)와 아래쪽 가장자리 모두에서 시작한다
+      expect(drops.some((p) => p.y < 200)).toBe(true);
+      expect(drops.some((p) => p.y > 200)).toBe(true);
+      for (const p of drops) expect(p.delayMs + p.lifeMs).toBeLessThanOrEqual(640);
+    }
+    const drum = runGeo('drum', 70, 24, 6, 100);
+    expect(drum.some((p) => p.kind === 'drop')).toBe(false);
+    expect(drum.filter((p) => p.kind === 'dot').every((p) => p.vy < 0)).toBe(true);
+  });
 });
