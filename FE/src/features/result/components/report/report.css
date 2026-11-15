@@ -89,6 +89,17 @@
   justify-content: space-between;
   gap: 8px;
 }
+/* 제목과 느린 연주 안내(「시각은 원래 빠르기 기준이에요」)를 한 줄에 둔다 */
+.rp-flow-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.rp-flow-note {
+  color: var(--text-2);
+  font-size: 12px;
+}
 .rp-flow-header h2,
 .rp-observations h2,
 .rp-block h2 {

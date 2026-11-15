@@ -294,6 +294,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           onPickCluster={(seg) => setPicked(focusOfCluster(seg))}
           notice={notice}
           grid={grid}
+          slow={slowRate !== null}
         />
       ) : (
         <section className="rp-flow" aria-labelledby="rp-flow-title">
