@@ -160,6 +160,8 @@ export interface Report {
   chartId: number | null;
   difficulty: Difficulty | null;
   inputSource: string;
+  /** 연주 배율(연습 속도, 0~1). 원래 빠르기·옛 기록은 1 */
+  playbackRate: number;
   analysisStatus: AnalysisStatus;
   /** AI 약점 구간. null = 미분석·실패, [] = 분석했으나 약점 없음 */
   weakSegments: WeakSegment[] | null;

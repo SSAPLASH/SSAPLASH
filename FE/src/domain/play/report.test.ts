@@ -51,7 +51,7 @@ function makeReport(analysisStatus: AnalysisStatus, weakSegments: WeakSegment[] 
     songId: null,
     chartId: null,
     difficulty: null,
-    inputSource: 'KEYBOARD',
+    inputSource: 'KEYBOARD', playbackRate: 1,
     analysisStatus,
     weakSegments,
     coachSummary: null,

@@ -3,6 +3,7 @@
 // - 패드 코드: normalizePadId(옛 이름 HI_TOM → SMALL_TOM). 모르는 패드는 버린다
 // - 노트 시각: PERFECT·GOOD은 tMs − deltaMs, MISS는 tMs. seq는 시간순이 아니므로 모두 받은 뒤 정렬한다
 import type { Difficulty } from '@/domain/song/chart';
+import { slowRateOf } from '@/domain/song/practiceRate';
 import type { Judgement } from '@/domain/play/judgement';
 import { normalizePadId, type PadId } from '@/domain/kit/pads';
 import type { AnalysisStatus, CoachSummary, Report, ReportNote, SeverityLevel, WeakScope, WeakSegment } from '@/domain/play/report';
@@ -39,6 +40,8 @@ export interface ReportDto {
   difficulty?: unknown;
   inputSource: string;
   endReason: string | null;
+  /** 연주 배율(연습 속도). 없던 옛 기록은 1. 이 필드가 생기기 전 서버 응답에는 없다 */
+  playbackRate?: unknown;
   analysisStatus: AnalysisStatus;
   weakSegments: unknown;
   coachSummary?: unknown;
@@ -159,6 +162,7 @@ export function toReport(dto: ReportDto): Report {
     chartId: positiveId(dto.chartId),
     difficulty: isDifficulty(dto.difficulty) ? dto.difficulty : null,
     inputSource: dto.inputSource,
+    playbackRate: slowRateOf(dto.playbackRate) ?? 1,
     analysisStatus: dto.analysisStatus,
     weakSegments: toWeakSegments(dto.weakSegments),
     coachSummary: toCoachSummary(dto.coachSummary),
