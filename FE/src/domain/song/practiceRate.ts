@@ -56,6 +56,14 @@ export function toSongMs(ms: number, rate: number): number {
   return rate === 1 ? ms : ms * rate;
 }
 
+/**
+ * 서버·로그의 배율 값에서 「느리게 친 판」의 배율만 꺼낸다. 0 초과 1 미만의 숫자면 그 값, 그 밖(없음·1·이상한 값)은 null.
+ * 5 % 단위인지는 따지지 않는다(서버가 저장한 값을 그대로 보인다)
+ */
+export function slowRateOf(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 1 ? v : null;
+}
+
 /** 「70%」 */
 export function rateLabel(rate: number): string {
   return `${ratePercent(rate)}%`;
