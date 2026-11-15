@@ -228,6 +228,13 @@ export function SetupPage() {
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null);
   useStageFit(stageEl);
   const [advOpen, setAdvOpen] = useState(false);
+  const advBodyRef = useRef<HTMLDivElement>(null);
+  // 고급 설정을 펼치면 내용이 화면 아래에 가려지지 않게 스크롤해 보인다(하단 바 높이만큼의 여백은 CSS scroll-margin)
+  useEffect(() => {
+    if (!advOpen) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    advBodyRef.current?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+  }, [advOpen]);
 
   // ---- 단계 판정(적용 프리셋 기준 보정 완료, PLAY-004 D9·UX-64 D7) ----
   const readinessInput = {
@@ -724,7 +731,7 @@ export function SetupPage() {
           </Button>
         </div>
         {advOpen && (
-          <div id="setup-adv-body" className="setup-adv-body">
+          <div id="setup-adv-body" ref={advBodyRef} className="setup-adv-body">
             <div className="setup-adv-group" role="group" aria-labelledby="setup-adv-timing">
               <h3 id="setup-adv-timing" className="setup-adv-group-title">판정 타이밍</h3>
               <p className="setup-adv-note">박자 맞추기로 자동으로 맞출 수 있어요. 여기서는 손으로 미세하게 고쳐요.</p>
