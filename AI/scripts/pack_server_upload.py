@@ -1,8 +1,7 @@
 """GPU 서버(JupyterHub)에 올릴 zip을 만드는 스크립트. AI/ 폴더에서 실행 (채보 설계 #11).
 
 서버에는 구글 드라이브가 없어서, 코랩 때 드라이브에 두었던 것을 zip 5개로 묶어 JupyterHub 홈 폴더에 올림.
-zip 안 경로는 AI/ 기준이라 서버의 AI/ 폴더에서 풀면 제자리에 놓임
-(`notebooks/transcription_bench_server.ipynb` 2번 셀).
+zip 안 경로는 AI/ 기준이라 서버의 AI/ 폴더에서 풀면 제자리에 놓임.
 
   uv run python scripts/pack_server_upload.py
   → data/upload/server/ 에 S15P31A307_code.zip, data_synth_v1.zip, data_gmd.zip, data_mdb_drums.zip,
