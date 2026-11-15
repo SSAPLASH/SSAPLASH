@@ -18,9 +18,9 @@ afterEach(() => {
 });
 
 describe('playHaptic 설정', () => {
-  it('기본값은 판정 진동이고 설정 버전은 그대로 26', () => {
+  it('기본값은 판정 진동이고 설정 버전은 그대로 27', () => {
     expect(useSettings.getInitialState().playHaptic).toBe('judgement');
-    expect(SETTINGS_VERSION).toBe(26);
+    expect(SETTINGS_VERSION).toBe(27);
   });
 
   it('setter로 바꾼다', () => {

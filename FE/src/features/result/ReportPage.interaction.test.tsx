@@ -35,7 +35,7 @@ const drillCalls = () => vi.mocked(fetchRecommendations).mock.calls.filter(([p])
 const reportCalls = () => vi.mocked(fetchRecommendations).mock.calls.filter(([p]) => p.context === 'REPORT');
 const report = (over: Partial<Report> = {}): Report => ({
   playId: 'p1', score: 1, accuracy: 0.5, maxCombo: 1, counts: { PERFECT: 1, GOOD: 0, MISS: 0 }, histogram: null, padStats: [],
-  mode: 'RHYTHM', songId: null, chartId: null, difficulty: null, inputSource: 'KEYBOARD', analysisStatus: 'DONE', weakSegments: [], coachSummary: null, recommendedDrills: null,
+  mode: 'RHYTHM', songId: null, chartId: null, difficulty: null, inputSource: 'KEYBOARD', playbackRate: 1, analysisStatus: 'DONE', weakSegments: [], coachSummary: null, recommendedDrills: null,
   generatedAt: '', ...over,
 });
 const setReport = (r: Report | Error) =>

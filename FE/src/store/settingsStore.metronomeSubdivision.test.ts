@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { migrateSettings, SETTINGS_VERSION, useSettings } from './settingsStore';
 
 describe('metronomeSubdivision 설정 (메트로놈 박 분할, MODE-002·MODE-003)', () => {
-  it('설정 버전은 26, 기본값은 자동', () => {
-    expect(SETTINGS_VERSION).toBe(26);
+  it('설정 버전은 27, 기본값은 자동', () => {
+    expect(SETTINGS_VERSION).toBe(27);
     expect(useSettings.getInitialState().metronomeSubdivision).toBe('auto');
   });
 

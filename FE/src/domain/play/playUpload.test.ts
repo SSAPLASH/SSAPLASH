@@ -208,3 +208,34 @@ it('로컬 페달 필드는 서버 업로드 계약에 추가하지 않는다', 
   const changed = { ...base, hihatPedalCoverage: 'COMPLETE' as const, notes: base.notes.map((n) => ({ ...n, hihatOpen: true as const })), hits: base.hits.map((h) => ({ ...h, hihatClosed: false })) };
   expect(body(changed)).toEqual(body(base));
 });
+
+describe('연습 속도로 친 판 (MODE-003, mail MODE-003_연습-속도-기록-처리)', () => {
+  it('배율을 싣고, 판정 타격 tMs = 노트 시각 + 실제 오차 × 배율이다. 오차·판정 폭은 실제 ms 그대로', () => {
+    const b = body(log({ playbackRate: 0.7 }));
+    expect(b.judgementContext.playbackRate).toBe(0.7);
+    expect(b.judgementContext.timingWindows).toEqual({ perfectMs: 25, goodMs: 60 });
+    // 노트 0(0ms) +5ms → 3.5, MISS는 노트 시각(500), 채보 밖 타격은 로그의 곡 시각 그대로(700), 노트 2(1000ms) −40ms → 972
+    expect(b.hits.map((h) => h.tMs)).toEqual([3.5, 500, 700, 972]);
+    expect(b.hits.map((h) => h.deltaMs)).toEqual([5, null, null, -40]);
+  });
+
+  it('서버 검사식 (tMs − 노트 시각) ÷ 배율 = 오차가 모든 배율에서 0.001ms 안에 맞는다', () => {
+    for (let pct = 50; pct <= 100; pct += 5) {
+      const rate = pct / 100;
+      const l = log({ playbackRate: rate });
+      const b = body(l);
+      for (const h of b.hits) {
+        if (h.judgement === null || h.judgement === 'MISS') continue;
+        const n = l.notes.find((x) => x.noteId === h.matchedNoteId)!;
+        expect(Math.abs(h.deltaMs! - (h.tMs - n.timeMs) / rate)).toBeLessThan(0.001);
+      }
+    }
+  });
+
+  it('배율이 없거나 1이면 본문이 지금과 같다', () => {
+    expect(body(log({ playbackRate: 1 }))).toEqual(body(log()));
+    expect(body(log()).judgementContext.playbackRate).toBe(1);
+    expect(body(log()).hits.map((h) => h.tMs)).toEqual([5, 500, 700, 960]);
+  });
+});
+

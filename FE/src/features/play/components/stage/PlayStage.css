@@ -86,6 +86,28 @@
   height: 210px;
 }
 
+/* 악보 연습 드럼 줄: [안내 칸 · 킷 · 최근 타격] 3열. 킷은 폭이 고정이고 화면 가운데에 있다.
+   안내 칸은 킷 왼쪽 남는 폭을 쓴다(큰 코칭 모양은 최대 340) — 화면이 좁으면 안내 칸이 먼저 줄고 킷은 줄지 않는다 */
+.play-stage.sheet .play-stage-drum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.play-stage.sheet .play-stage-guide {
+  justify-self: end;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 340px;
+  min-width: 0;
+}
+.play-stage.sheet .play-stage-guide > .guide-slot:not(.lg) {
+  margin-left: auto;
+}
+.play-stage.sheet .play-stage-readout {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+}
+
 /* 리듬 게임: 화면 높이를 꽉 채우고 남는 높이는 모두 하이웨이가 갖는다(레인을 길게).
    HUD는 자리를 차지하지 않고 하이웨이 위쪽에 겹쳐 뜬다(배경 없음 — 레인이 화면 위 끝까지 간다).
    킷은 네온 0.6배(456×180), 화면 높이 820 이상이면 0.7배(532×210)다(link/laneLinkGeometry의 gameKitScale과 같은 기준).

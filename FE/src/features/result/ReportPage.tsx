@@ -4,6 +4,7 @@
 // AI 약점은 유형으로 자리를 나누되(놓침이 몰린 구간·패드 전환·그 밖) 문구는 서버 값을 그대로 쓴다.
 // 리포트에 songId가 있으면 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
 // 하단 "추천 곡"(설계 COACH-004-song-recommend-report): 리포트가 OK가 된 뒤 playId당 1회만 요청하고, 키 수명(clear)은 바깥 ReportPage가 맡는다.
+import { rateLabel, slowRateOf } from '@/domain/song/practiceRate';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getChartAssets } from '@/api/song/charts';
@@ -183,12 +184,15 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   }, [playId, pending, pollRun]);
 
   const title = log?.title ? `${log.title} 연주 리포트` : '연주 리포트';
+  const slowRate = slowRateOf(report.s === 'ok' ? report.v.playbackRate : undefined) ?? slowRateOf(log?.playbackRate);
   const meta =
     report.s === 'ok'
       ? [
           MODE_LABEL[report.v.mode] ?? report.v.mode,
           report.v.difficulty ? (DIFFICULTY_LABEL[report.v.difficulty] ?? report.v.difficulty) : (log?.difficulty ?? ''),
           INPUT_LABEL[report.v.inputSource] ?? report.v.inputSource,
+          // 연습 속도로 친 판이면 배율을 적는다(서버 응답 playbackRate, 없으면 이 브라우저의 로그)
+          slowRate !== null ? `${rateLabel(slowRate)} 속도로 연습` : '',
           log ? new Date(log.startedAt).toLocaleString('ko-KR') : '',
         ].filter((t) => t !== '')
       : [];
