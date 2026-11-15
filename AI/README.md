@@ -90,11 +90,10 @@ AI/
 ├─ .venv-*/              채보 모델 별도 가상환경 (git 미추적)
 ├─ tests/                pytest. 패키지·모듈별 폴더(bench 하위 모듈은 bench/ 없이 최상위, 스크립트 테스트는 analysis/·ncs/).
 │                        실제 데이터·모델 없이 테스트용 wav와 mock 어댑터로 돈다
-├─ notebooks/            실행용 ipynb 파일. 코랩용 bench_colab.ipynb(분리)·transcription_bench_colab.ipynb(채보),
-│                        GPU 서버용은 작업별 *_server.ipynb
+├─ notebooks/            GPU 서버 실행용 ipynb 파일. 작업별 *_server.ipynb
 ├─ docs/                 벤치마크·규칙 실험 결과(bench/, chart-rules/), 코칭·추천 설명 문서, 트러블슈팅-워커-처리-속도.md
 ├─ mlruns/               MLflow 로컬 기록 (git 미추적)
-└─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 설명은 data/README.md)
+└─ data/                 데이터셋·모델 가중치·결과 (git 미추적, 빈 폴더만 .gitkeep으로 둠)
 ```
 
 ## 환경 구축
@@ -594,23 +593,11 @@ MLflow 기록은 `uv run mlflow ui --backend-store-uri mlruns`로 본다. 실험
 
 모델 yaml은 어댑터(`msst`, `demucs`, `openunmix`, `ensemble`, `mock`)와 가중치 위치, 코드·가중치 라이선스 문자열을 적는다. 라이선스 두 필드는 필수다. MSST 가중치는 첫 실행 때 `data/models/<모델>/`(환경 변수 `SSAPLASH_MODELS_DIR`이 있으면 그 아래)에 내려받고, demucs·openunmix 가중치는 torch hub 캐시에 받는다. 다운로드 시간은 로드 시간(`loadSec`)에 넣지 않는다.
 
-### 코랩에서 돌리기
-
-`notebooks/bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 드라이브 `MyDrive/ssaplash/`에 저장소 zip(`S15P31A307.zip`), `data/musdb18hq/test/`(11GB), `data/synth_v1/`(216MB)을 올려 두면 이 ipynb 파일이 저장소를 풀고 `uv sync --extra models`로 환경을 만든 뒤, 데이터를 런타임 로컬 디스크로 복사하고 위와 같은 `ssaplash-bench` 명령을 부른다. 결과 CSV·MLflow 기록은 드라이브에 바로 써서 세션이 끊겨도 남는다. 본측정은 코랩 GPU 한 종류로만 한다 (로컬 RTX 4070 8GB는 30초 클립 동작 확인용).
-
-본측정 runId는 `musdb-full`·`synth-full`로 고정돼 있어, 세션이 끊기면 런타임을 다시 연결하고 준비 셀(1~4)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 다시 연결했을 때 GPU 이름이 바뀌었으면 결과의 `gpuName`이 섞이므로 같은 GPU를 받을 때까지 런타임을 바꾼다.
-
-저장소 zip은 저장소 루트에서 만든다. 데이터·결과·MLflow 폴더는 git이 추적하지 않아 zip에 들어가지 않는다.
-
-```bash
-git archive --format=zip --prefix=S15P31A307/ -o S15P31A307.zip HEAD
-```
-
 ### 실제 곡 분리 품질 평가 (S15P31A307-166)
 
 음원 분리 모델을 실제 드러머 녹음에 돌린 결과와 해석은 `docs/bench/separation-real-2026-10-29/evaluation.md`에 있다. 드럼 SDR은 ENST-Drums minus-one 64곡으로 재고, MDB Drums는 드럼 단독 트랙이 완성곡 속 드럼과 달라 타격 보존율만 본다. ENST 로더는 `bench/datasets/enst.py`, 설정은 `enst_minus_one.yaml`이다.
 
-GPU 서버에서는 `notebooks/separation_quality_server.ipynb`를 위에서부터 실행한다. ENST 드럼과 반주를 녹음된 음량 그대로 더한 조건과 확인 스크립트는 ENST가 있는 PC에서 돌린다.
+ENST 드럼과 반주를 녹음된 음량 그대로 더한 조건과 확인 스크립트는 ENST가 있는 PC에서 돌린다.
 
 ```bash
 # ENST 드럼과 반주를 녹음된 음량 그대로 더해 분리, 분리 wav 64곡 저장
@@ -640,7 +627,7 @@ uv run python scripts/compare_mdb_musdb_stems.py --out data/results/mdb_musdb_st
 
 두 모델 드럼 평균은 `configs/bench/models/ensemble/`의 `ensemble` 어댑터(`members`에 모델 yaml 목록)로 만든다.
 
-GPU 서버에서는 `notebooks/mr_quality_server.ipynb`를 위에서부터 실행한다. ENST가 있는 PC에서 후보 하나를 돌리는 명령은 아래와 같다.
+ENST가 있는 PC에서 후보 하나를 돌리는 명령은 아래와 같다.
 
 ```bash
 # ENST를 MUSDB 폴더 모양으로 한 번 내보냄
@@ -725,7 +712,7 @@ uv pip install --python .venv-idm/Scripts/python.exe lightning lightning-utiliti
 
 # Omnizart: Python 3.10 + TensorFlow. PyPI의 madmom 0.16.1은 Python 3.10에서 C 컴파일이 안 되므로(tp_print·Py_REFCNT 오류)
 # madmom은 저장소 최신판(git)을 먼저 깐다(C 컴파일러 필요: Windows는 Visual Studio, Linux는 gcc). omnizart 설치 스크립트는
-# pyaudio·vamp·pyfluidsynth를 직접 깔므로 Linux에서는 apt로 portaudio19-dev·fluidsynth를 먼저 둔다(코랩 ipynb 파일 4번 셀)
+# pyaudio·vamp·pyfluidsynth를 직접 깔므로 Linux에서는 apt로 portaudio19-dev·fluidsynth를 먼저 둔다
 uv python install 3.10
 uv venv .venv-omnizart --python 3.10
 uv pip install --python .venv-omnizart/Scripts/python.exe "Cython<3" "numpy<2" scipy mido wheel setuptools
@@ -755,46 +742,6 @@ uv pip install --python .venv-drum2midi/Scripts/python.exe audioread
 ```
 
 별도 환경 모델은 GPU 메모리를 스크립트가 torch로 읽어 보내고(ADT_STR·IDM·YourMT3+), TensorFlow 모델(Omnizart)은 못 읽으므로 하네스가 실행 중 `nvidia-smi`를 0.25초마다 읽어 "최댓값 − 시작값"을 쓴다. 이 값은 곡별이 아니라 실행 전체의 최댓값이며 CSV `vramMethod` 열에 `script` / `nvidia-smi`로 구분한다.
-
-### 채보 벤치마크를 코랩에서 돌리기
-
-`notebooks/transcription_bench_colab.ipynb`를 코랩에서 열고 위에서부터 실행한다. 분리 벤치마크 ipynb 파일과 같은 방식이고, 이 ipynb 파일이 별도 환경 3개(ADT_STR·Inverse Drum Machine·Omnizart)까지 만든다. 환경 만들기는 세션마다 10~20분이 든다.
-
-드라이브 `MyDrive/ssaplash/`에 올릴 것. 저장소 zip과 `data/synth_v1/`은 분리 벤치마크 때 올린 것을 그대로 쓴다.
-
-| 드라이브 경로 | 내용 | 만드는 법 |
-| --- | --- | --- |
-| `data/gmd/groove/` | GMD test 연주 45개 + info.csv, 약 560MB | 아래 명령으로 뽑은 `data/upload/gmd/` 폴더를 `data/gmd/`로 올린다. GMD 전체(11GB)는 올리지 않는다 |
-| `data/mdb_drums/` | 로컬 `AI/data/mdb_drums/` 폴더 그대로 (`MDB Drums/` 23곡, 331MB) | 폴더째 올린다 |
-
-```bash
-# gmd_test.yaml의 연주 45개와 info.csv만 data/upload/gmd/groove/ 에 복사하고, 복사본으로 곡 수·누락을 점검한다
-uv run python scripts/pack_gmd_subset.py configs/bench/datasets/gmd_test.yaml data/upload/gmd
-```
-
-본측정 runId는 `drums-synth`·`drums-gmd`·`drums-mdb`·`drums-mdbu`(정답 드럼 입력), `mix-*`(원곡 입력), `sep-sw-*`·`sep-musdb-*`(분리 모델이 뽑은 드럼 입력)로 고정돼 있어, 세션이 끊기면 준비 셀(1~6)을 돌린 뒤 같은 셀을 다시 실행하면 이어서 돈다. 합친 보고서는 드라이브 `results/combined/`에 생긴다.
-
-### 채보 벤치마크를 GPU 서버에서 돌리기
-
-코랩 대신 학교 GPU 서버(JupyterHub)에서 모델을 더 돌릴 때 쓴다. 지금은 YourMT3+ 하나를 돌리고 결과를 코랩 결과와 합친다. 서버에는 드라이브가 없으므로 필요한 것을 zip 5개로 묶어 JupyterHub 홈 폴더에 올리고, `notebooks/transcription_bench_server.ipynb`를 같이 올려 위에서부터 실행한다.
-
-```bash
-# 올릴 zip 5개를 data/upload/server/ 에 만든다. 코랩 분리 드럼 캐시에 빠진 곡이 있으면 목록을 찍고 멈춘다
-uv run python scripts/pack_server_upload.py
-```
-
-| zip | 내용 | 크기 |
-| --- | --- | --- |
-| `S15P31A307_code.zip` | 저장소 코드. git이 추적하는 파일과 아직 커밋하지 않은 새 파일 | 약 2MB |
-| `data_synth_v1.zip`, `data_gmd.zip`, `data_mdb_drums.zip` | 합성곡 5곡, GMD test 연주 45개(`pack_gmd_subset.py`로 뽑은 것), MDB Drums 23곡 | 약 220·550·350MB |
-| `results_separated.zip` | 코랩 `sep-*` run에서 분리 모델이 뽑아 둔 드럼 32곡. 서버에서 `--separated-dir`로 그대로 써서 분리 모델을 설치하지 않는다 | 약 600MB |
-
-서버에서 다른 점
-
-- **지정된 GPU만 쓴다.** 공용 서버라서 서버 ipynb 파일 1번 셀의 `GPU_ID`에 지정받은 번호를 넣는다. `CUDA_VISIBLE_DEVICES`로 그 GPU 하나만 보이게 한다.
-- **torch를 CUDA 12.8판으로 바꿔 넣는다.** `uv.lock`의 Linux torch는 CUDA 13판이라 드라이버가 CUDA 12.8인 서버(드라이버 570)에서는 GPU를 못 잡고 경고 한 줄만 찍은 채 CPU로 돈다. 그래서 하네스 환경은 extra 없이 `uv sync`만 하고 CUDA 12.8판 torch를 `uv pip install`로 넣은 뒤, `uv run` 대신 `.venv/bin/ssaplash-bench`로 부른다(`uv run`이 잠금 파일대로 다시 맞추지 않게).
-- **runId는 `ymt3-*`.** 코랩 run 폴더에 이어 붙이지 않고 새 폴더로 돌린다. 한 CSV 안에 GPU가 섞이지 않게 하기 위해서다.
-- **보고서는 로컬에서 만든다.** 서버의 `results_ymt3.zip`(서버 ipynb 파일 12번 셀)을 내려받아 `data/results/`에 풀고 코랩 results.csv와 같이 `report-transcription`에 넘긴다. GPU가 다른 행이 섞인 묶음은 비교표에 GPU 열이 붙는다. 점수는 GPU와 상관없어 그대로 비교하고, RTF·GPU 메모리는 GPU가 달라 따로 본다.
 
 ### 채보 규칙 분석 도구 (S15P31A307-163)
 
@@ -847,7 +794,7 @@ uv run python scripts/compare_drum2midi.py --run d2m=data/results/d2m-drums-mdb 
 uv run python scripts/check_false_toms.py --features base=data/rule_features --features tom_6cls=data/rule_features_ft_tom_6cls --dataset configs/bench/datasets/enst_minus_one.yaml --song-prefix drummer_1 --candidates docs/chart-rules/tom-newkits-2026-10-29/candidates.yaml --candidate pk_gap30 --out data/results/false-toms-enst-drummer_1.md
 ```
 
-곡 안 탐 그룹 나누기·이름 붙이기 값을 다시 고를 때는 스크립트 세 개를 쓴다. `tom_rule_grid.py`가 `adtof_drumsep.yaml` 규칙에서 탐 그룹 키만 바꾼 후보 yaml을 만들고, `tom_rule_eval_stream.py`가 곡마다 특징을 읽어 후보 전부를 rule-eval과 같은 계산으로 채점한다. rule-eval은 특징을 한꺼번에 메모리에 올려서 E-GMD test 1,170개처럼 큰 데이터는 이 스크립트를 쓴다. `tom_rule_pick.py select`는 E-GMD 키트마다 탐 이름 정확도를 내고 키트 평균으로 후보를 고른 뒤 키트 하나 빼기를 반복하고, `enst`는 ENST에서 지금 규칙 대비 차이와 같은 곡끼리 다시 뽑은 95% 구간을 드러머별로 낸다. 결과는 `docs/chart-rules/tom-rule-retune-2026-11/`. 같은 실행을 GPU 서버에서 하려면 `notebooks/tom_rule_retune_server.ipynb`를 쓴다. 서버 운영 코드를 덮어쓰지 않고, 채점 스크립트와 후보 yaml을 셀 안에서 따로 써서 돌린다. 서비스처럼 원곡을 분리한 드럼으로 특징을 만들 때는 `scripts/rule_features_separated.py --separator <분리 모델 yaml> --dataset <데이터셋 yaml> --out <특징 폴더>`를 쓴다. 채보에 넣은 분리 드럼을 `stem_input`으로 같이 저장해 채점 스크립트가 거르기 입력으로 쓴다.
+곡 안 탐 그룹 나누기·이름 붙이기 값을 다시 고를 때는 스크립트 세 개를 쓴다. `tom_rule_grid.py`가 `adtof_drumsep.yaml` 규칙에서 탐 그룹 키만 바꾼 후보 yaml을 만들고, `tom_rule_eval_stream.py`가 곡마다 특징을 읽어 후보 전부를 rule-eval과 같은 계산으로 채점한다. rule-eval은 특징을 한꺼번에 메모리에 올려서 E-GMD test 1,170개처럼 큰 데이터는 이 스크립트를 쓴다. `tom_rule_pick.py select`는 E-GMD 키트마다 탐 이름 정확도를 내고 키트 평균으로 후보를 고른 뒤 키트 하나 빼기를 반복하고, `enst`는 ENST에서 지금 규칙 대비 차이와 같은 곡끼리 다시 뽑은 95% 구간을 드러머별로 낸다. 결과는 `docs/chart-rules/tom-rule-retune-2026-11/`. 서비스처럼 원곡을 분리한 드럼으로 특징을 만들 때는 `scripts/rule_features_separated.py --separator <분리 모델 yaml> --dataset <데이터셋 yaml> --out <특징 폴더>`를 쓴다. 채보에 넣은 분리 드럼을 `stem_input`으로 같이 저장해 채점 스크립트가 거르기 입력으로 쓴다.
 
 ```bash
 uv run python scripts/tom_rule_grid.py --out docs/chart-rules/tom-rule-retune-2026-11
@@ -885,7 +832,7 @@ uv run python scripts/ensemble_eval.py --dataset configs/bench/datasets/public_s
 
 ### 채보 모델 파인튜닝 (S15P31A307-164)
 
-ADTOF Frame_RNN(파라미터 45만 개, 되돌리기 대상 `original`이 쓰는 모델)을 E-GMD·STAR Drums의 정답 드럼 트랙으로 더 학습시켜 탐 검출을 올린다. 2026-10-31 결과로 파인튜닝 가중치는 채택하지 않았다. MDB 탐은 올랐지만 학습에 안 쓴 실제 녹음 ENST에서 탐이 떨어졌다(`docs/chart-rules/tom-finetune-2026-10-31/summary.md`). 되돌리기 대상 `original`은 기본 가중치 그대로이고 아래 도구는 재시도용으로 남긴다. 모델 구조·입력 특징은 그대로이고 가중치 파일만 바뀌므로 어댑터·벤치마크·서비스 추론은 yaml의 `checkpoint_path`만 바꾸면 그대로 돈다. 원본 ADTOF 학습 코드는 Keras이고 학습 데이터는 신청제라 학습 코드를 새로 썼다(`src/ssaplash_ai/train/`). 학습은 GPU 서버에서 `notebooks/tom_finetune_server.ipynb`로 돌리고, 로컬은 pytest의 합성 데이터 몇 스텝(CPU)까지만 한다.
+ADTOF Frame_RNN(파라미터 45만 개, 되돌리기 대상 `original`이 쓰는 모델)을 E-GMD·STAR Drums의 정답 드럼 트랙으로 더 학습시켜 탐 검출을 올린다. 2026-10-31 결과로 파인튜닝 가중치는 채택하지 않았다. MDB 탐은 올랐지만 학습에 안 쓴 실제 녹음 ENST에서 탐이 떨어졌다(`docs/chart-rules/tom-finetune-2026-10-31/summary.md`). 되돌리기 대상 `original`은 기본 가중치 그대로이고 아래 도구는 재시도용으로 남긴다. 모델 구조·입력 특징은 그대로이고 가중치 파일만 바뀌므로 어댑터·벤치마크·서비스 추론은 yaml의 `checkpoint_path`만 바꾸면 그대로 돈다. 원본 ADTOF 학습 코드는 Keras이고 학습 데이터는 신청제라 학습 코드를 새로 썼다(`src/ssaplash_ai/train/`). 학습은 GPU 서버에서 돌리고, 로컬은 pytest의 합성 데이터 몇 스텝(CPU)까지만 한다.
 
 ```bash
 # 1. 학습. best.pth·last.pth·log.csv(에폭별 손실·검증 F1)·config.yaml 복사본이 --out에 생긴다
@@ -955,7 +902,7 @@ STRUM 학습 가중치(`configs/bench/transcribers/strum/strum_crnn_songsterr_eg
 uv run python scripts/strum_service_check.py --manifest data/ext_train/test31.json --reference data/results/ext_notes/strum_p3_RE_sg --mono16 --tolerance-ms 12
 ```
 
-서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 원래 ADTOF + 드럼 킷 분리 모델(`adtof_drumsep.yaml`, 결과 표의 이름은 "현재 사용 중 모델"), 실제 녹음 학습 모델, 조합(탐만 원래 모델)을 비교하는 것은 `notebooks/sep_compare_server.ipynb`가 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
+서비스와 같은 입력(BS-Roformer SW로 뽑은 드럼)으로 원래 ADTOF + 드럼 킷 분리 모델(`adtof_drumsep.yaml`, 결과 표의 이름은 "현재 사용 중 모델"), 실제 녹음 학습 모델, 조합(탐만 원래 모델)을 비교할 때는 GPU 서버에서 `run-transcription --save-midi`로 곡별 예측 MIDI를 만들고 로컬에서 채점한다. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`configs/bench/transcribers/adtof_drumsep/sep_compare/realrec_heldout_d{1,2,3}.yaml`)으로 채점한다.
 
 ```bash
 uv run python scripts/score_sep_compare.py --results data/results/sep_compare --out data/results/sep_compare/compare.md
@@ -1068,7 +1015,7 @@ uv run ssaplash-bench relog data/results data/models/adtof_ft --recursive --mlfl
 
 ## 데이터
 
-`AI/data/`는 git이 추적하지 않는다. 폴더마다 무슨 데이터가 있는지는 `AI/data/README.md`에 있다. 아래 두 데이터셋과 MDB Drums는 직접 받아 둔다. E-GMD·STAR Drums·ENST·Songsterr 곡은 아래 표와 각 설정 yaml 주석을 본다. 모두 교육·연구 목적으로만 쓰고 저장소나 Notion에 음원을 올리지 않는다.
+`AI/data/`는 git이 추적하지 않고 빈 폴더만 `.gitkeep`으로 둔다. 아래 두 데이터셋과 MDB Drums는 직접 받아 둔다. E-GMD·STAR Drums·ENST·Songsterr 곡은 아래 표와 각 설정 yaml 주석을 본다. 모두 교육·연구 목적으로만 쓰고 저장소나 Notion에 음원을 올리지 않는다.
 
 | 데이터셋 | 용도 | 받는 곳 | 크기 | 라이선스 | md5 |
 | --- | --- | --- | --- | --- | --- |
@@ -1097,7 +1044,6 @@ AI/data/
 │   ├─ onsets.csv                     타격 시각(초)·MIDI 피치·악기 분류·세기
 │   └─ meta.yaml                      출처·라이선스·bpm·게인
 ├─ mdb_drums/                         채보 벤치마크용. 아래 "MDB Drums" 절
-│   ├─ CHECKSUMS.txt                  sha256 (git 추적)
 │   └─ MDB Drums/{annotations,audio/drum_only,audio/full_mix}/
 ├─ enst/, e-gmd/, star_drums/, songsterr/   채보 평가·학습 데이터. 아래 표와 각 설정 yaml 주석
 ├─ enst_gain1_musdb/                  ENST를 MUSDB 폴더 모양으로 내보낸 것 (드럼리스 MR 품질 비교용)
@@ -1151,7 +1097,6 @@ cd AI/data
 git clone --depth 1 --filter=blob:none --sparse https://github.com/CarlSouthall/MDBDrums.git mdb_drums
 cd mdb_drums
 git sparse-checkout set "MDB Drums/annotations" "MDB Drums/audio/drum_only" "MDB Drums/audio/full_mix"
-sha256sum -c CHECKSUMS.txt   # 115개 파일. 체크섬 파일은 git이 추적한다 (2018-03-12 커밋 b29e2d6 기준)
 rm -rf .git                  # 받은 뒤 안쪽 .git은 지운다. 남겨 두면 우리 저장소 git status에 잡힌다
 ```
 

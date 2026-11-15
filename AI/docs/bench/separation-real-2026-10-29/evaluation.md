@@ -128,7 +128,7 @@
 
 | 결과 | 만드는 법 |
 | --- | --- |
-| `enst/`, `mdb/` 보고서 | GPU 서버에서 `notebooks/separation_quality_server.ipynb`. run-id는 `sep-quality-enst`, `sep-quality-mdbu`, `sep-quality-mdb` |
+| `enst/`, `mdb/` 보고서 | GPU 서버에서 실행. run-id는 `sep-quality-enst`, `sep-quality-mdbu`, `sep-quality-mdb` |
 | `enst-gain1/` 보고서 | `uv run ssaplash-bench run --models configs/bench/models/msst/bs_roformer_sw.yaml --dataset configs/bench/datasets/enst_minus_one_gain1.yaml --save-wav 64 --run-id sep-enst-gain1 --mlflow-uri none` |
 | `onset_merged_*.csv` | `uv run python scripts/check_onset_merged.py <데이터셋 yaml> --separated data/results/<run-id>/separated/bs_roformer_sw --out <CSV>` |
 | `mdb_musdb_stems.csv` | `uv run python scripts/compare_mdb_musdb_stems.py --out <CSV>` |
