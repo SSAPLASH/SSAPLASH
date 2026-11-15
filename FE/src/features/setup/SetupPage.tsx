@@ -13,16 +13,15 @@ import { useRecentHits } from '@/components/drum/useRecentHits';
 import { StageBeam, StageFloor } from '@/components/drum/StageLights';
 import { Button } from '@/components/ui/action/Button';
 import { Card } from '@/components/ui/layout/Card';
-import { Segmented } from '@/components/ui/form/Segmented';
 import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { Slider } from '@/components/ui/form/Slider';
-import { Toggle } from '@/components/ui/form/Toggle';
 import { HitLog } from '@/features/setup/components/HitLog';
 import { HIT_LOG_ROWS } from '@/features/setup/components/hitLogFormat';
 import '@/features/setup/components/setup.css';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
-import { timingCalStatusText } from '@/components/calibration/timingCalText';
+import { outputLatencyWarnText, timingCalMismatchText, timingCalStatusText, timingOffsetText } from '@/components/calibration/timingCalText';
+import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/calibration/timingCalibration';
 import { SensorOptionsPanel } from '@/features/setup/components/SensorOptionsPanel';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/features/setup/components/preset/PresetChips';
 import { PresetNameDialog } from '@/features/setup/components/preset/PresetNameDialog';
@@ -84,11 +83,6 @@ const KIT_SCALE = 1.6;
 const KIT_GUIDE_TEXT = '아무 패드나 쳐 보세요. 맞게 잡히면 그 자리에 불이 들어와요.';
 /** 시스템 기본 + 센서 모드: 고정 자리 안내 */
 const KIT_GUIDE_SYSTEM_TEXT = '기본 자리예요. 내 자리로 맞추려면 [새로 보정]을 눌러요.';
-
-const COUNT_IN_OPTIONS = [
-  { value: '0', label: '끔' },
-  { value: '1', label: '켬' },
-];
 
 const NO_SENSOR = { id: 'none', label: '키보드만', description: '키 하나가 패드 하나. 보정 없이 바로 플레이' };
 
@@ -220,6 +214,9 @@ export function SetupPage() {
   const hasAnchors: [boolean, boolean] = [s.stickAnchors[0] !== null, s.stickAnchors[1] !== null];
 
   const lat = audioEngine.latency();
+  // 박자 맞추기 안내: 측정한 입력과 지금 입력이 다르거나, 보고된 출력 지연이 크면 고급 설정에 한 줄씩 보인다
+  const timingMismatch = timingCalMismatchText(s.timingCal, sensorMode);
+  const latencyWarn = outputLatencyWarnText(lat?.outputLatencyMs);
   const recentHits = useRecentHits(HIT_LOG_ROWS);
   // 드럼 그림: 자유 연습과 같은 LiveDrumKit. 패드 점등·타격 모션은 usePadStates·usePadHitSeq가 준다
   const padStates = usePadStates();
@@ -231,6 +228,13 @@ export function SetupPage() {
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null);
   useStageFit(stageEl);
   const [advOpen, setAdvOpen] = useState(false);
+  const advBodyRef = useRef<HTMLDivElement>(null);
+  // 고급 설정을 펼치면 내용이 화면 아래에 가려지지 않게 스크롤해 보인다(하단 바 높이만큼의 여백은 CSS scroll-margin)
+  useEffect(() => {
+    if (!advOpen) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    advBodyRef.current?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+  }, [advOpen]);
 
   // ---- 단계 판정(적용 프리셋 기준 보정 완료, PLAY-004 D9·UX-64 D7) ----
   const readinessInput = {
@@ -713,82 +717,70 @@ export function SetupPage() {
       {/* 패드 보정 팝업: 보정 중(capture)에만 열린다. 재정렬은 ② 단계 팝업이 맡는다 */}
       {capturing && <CalibrationDialog presetName={stageName} onSave={onCaptureSave} />}
 
-      {/* 고급 설정: 판정 반경·연주 환경(설정 스토어에 즉시 저장되어 미저장 판정 대상이 아니다) */}
+      {/* 고급 설정: 판정 타이밍·패드 인식 범위. 스틱·기기에 맞추는 값만 둔다(앱 동작 값은 설정 화면). 설정 스토어에 즉시 저장되어 미저장 판정 대상이 아니다 */}
       <Card padding="md" className="setup-adv" role="region" aria-labelledby="setup-adv-title">
         <div className="setup-card-head">
           <div className="setup-step-main">
             <h2 id="setup-adv-title" className="setup-card-title">
               고급 설정
             </h2>
-            <p className="setup-card-desc">판정 반경 · 판정 폭 · 노트 낙하 · 카운트다운 · 메트로놈</p>
+            <p className="setup-card-desc">판정 타이밍 · 패드 인식 범위</p>
           </div>
           <Button variant="text" className="setup-step-action" aria-expanded={advOpen} aria-controls="setup-adv-body" onClick={() => setAdvOpen((v) => !v)}>
             {advOpen ? '접기' : '펼치기'}
           </Button>
         </div>
         {advOpen && (
-          <div id="setup-adv-body" className="setup-adv-body">
-            <Slider
-              label="판정 반경 하한"
-              min={TUNING_RANGES.minRadiusDeg.min}
-              max={TUNING_RANGES.minRadiusDeg.max}
-              step={TUNING_RANGES.minRadiusDeg.step}
-              value={s.tuning.minRadiusDeg}
-              valueText={`${s.tuning.minRadiusDeg}°`}
-              onChange={(v) => s.setTuning({ minRadiusDeg: v })}
-            />
-            <Slider
-              label="판정 반경 상한"
-              min={TUNING_RANGES.maxRadiusDeg.min}
-              max={TUNING_RANGES.maxRadiusDeg.max}
-              step={TUNING_RANGES.maxRadiusDeg.step}
-              value={s.tuning.maxRadiusDeg}
-              valueText={`${s.tuning.maxRadiusDeg}°`}
-              onChange={(v) => s.setTuning({ maxRadiusDeg: v })}
-            />
-            <Slider
-              label="판정 폭 Perfect"
-              min={10}
-              max={60}
-              step={5}
-              value={s.timing.perfectMs}
-              valueText={`±${s.timing.perfectMs}ms`}
-              onChange={(v) => s.setTiming({ ...s.timing, perfectMs: v })}
-            />
-            <Slider
-              label="판정 폭 Good"
-              min={30}
-              max={150}
-              step={5}
-              value={s.timing.goodMs}
-              valueText={`±${s.timing.goodMs}ms`}
-              onChange={(v) => s.setTiming({ ...s.timing, goodMs: v })}
-            />
-            <Slider
-              label="노트 낙하 시간"
-              min={600}
-              max={3000}
-              step={100}
-              value={s.scrollMs}
-              valueText={`${s.scrollMs}ms`}
-              onChange={(v) => s.setScrollMs(v)}
-            />
-            <div className="setup-adv-item">
-              <span className="setup-adv-label">카운트다운</span>
-              <Segmented
-                label="카운트다운"
-                options={COUNT_IN_OPTIONS}
-                value={String(s.countInBars)}
-                onChange={(v) => s.setCountInBars(Number(v))}
+          <div id="setup-adv-body" ref={advBodyRef} className="setup-adv-body">
+            <div className="setup-adv-group" role="group" aria-labelledby="setup-adv-timing">
+              <h3 id="setup-adv-timing" className="setup-adv-group-title">판정 타이밍</h3>
+              <p className="setup-adv-note">판정이 빠르면 내리고, 늦으면 올려요.</p>
+              <Slider
+                label="스틱 판정 타이밍"
+                min={TIMING_OFFSET_MIN_MS}
+                max={TIMING_OFFSET_MAX_MS}
+                step={TIMING_OFFSET_STEP_MS}
+                value={s.audioOffsetMs}
+                valueText={timingOffsetText(s.audioOffsetMs)}
+                onChange={s.setAudioOffsetMs}
+              />
+              <Slider
+                label="킥 판정 타이밍"
+                min={TIMING_OFFSET_MIN_MS}
+                max={TIMING_OFFSET_MAX_MS}
+                step={TIMING_OFFSET_STEP_MS}
+                value={kickOffsetOrStick(s.audioOffsetMs, s.kickOffsetMs)}
+                valueText={timingOffsetText(kickOffsetOrStick(s.audioOffsetMs, s.kickOffsetMs))}
+                onChange={s.setKickOffsetMs}
+              />
+              {timingMismatch && <p className="setup-adv-note">{timingMismatch}</p>}
+              {latencyWarn && <p className="setup-adv-note">{latencyWarn}</p>}
+              <p className="setup-adv-foot">
+                오디오 지연 실측: {lat ? `base ${lat.baseLatencyMs.toFixed(1)}ms · output ${lat.outputLatencyMs.toFixed(1)}ms · ${lat.sampleRate}Hz` : '소리를 한 번 내면 표시됩니다'}
+              </p>
+            </div>
+            <div className="setup-adv-group" role="group" aria-labelledby="setup-adv-range">
+              <h3 id="setup-adv-range" className="setup-adv-group-title">패드 인식 범위</h3>
+              <p className="setup-adv-note">옆 패드가 울리면 최대를 줄이고, 잘 안 맞으면 최소를 늘려요.</p>
+              <Slider
+                label="패드 인식 범위 최소"
+                min={TUNING_RANGES.minRadiusDeg.min}
+                max={TUNING_RANGES.minRadiusDeg.max}
+                step={TUNING_RANGES.minRadiusDeg.step}
+                value={s.tuning.minRadiusDeg}
+                valueText={`${s.tuning.minRadiusDeg}°`}
+                onChange={(v) => s.setTuning({ minRadiusDeg: v })}
+              />
+              <Slider
+                label="패드 인식 범위 최대"
+                min={TUNING_RANGES.maxRadiusDeg.min}
+                max={TUNING_RANGES.maxRadiusDeg.max}
+                step={TUNING_RANGES.maxRadiusDeg.step}
+                value={s.tuning.maxRadiusDeg}
+                valueText={`${s.tuning.maxRadiusDeg}°`}
+                onChange={(v) => s.setTuning({ maxRadiusDeg: v })}
               />
             </div>
-            <div className="setup-adv-switch">
-              <span>플레이 중 메트로놈</span>
-              <Toggle label="플레이 중 메트로놈" checked={s.metronome} onChange={s.setMetronome} />
-            </div>
-            <p className="setup-adv-foot">
-              오디오 지연 실측: {lat ? `base ${lat.baseLatencyMs.toFixed(1)}ms · output ${lat.outputLatencyMs.toFixed(1)}ms · ${lat.sampleRate}Hz` : '소리를 한 번 내면 표시됩니다'}
-            </p>
           </div>
         )}
       </Card>
