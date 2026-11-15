@@ -1,9 +1,9 @@
 {
   "gate": {
-    "mode": "shadow",
+    "mode": "on",
     "arms": [{ "model": "coach-gate-mlp16", "share": 100 }]
   },
   "cause": { "arms": [{ "model": "coach-cause-logistic", "share": 100 }] },
-  "llm": { "mode": "shadow", "rolloutPercent": 100 },
+  "llm": { "mode": "on", "rolloutPercent": 100 },
   "rolloutPercent": 100
 }
