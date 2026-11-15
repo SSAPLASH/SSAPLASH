@@ -20,7 +20,7 @@ import { HIT_LOG_ROWS } from '@/features/setup/components/hitLogFormat';
 import '@/features/setup/components/setup.css';
 import { TimingCalDialog } from '@/components/calibration/TimingCalDialog';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';
-import { outputLatencyWarnText, timingCalMismatchText, timingCalRecordText, timingCalStatusText, timingOffsetText } from '@/components/calibration/timingCalText';
+import { outputLatencyWarnText, timingCalMismatchText, timingCalStatusText, timingOffsetText } from '@/components/calibration/timingCalText';
 import { kickOffsetOrStick, TIMING_OFFSET_MAX_MS, TIMING_OFFSET_MIN_MS, TIMING_OFFSET_STEP_MS } from '@/domain/kit/calibration/timingCalibration';
 import { SensorOptionsPanel } from '@/features/setup/components/SensorOptionsPanel';
 import { PresetChips, SLOTS_FULL_TEXT } from '@/features/setup/components/preset/PresetChips';
@@ -734,7 +734,7 @@ export function SetupPage() {
           <div id="setup-adv-body" ref={advBodyRef} className="setup-adv-body">
             <div className="setup-adv-group" role="group" aria-labelledby="setup-adv-timing">
               <h3 id="setup-adv-timing" className="setup-adv-group-title">판정 타이밍</h3>
-              <p className="setup-adv-note">박자 맞추기로 자동으로 맞출 수 있어요. 여기서는 손으로 미세하게 고쳐요.</p>
+              <p className="setup-adv-note">판정이 빠르면 내리고, 늦으면 올려요.</p>
               <Slider
                 label="스틱 판정 타이밍"
                 min={TIMING_OFFSET_MIN_MS}
@@ -744,7 +744,6 @@ export function SetupPage() {
                 valueText={timingOffsetText(s.audioOffsetMs)}
                 onChange={s.setAudioOffsetMs}
               />
-              <p className="setup-adv-help">판정이 빠르게 나오면 내리고, 늦게 나오면 올리세요</p>
               <Slider
                 label="킥 판정 타이밍"
                 min={TIMING_OFFSET_MIN_MS}
@@ -754,8 +753,6 @@ export function SetupPage() {
                 valueText={timingOffsetText(kickOffsetOrStick(s.audioOffsetMs, s.kickOffsetMs))}
                 onChange={s.setKickOffsetMs}
               />
-              <p className="setup-adv-help">킥 페달 판정만 따로 맞춰요.</p>
-              <p className="setup-adv-note">{timingCalRecordText(s.timingCal)}</p>
               {timingMismatch && <p className="setup-adv-note">{timingMismatch}</p>}
               {latencyWarn && <p className="setup-adv-note">{latencyWarn}</p>}
               <p className="setup-adv-foot">
@@ -764,7 +761,7 @@ export function SetupPage() {
             </div>
             <div className="setup-adv-group" role="group" aria-labelledby="setup-adv-range">
               <h3 id="setup-adv-range" className="setup-adv-group-title">패드 인식 범위</h3>
-              <p className="setup-adv-note">패드 보정이 정하는 패드별 인식 범위의 한계예요. 옆 패드가 같이 울리면 최대를 줄이고, 잘 안 맞으면 최소를 늘리세요.</p>
+              <p className="setup-adv-note">옆 패드가 울리면 최대를 줄이고, 잘 안 맞으면 최소를 늘려요.</p>
               <Slider
                 label="패드 인식 범위 최소"
                 min={TUNING_RANGES.minRadiusDeg.min}
