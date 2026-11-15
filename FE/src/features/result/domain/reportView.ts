@@ -15,6 +15,31 @@ export const PAD_MAIN_ROWS = 3;
 /** 리포트 화면의 판정 이름(D7) */
 export const JUDGEMENT_LABEL: Record<Judgement, string> = { PERFECT: '정확', GOOD: '타이밍 차이', MISS: '놓침' };
 
+/**
+ * 리포트 화면의 노트 구분(설계 COACH-002-report-timing-direction D3). 판정의 GOOD을 오차 부호로 나눈다 —
+ * 「타이밍이 어긋났다」가 아니라 빨랐는지 늦었는지를 보인다. 놓침은 오차가 없어 방향을 알 수 없다
+ */
+export type NoteVerdict = 'PERFECT' | 'EARLY' | 'LATE' | 'MISS';
+
+/** 구분의 화면 이름 */
+export const VERDICT_LABEL: Record<NoteVerdict, string> = { PERFECT: '정확', EARLY: '빠름', LATE: '늦음', MISS: '놓침' };
+
+/** 5초 막대 범례에서 빠름·늦음을 한 색으로 묶은 이름(D5 — 막대는 색 3개 그대로다) */
+export const OFF_BEAT_LABEL = `${VERDICT_LABEL.EARLY}·${VERDICT_LABEL.LATE}`;
+
+/** GOOD이고 오차가 음수면 빠름, GOOD의 나머지는 늦음(오차가 0이거나 없는 GOOD은 서버 계약상 오지 않는다) */
+export function noteVerdict(n: Pick<ReportNote, 'judgement' | 'deltaMs'>): NoteVerdict {
+  if (n.judgement !== 'GOOD') return n.judgement;
+  return n.deltaMs !== null && n.deltaMs < 0 ? 'EARLY' : 'LATE';
+}
+
+/** 구분별 노트 수 */
+export function verdictCounts(notes: readonly Pick<ReportNote, 'judgement' | 'deltaMs'>[]): Record<NoteVerdict, number> {
+  const counts: Record<NoteVerdict, number> = { PERFECT: 0, EARLY: 0, LATE: 0, MISS: 0 };
+  for (const n of notes) counts[noteVerdict(n)] += 1;
+  return counts;
+}
+
 const safe = (ms: number) => (Number.isFinite(ms) && ms > 0 ? ms : 0);
 const two = (n: number) => String(n).padStart(2, '0');
 
@@ -59,7 +84,12 @@ const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 export interface FlowBin {
   fromMs: number;
   perfect: number;
+  /** 빠름 + 늦음(막대의 한 토막) */
   good: number;
+  /** good 중 박보다 빨리 친 수 */
+  early: number;
+  /** good 중 박보다 늦게 친 수 */
+  late: number;
   miss: number;
 }
 
@@ -73,12 +103,17 @@ export function flowTotalMs(notes: readonly ReportNote[], durationMs: number | n
 /** 노트를 5초 칸으로 묶는다(시작 포함, 끝 미포함). 축 밖 노트는 양 끝 칸에 넣는다 */
 export function flowBins(notes: readonly ReportNote[], totalMs: number): FlowBin[] {
   const count = Math.max(1, Math.ceil(totalMs / FLOW_BIN_MS));
-  const bins: FlowBin[] = Array.from({ length: count }, (_, i) => ({ fromMs: i * FLOW_BIN_MS, perfect: 0, good: 0, miss: 0 }));
+  const bins: FlowBin[] = Array.from({ length: count }, (_, i) => ({ fromMs: i * FLOW_BIN_MS, perfect: 0, good: 0, early: 0, late: 0, miss: 0 }));
   for (const n of notes) {
     const bin = bins[Math.min(count - 1, Math.max(0, Math.floor(n.timeMs / FLOW_BIN_MS)))];
-    if (n.judgement === 'PERFECT') bin.perfect += 1;
-    else if (n.judgement === 'GOOD') bin.good += 1;
-    else bin.miss += 1;
+    const verdict = noteVerdict(n);
+    if (verdict === 'PERFECT') bin.perfect += 1;
+    else if (verdict === 'MISS') bin.miss += 1;
+    else {
+      bin.good += 1;
+      if (verdict === 'EARLY') bin.early += 1;
+      else bin.late += 1;
+    }
   }
   return bins;
 }
