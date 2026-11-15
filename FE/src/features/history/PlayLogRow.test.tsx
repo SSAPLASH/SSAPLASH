@@ -8,7 +8,7 @@ import type { PlayRowView } from './playLogRows';
 
 const row = (over: Partial<PlayRowView> = {}): PlayRowView => ({
   playId: 'p1', title: '별빛 산책', titleMuted: false, mode: 'RHYTHM', level: 'HARD', at: new Date(2026, 10, 12, 14, 31).toISOString(), durationMs: 192000,
-  accuracy: 74.1, score: 141250, wideGoodMs: null, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' }, ...over,
+  accuracy: 74.1, score: 141250, wideGoodMs: null, rate: null, chips: [], save: null, link: { kind: 'REPORT', to: '/result/p1/report' }, ...over,
 });
 const show = (r: PlayRowView, onRetry = vi.fn()) => {
   render(
@@ -107,5 +107,13 @@ describe('PlayLogRow', () => {
     show(row({ save: 'UNSAVED', link: { kind: 'RESULT', to: '/result/p1' } }));
     expect(screen.getByText('저장 안 됨')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('연습 속도로 친 판은 보조 줄에 「70% 속도」를 보이고, 원래 빠르기면 없다', () => {
+    show(row({ rate: 0.7 }));
+    expect(screen.getByText('70% 속도')).toBeTruthy();
+    cleanup();
+    show(row({ rate: null }));
+    expect(screen.queryByText(/% 속도/)).toBeNull();
   });
 });
