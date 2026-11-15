@@ -1,6 +1,6 @@
 """노래 파일 채보에 하이햇 페달을 붙이는 방법 비교.
 
-서버 `notebooks/sep_compare_server.ipynb`가 남긴 곡별 예측 MIDI(서비스와 같은 BS-Roformer SW 드럼 입력)를 읽어,
+GPU 서버에서 run-transcription `--save-midi`로 남긴 곡별 예측 MIDI(서비스와 같은 BS-Roformer SW 드럼 입력)를 읽어,
 현재 사용 중 모델(원래 ADTOF + 드럼 킷 분리, 2026-11-05 당시 서비스 모델)의 HIHAT 노트에 실제 녹음 학습 모델의 HIHAT_PEDAL 예측을 붙이는 방법들을 같은 곡·같은 기준
 (9패드, ±50ms)으로 채점함. 실제 녹음 학습 모델은 곡마다 그 곡을 학습에 안 쓴 버전(`realrec_*_d1~3`)만 씀.
 

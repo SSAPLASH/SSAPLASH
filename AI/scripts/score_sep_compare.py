@@ -1,6 +1,6 @@
 """드럼 분리 입력 채보 모델 비교표.
 
-서버 `notebooks/sep_compare_server.ipynb`가 run-transcription `--save-midi`로 남긴 곡별 예측 MIDI를 읽어
+GPU 서버에서 run-transcription `--save-midi`로 남긴 곡별 예측 MIDI를 읽어
 세 후보를 같은 곡 목록·같은 기준(9패드, ±50ms)으로 채점함.
 
 - 현재 사용 중 모델: 원래 ADTOF + 드럼 킷 분리(`adtof_drumsep.yaml`). 2026-11-02 당시 서비스 모델이고
