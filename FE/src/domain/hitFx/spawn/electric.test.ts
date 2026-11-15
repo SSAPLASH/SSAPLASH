@@ -125,4 +125,27 @@ describe('electric 테마(연속 그림 + 입자)', () => {
       expect(Math.hypot(dx, dy)).toBeCloseTo(0.95, 5);
     }
   });
+
+  it('심벌 한 타: 가장 센 세기·판정 배율에서도 maxSpawn 이하, 수명(지연 포함)은 maxLifeMs 이하', () => {
+    for (const v of [0, 60, 127]) {
+      for (const mode of ['lab', 'game', 'sheet'] as const) {
+        for (const j of [null, 'PERFECT', 'GOOD'] as const) {
+          for (let seq = 1; seq <= 30; seq++) {
+            const e: FxEvent = { seq, pad: 'CRASH', velocity: v, mode, judgement: j, deltaMs: j ? 0 : null, combo: null };
+            const geo = { cx: 300, cy: 200, rx: 80, ry: 20, k: 80 / 57 };
+            const list = def.spawn(e, geo, 'cymbal', fxIntensity(e), createRand(seq), def.palette('acoustic', 'cymbal', 'x'));
+            expect(list.length).toBeLessThanOrEqual(def.maxSpawn);
+            for (const x of list) expect(x.lifeMs + x.delayMs).toBeLessThanOrEqual(def.maxLifeMs);
+          }
+        }
+      }
+    }
+  });
+
+  it('심벌: 가장자리 불꽃이 드럼보다 많고 9 이하', () => {
+    const drops = (shape: 'drum' | 'cymbal') => runGeo(shape, 80, 20, 6, 127).filter((p) => p.kind === 'drop').length;
+    expect(drops('cymbal')).toBeGreaterThan(drops('drum'));
+    expect(drops('cymbal')).toBeLessThanOrEqual(9);
+    expect(runGeo('cymbal', 80, 20, 6, 127).filter((p) => p.kind === 'drop').every((p) => p.lifeMs >= 180 && p.lifeMs <= 275)).toBe(true);
+  });
 });
