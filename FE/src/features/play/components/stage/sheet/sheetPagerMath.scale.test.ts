@@ -1,6 +1,6 @@
 // 악보 배율(staffScale) 단위 테스트: 칸 높이에 비례하되 1.2~1.6배로 자른다
 import { describe, expect, it } from 'vitest';
-import { CONTENT_BOTTOM, CONTENT_TOP, STAFF_SCALE_MAX, STAFF_SCALE_MIN, staffOffsetY, staffScale } from './sheetPagerMath';
+import { barsPerPage, CONTENT_BOTTOM, CONTENT_TOP, overlayLift, STAFF_MIN_LOGICAL_WIDTH, STAFF_SCALE_MAX, STAFF_SCALE_MIN, STAFF_SCALE_WIDE_MAX, staffOffsetY, staffScale, staffScaleMax } from './sheetPagerMath';
 
 const SPAN = CONTENT_BOTTOM - CONTENT_TOP;
 
@@ -20,6 +20,44 @@ describe('staffScale', () => {
     expect(staffScale(SPAN * 1.2)).toBeCloseTo(1.2);
     expect(staffScale(100)).toBe(STAFF_SCALE_MIN);
     expect(staffScale(0)).toBe(STAFF_SCALE_MIN);
+  });
+});
+
+describe('staffScaleMax (넓은 칸의 최대 배율, 설계 MODE-003-practice-speed D20)', () => {
+  it('폭을 모르거나 좁으면 1.6이다', () => {
+    expect(staffScaleMax()).toBe(1.6);
+    expect(staffScaleMax(0)).toBe(1.6);
+    expect(staffScaleMax(STAFF_MIN_LOGICAL_WIDTH * 1.6)).toBeCloseTo(1.6);
+    expect(staffScaleMax(700)).toBe(1.6);
+  });
+  it('넓으면 논리 폭이 494 아래로 내려가지 않는 만큼 커지고 2.6에서 멈춘다', () => {
+    expect(staffScaleMax(988)).toBeCloseTo(2);
+    expect(988 / staffScaleMax(988)).toBeCloseTo(STAFF_MIN_LOGICAL_WIDTH);
+    expect(staffScaleMax(1232)).toBeCloseTo(1232 / 494);
+    expect(staffScaleMax(1581)).toBe(STAFF_SCALE_WIDE_MAX);
+    expect(staffScaleMax(4000)).toBe(STAFF_SCALE_WIDE_MAX);
+  });
+  it('그 배율에서 한 화면은 두 마디이고 마디 폭은 네 마디 배치의 가장 좁은 마디(225) 이상이다', () => {
+    for (const w of [988, 1232, 1581, 2512]) {
+      const inner = w / staffScaleMax(w) - 44;
+      expect(barsPerPage(inner) === 2 ? inner / 2 : inner / 4).toBeGreaterThanOrEqual(225 - 1e-9);
+    }
+  });
+  it('staffScale은 폭을 주면 그 폭의 최대까지 키운다. 높이가 모자라면 높이가 이긴다', () => {
+    expect(staffScale(1000, 988)).toBeCloseTo(2);
+    expect(staffScale(SPAN * 1.8, 988)).toBeCloseTo(1.8);
+    expect(staffScale(1000, 700)).toBe(STAFF_SCALE_MAX);
+    expect(staffScale(1000)).toBe(STAFF_SCALE_MAX);
+  });
+});
+
+describe('overlayLift (타이밍 막대를 박 번호 아래로 올리는 높이)', () => {
+  it('칸이 악보와 막대 자리에 딱 맞으면 0이다', () => {
+    expect(overlayLift(SPAN * 1.6 + 28, 1.6, 28)).toBeCloseTo(0);
+    expect(overlayLift(100, 1.6, 28)).toBe(0);
+  });
+  it('칸이 더 높으면 남는 높이의 절반만큼 올린다(악보가 가운데에 놓인 만큼)', () => {
+    expect(overlayLift(SPAN * 1.6 + 28 + 100, 1.6, 28)).toBeCloseTo(50);
   });
 });
 

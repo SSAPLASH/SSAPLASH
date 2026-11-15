@@ -1242,13 +1242,14 @@ a.btn-ghost.as-button {
   top: 0;
   pointer-events: none;
 }
-/* 타이밍 막대: 악보 영역 안쪽 아래 가운데(보표·커서·박 번호 아래 여백) */
+/* 타이밍 막대: 악보 영역 안쪽 아래 가운데(박 번호 바로 아래). 아래 여백 8은 sheetPagerMath OVERLAY_RESERVE_PX와 맞춘다 */
 .sheet-pager-overlay {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  /* 칸이 악보보다 높으면 SheetPager가 --sheet-overlay-lift로 박 번호 아래까지 올린다 */
+  bottom: calc(8px + var(--sheet-overlay-lift, 0px));
   transform: translateX(-50%);
-  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
+  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624 + 양 끝 글자)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
   width: max-content;
   max-width: 100%;
   pointer-events: none;
