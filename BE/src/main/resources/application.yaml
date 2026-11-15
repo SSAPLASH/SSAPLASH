@@ -47,6 +47,8 @@ spring:
 chart:
   worker:
     credentials: ${CHART_WORKER_CREDENTIALS:}
+    # 모든 채보 워커의 마지막 claim·heartbeat가 이 시간보다 오래되면 대기 중인 채보 작업을 바로 실패 처리. 0이면 끔
+    offline-after-ms: ${CHART_WORKER_OFFLINE_AFTER_MS:60000}
   assets:
     enabled: ${CHART_ASSET_ENABLED:false}
     endpoint: ${CHART_ASSET_ENDPOINT:}

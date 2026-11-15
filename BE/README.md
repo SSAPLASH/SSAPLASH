@@ -14,7 +14,7 @@
 이 필터들은 교집합이며 전체 건수와 페이지에 똑같이 적용한다. 생략하면 기존 범위를 유지하므로 내 곡의 처리 중·실패 항목도 볼 수 있다.
 
 본인 곡이 실패했고 최신 채보 작업도 실패한 경우 `chartFailure`에 `{code,message,reason}`이 들어간다. 공개 가능한 기존 코드는
-`INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
+`INPUT_INVALID`, `OUTPUT_INVALID`, `MODEL_FAILED`, `JOB_CANCELLED`, `WORKER_OFFLINE`이고 그 외 또는 코드 없는 실패는 `JOB_FAILED`로 표현한다.
 선택 필드 `reason`은 `SOURCE_INVALID`, `NOT_TRANSCRIBABLE`, `GPU_OUT_OF_MEMORY`, `INTERNAL_ERROR` 중 하나이며 기존 행과 BE 자체 실패는 `null`이다. 워커가 보낸 메시지·스토리지 정보는 반환하지 않는다. 재시도 중간 실패는 공개하지 않고 최종 실패의 사유만 저장한다. AI 워커 기본 전송 설정은 꺼져 있으므로 BE 배포 뒤 `SSAPLASH_WORKER_SEND_REASON` 설정과 연동을 확인한다.
 
 ### 산정 방식과 한계
@@ -304,7 +304,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 46). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 51). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -466,6 +466,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V47 | `V47__create_live_coach_jobs.sql` | 연주 중 LLM 구간 코칭 작업 큐 `live_coach_jobs`(공개 번호, 사용자, 판 번호, 구간 사실 jsonb, 상태, 임대, 결과 `title`≤8자·`sub`≤16자). 짧게 살다 지워지는 표 | -299 |
 | V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
 | V50 | `V50__add_lesson_course.sql` | 학습 코스 `lessons.course`(`BEGINNER`·`INTERMEDIATE`, 기존 행은 `BEGINNER`). 순서 유일 조건을 `position`에서 `(course, position)`으로 바꿨다. 진도 표는 그대로 | 학습 코스(중급) |
+| V51 | `V51__create_chart_worker_presence.sql` | 채보 워커별 마지막 연락 시각 `chart_worker_presence`(`worker_id` PK, `last_seen_at`). claim·heartbeat가 올 때마다 갱신한다 | -383 |
 
 규칙:
 
@@ -1357,6 +1358,26 @@ manifest는 발급된 `fileId`, `contentType: audio/flac`, 양수 `sizeBytes`, �
 
 채보는 현재 BE가 읽을 수 있는 schemaVersion 1, 9개 패드 KICK·SNARE·HIHAT·HIHAT_PEDAL·SMALL_TOM·MID_TOM·FLOOR_TOM·CRASH·RIDE, 순서가 있는 정수 timeMs와 고유 noteId를 검사한다. READY는 모든 노트의 notation과 ppq·tempoMap·timeSignatureMap을 검사한다. AI 169번의 실제 notes/timing/notation 샘플과 FE 렌더링 정합성은 아직 검증되지 않았고 이 문서의 구조가 모델 샘플의 확정을 뜻하지 않는다. WS·실제 AI 워커·모델 및 실제 배포 스토리지 통합은 별도 검증이 필요하다.
 
+
+### 워커가 꺼졌을 때 대기 작업 실패 처리 (383번)
+
+BE는 채보 워커가 `POST /claim`이나 `POST /{jobId}/heartbeat`를 보낼 때마다 `chart_worker_presence`에 그 워커의 마지막 연락 시각을 기록한다. claim 결과가 204여도, 요청이 409로 거절돼도 기록한다. 워커는 대기 작업이 없을 때 5초마다 claim을, 작업 중에는 10초마다 heartbeat를 보낸다.
+
+10초마다 도는 복구 주기에서 기록된 워커가 없거나 모든 워커의 마지막 연락이 `chart.worker.offline-after-ms`(환경변수 `CHART_WORKER_OFFLINE_AFTER_MS`, 기본 60000)보다 오래되면 대기 중인 채보 작업을 `WORKER_OFFLINE`으로 실패 처리한다. 곡은 FAILED가 되고 원곡은 기존 실패와 같이 정리 대상에 들어간다. 사용자는 실패 화면에서 곡을 다시 올리면 된다. 판정 순서는 탈퇴·곡 삭제(`JOB_CANCELLED`), 대기 30분·단계 마감 초과(`STAGE_TIMEOUT`), 워커 꺼짐(`WORKER_OFFLINE`) 순이다. 값을 0으로 두면 이 검사를 끄고 기존처럼 30분 뒤 `STAGE_TIMEOUT`으로만 끝난다.
+
+- 워커가 꺼진 뒤 올린 곡은 약 10초 안에 실패로 끝난다.
+- 처리 중에 워커가 꺼지면 60초 임대 만료로 작업이 대기로 돌아가고, 다음 복구 주기에서 `WORKER_OFFLINE`으로 끝난다. 워커가 꺼진 뒤 약 70초다.
+- 워커를 다시 띄우면 모델을 올리는 동안에는 claim이 없어서 그 사이에 올린 곡은 실패한다. 첫 claim부터 새 곡은 정상 처리된다.
+- 공개 오류는 `code: WORKER_OFFLINE`, `message: 채보 서버가 잠시 멈춰 있습니다. 잠시 뒤 다시 올려 주세요.`이고 `reason`은 null이다.
+- 리포트 LLM 총평과 연주 중 코칭 작업 큐는 이 검사를 쓰지 않는다.
+
+운영에서 워커 연락 상태는 다음 SQL로 확인한다.
+
+```sql
+SELECT worker_id, last_seen_at, clock_timestamp() - last_seen_at AS 지난_시간 FROM chart_worker_presence ORDER BY last_seen_at DESC;
+```
+
+테스트 컨텍스트는 같은 DB를 쓰고 일부는 10초마다 복구 주기가 돌아서, `TestPropertyDefaultsInitializer`가 이 검사를 기본으로 끈다. 검사 테스트는 `WorkerOfflineTest`이며 `chart.worker.offline-after-ms=60000`으로 켠다.
 
 ## 리포트 종합 총평과 LLM 총평 작업 (COACH-003 후속)
 
