@@ -172,6 +172,65 @@ def build_cases() -> dict[str, LiveSegmentFacts]:
     }
 
 
+# 습관 상황 이름 앞에 붙는 말. 보고서가 습관 상황과 그 밖 상황의 통과율을 나눠 센다
+HABIT_CASE_PREFIX = "습관:"
+
+
+def build_habit_cases() -> dict[str, LiveSegmentFacts]:
+    """습관 골든 상황 4가지(설계 COACH-001 습관 개인화 4.4). BE가 붙이는 `habit`과 FE의 `playedPads`가 있다."""
+    base = build_cases()
+    late = base["늦음"].model_dump()
+    clean = base["잘 친 구간"].model_dump()
+    fast = base["빠름"].model_dump()
+    keyboard = base["키보드 늦음"].model_dump()
+    return {
+        # 늦게 치는 습관이 이번 구간에도 나옴 → '이번에도'
+        f"{HABIT_CASE_PREFIX} 늦음 이번에도": LiveSegmentFacts.model_validate(
+            {
+                **late,
+                "playedPads": ["KICK", "SNARE", "HIHAT"],
+                "habit": {"plays": 8, "items": [{"pattern": "TIMING_LATE", "share": "OFTEN"}]},
+            }
+        ),
+        # 스몰탐을 자주 놓치던 사람이 이번엔 스몰탐을 쳤고 놓치지 않음 → '평소보다'
+        f"{HABIT_CASE_PREFIX} 스몰탐 나아짐": LiveSegmentFacts.model_validate(
+            {
+                **clean,
+                "previous": {"counts": {"perfect": 18, "good": 8, "miss": 2}},
+                "playedPads": ["KICK", "SNARE", "SMALL_TOM"],
+                "habit": {
+                    "plays": 6,
+                    "items": [
+                        {"pattern": "MISS_CLUSTER", "pad": "SMALL_TOM", "share": "SOMETIMES"}
+                    ],
+                },
+            }
+        ),
+        # 습관(플로어탐 늦음)이 이번 구간과 관계없음 → 습관 이야기를 하지 않아야 한다
+        f"{HABIT_CASE_PREFIX} 관계없는 습관": LiveSegmentFacts.model_validate(
+            {
+                **fast,
+                "playedPads": ["KICK", "SNARE"],
+                "habit": {
+                    "plays": 5,
+                    "items": [{"pattern": "PAD_LATE", "pad": "FLOOR_TOM", "share": "OFTEN"}],
+                },
+            }
+        ),
+        # 키보드인데 약한 손 습관 → 쓰지 않는다
+        f"{HABIT_CASE_PREFIX} 키보드 약한 손": LiveSegmentFacts.model_validate(
+            {
+                **keyboard,
+                "playedPads": ["KICK", "SNARE"],
+                "habit": {
+                    "plays": 5,
+                    "items": [{"pattern": "HAND_WEAK", "hand": "LEFT", "share": "OFTEN"}],
+                },
+            }
+        ),
+    }
+
+
 @dataclass
 class Trial:
     case: str
@@ -197,6 +256,9 @@ class Summary:
     violations: dict[str, int]
     titleVariety: float
     meetsTarget: bool
+    # 습관 상황이 있을 때만: 습관 상황과 그 밖 상황의 통과율(습관 때문에 기존 상황이 나빠지지 않는지 본다)
+    habitPassRate: float | None = None
+    otherPassRate: float | None = None
 
 
 def percentile(xs: list[float], q: float) -> float:
@@ -258,6 +320,12 @@ def summarize(model: str, trials: list[Trial]) -> Summary:
     pass_rate = len(passed) / n if n else 0.0
     p95 = percentile(ms, 0.95)
     variety = title_variety(passed)
+    habit = [t for t in trials if t.case.startswith(HABIT_CASE_PREFIX)]
+    other = [t for t in trials if not t.case.startswith(HABIT_CASE_PREFIX)]
+
+    def rate(xs: list[Trial]) -> float | None:
+        return round(sum(t.passed for t in xs) / len(xs), 4) if xs and habit else None
+
     return Summary(
         model=model,
         trials=n,
@@ -270,6 +338,8 @@ def summarize(model: str, trials: list[Trial]) -> Summary:
         meetsTarget=pass_rate >= TARGET_PASS
         and p95 <= TARGET_P95_MS
         and variety >= TARGET_TITLE_VARIETY,
+        habitPassRate=rate(habit),
+        otherPassRate=rate(other),
     )
 
 
@@ -292,6 +362,14 @@ def markdown(
         f"- 목표(통과 {TARGET_PASS:.0%} 이상, 95백분위 {TARGET_P95_MS} ms 이하, 제목 다양성 "
         f"{TARGET_TITLE_VARIETY:.0%} 이상): {'충족' if summary.meetsTarget else '미달'}",
         f"- 거절 이유: {summary.violations or '없음'}",
+        *(
+            [
+                f"- 습관 상황 통과 {summary.habitPassRate:.0%}, 그 밖 상황 통과 "
+                f"{summary.otherPassRate:.0%}"
+            ]
+            if summary.habitPassRate is not None and summary.otherPassRate is not None
+            else []
+        ),
         "",
         "통과하지 못한 행의 제목·보조는 마지막으로 거절된 문구다(괄호 안은 공백 포함 글자 수).",
         "",
@@ -380,6 +458,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--seed", type=int, default=0, help="--sample의 난수 씨앗(세트끼리 같은 구간을 고른다)"
     )
+    p.add_argument(
+        "--habit",
+        action="store_true",
+        help="골든 12가지에 습관 상황 4가지를 더한다(설계 COACH-001 습관 개인화 4.4)",
+    )
     p.add_argument("--mlflow", action="store_true", help="MLflow 실험 coach-live-tip에 기록")
     p.add_argument("--tracking-uri")
     args = p.parse_args(argv)
@@ -389,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         from ssaplash_ai.coach_eval.live_real_set import load_cases
 
         cases = sample_cases(load_cases(args.facts), args.sample, args.seed)
+    elif args.habit:
+        cases = {**build_cases(), **build_habit_cases()}
     for model in args.model:
         # 운영 워커(`ssaplash-worker live-run`)와 같은 설정: 토큰 상한 80, JSON 출력
         generator = LocalServerGenerator(
@@ -398,7 +483,11 @@ def main(argv: list[str] | None = None) -> int:
         summary = summarize(model, trials)
         out = out_path(args.out, model, len(args.model))
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(markdown(summary, trials, cases), encoding="utf-8")
+        # 사실 열과 사람 판정 칸은 실제 기록 세트에만 붙인다
+        out.write_text(
+            markdown(summary, trials, cases if args.facts is not None else None),
+            encoding="utf-8",
+        )
         out.with_suffix(".jsonl").write_text(
             "\n".join(json.dumps(asdict(t), ensure_ascii=False) for t in trials) + "\n",
             encoding="utf-8",
