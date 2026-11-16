@@ -1,11 +1,11 @@
 /* 연주 화면 공통 컴포넌트(GuideSlot·HitReadout). 토큰은 tokens.css의 새 이름만 쓴다 */
 
-/* GuideSlot: 220×51 고정 박스 */
+/* GuideSlot: 264×51 고정 박스. 연주 중 LLM 보조 문구 20자(13px 한 줄)가 들어가는 폭(2026-11-16, 220에서 넓힘) */
 .guide-slot {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 220px;
+  width: 264px;
   height: 51px;
   font-family: var(--font);
   line-height: 1.45;
