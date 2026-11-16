@@ -137,8 +137,20 @@ class LiveCoachQueueTest {
     }
 
     @Test void disabledQueueAcceptsNothing() {
-        var off = new LiveCoachQueue(db, json, false, 10, 6);
+        var off = new LiveCoachQueue(db, json, null, false, 10, 6, false);
         assertThat(off.create(user, RUN, facts())).isNull();
         assertThat(off.enabled()).isFalse();
+    }
+
+    @Test void clientHabitIsDroppedWhenHabitIsOff() {
+        // 습관 설정이 꺼져 있으면(기본) FE가 보낸 habit을 지우고 나머지는 그대로 넣는다
+        var withHabit = (tools.jackson.databind.node.ObjectNode) facts();
+        withHabit.set("habit", json.readTree("{\"plays\":9,\"items\":[{\"pattern\":\"TIMING_LATE\",\"share\":\"OFTEN\"}]}"));
+        withHabit.set("playedPads", json.readTree("[\"KICK\",\"SNARE\"]"));
+        queue.create(user, RUN, withHabit);
+        var a = queue.claim("worker1", UUID.randomUUID());
+        assertThat(a.facts().has("habit")).isFalse();
+        assertThat(a.facts().path("playedPads")).hasSize(2);
+        assertThat(a.facts().path("segment").path("toBar").asInt()).isEqualTo(4);
     }
 }
