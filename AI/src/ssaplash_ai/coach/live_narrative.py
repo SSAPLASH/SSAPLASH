@@ -5,6 +5,8 @@
 가드레일은 리포트 총평(`narrative.py`)의 금지어·특수 토큰·외국 글자 검사를 함께 쓰고, 안내 칸 원칙(숫자 없음,
 짧은 길이, 키보드면 스틱 표현 없음, 스틱이면 누른다는 말 없음, 사실에 없는 패드 없음, 직전 문구 반복 없음,
 근거 없는 자세 지시 없음, 사실과 반대 방향 지시 없음)을 더한다(설계 COACH-001 각도·실측평가 3.3).
+BE가 붙인 습관 요약(`habit`)이 있으면 이번 구간과 규칙으로 맞대어(`habit_match`) 관계있을 때만 습관 한 줄을 넣고,
+습관 표현을 그 결과대로만 쓰게 한다(설계 COACH-001 습관 개인화 3.3~3.5).
 하나라도 어기면 그 구간은 LLM 문구 없이 규칙 코칭만 쓴다. 타격 원본·회원 번호·`playId`·곡 정보는 사실에 없다.
 """
 
@@ -163,6 +165,15 @@ _CORRECTION_WORDS = tuple(w for w in _TITLE_DIRECTIONS if w not in ("그대로",
     "고쳐",
 )
 _JSON = re.compile(r"\{.*?\}", re.DOTALL)
+# 패드 평균 오차가 이 이상이면 그 패드를 늦게·빠르게 친 것으로 본다(프롬프트의 '늦게 침' 표기와 같은 기준)
+PAD_SIDE_MS = 15.0
+# 습관 표현. 습관 줄이 없으면 쓰지 않는다
+_HABIT_WORDS = ("평소", "이번에도", "여전히", "습관", "버릇")
+# 습관이 이번에도 나왔을 때만 쓰는 말과, 나아졌을 때만 쓰는 말
+_REPEAT_WORDS = ("이번에도", "여전히")
+_BETTER_WORDS = ("평소보다", "좋아졌", "나아졌")
+# 탓하는 말. 습관을 짚을 때 잔소리가 되지 않게 막는다
+_BLAME = re.compile(r"(^|\s)또(\s|다시|$)|자꾸|맨날|(^|\s)늘(\s|$)")
 
 
 class SegmentRange(BaseModel):
@@ -235,8 +246,29 @@ class LiveAim(BaseModel):
     hand: Literal["LEFT", "RIGHT"] | None = None
 
 
+class LiveHabitItem(BaseModel):
+    """반복된 약점 하나(설계 COACH-001 습관 개인화 3.1). `pad`는 패드 약점만, `hand`는 약한 손만"""
+
+    model_config = ConfigDict(extra="ignore")
+    pattern: str
+    pad: str | None = None
+    hand: Literal["LEFT", "RIGHT"] | None = None
+    share: Literal["OFTEN", "SOMETIMES"] = "SOMETIMES"
+
+
+class LiveHabit(BaseModel):
+    """BE가 그 사용자의 최근 분석된 플레이로 만든 습관 요약. 숫자 비율·날짜·곡 정보는 없다"""
+
+    model_config = ConfigDict(extra="ignore")
+    plays: int = Field(ge=0, le=50)
+    items: list[LiveHabitItem] = Field(default_factory=list, max_length=2)
+
+
 class LiveSegmentFacts(BaseModel):
-    """FE가 구간 끝에 만드는 사실(설계 3.2). 모르는 필드는 버린다. `aim`은 선택 필드(없으면 빈 목록)"""
+    """FE가 구간 끝에 만드는 사실(설계 3.2). 모르는 필드는 버린다. `aim`은 선택 필드(없으면 빈 목록).
+
+    `playedPads`(이번 구간에 노트가 2개 이상 있던 패드)는 FE가, `habit`은 BE가 붙인다. 둘 다 없을 수 있다.
+    """
 
     model_config = ConfigDict(extra="ignore")
     contractVersion: Literal[1] = 1
@@ -250,6 +282,8 @@ class LiveSegmentFacts(BaseModel):
     previous: PreviousSegment = Field(default_factory=PreviousSegment)
     stage: int = Field(ge=0, le=3)
     aim: list[LiveAim] = Field(default_factory=list, max_length=3)
+    playedPads: list[str] | None = Field(default=None, max_length=9)
+    habit: LiveHabit | None = None
 
 
 # 프롬프트에 넣는 예시: (상황, 제목, 보조). 모두 가드레일을 통과하는 길이·표현이다(시험에서 확인).
@@ -348,6 +382,115 @@ def timing_direction(facts: LiveSegmentFacts) -> Literal["LATE", "EARLY"] | None
     return "LATE" if m > 0 else "EARLY"
 
 
+@dataclass(frozen=True)
+class HabitMatch:
+    """습관과 이번 구간을 맞댄 결과. REPEAT = 이번에도 같음, BETTER = 나아짐"""
+
+    kind: Literal["REPEAT", "BETTER"]
+    item: LiveHabitItem
+
+
+def _few_misses(facts: LiveSegmentFacts) -> bool:
+    c = facts.counts
+    return c.miss * 5 < c.perfect + c.good + c.miss
+
+
+def _unsteady(facts: LiveSegmentFacts) -> bool | None:
+    std = facts.timing.stdDeltaMs
+    return None if std is None else std >= TIMING_UNSTEADY_RATIO * _window(facts.timing)
+
+
+def _repeat_or_better(item: LiveHabitItem, facts: LiveSegmentFacts) -> str | None:
+    """설계 습관 개인화 3.3 표. 'REPEAT'·'BETTER' 또는 관계없음(None)"""
+    pattern = item.pattern
+    direction = timing_direction(facts)
+    if pattern in ("TIMING_LATE", "TIMING_EARLY"):
+        if direction == pattern.removeprefix("TIMING_"):
+            return "REPEAT"
+        steady_now = facts.timing.meanDeltaMs is not None and direction is None
+        return "BETTER" if steady_now and _few_misses(facts) else None
+    if pattern in ("PAD_LATE", "PAD_EARLY", "MISS_CLUSTER"):
+        if item.pad is None:
+            return None
+        here = next((p for p in facts.pads if p.pad == item.pad), None)
+        if pattern == "MISS_CLUSTER":
+            problem = here is not None and here.misses > 0
+        else:
+            m = here.meanDeltaMs if here is not None else None
+            late = pattern == "PAD_LATE"
+            problem = m is not None and (m >= PAD_SIDE_MS if late else m <= -PAD_SIDE_MS)
+        if problem:
+            return "REPEAT"
+        # 그 패드를 이번 구간에 쳤다는 근거가 있어야 나아졌다고 한다(옛 FE는 playedPads가 없다)
+        played = facts.playedPads is not None and item.pad in facts.playedPads
+        return "BETTER" if played and here is None else None
+    if pattern == "HAND_WEAK":
+        if facts.input != "stick" or item.hand is None:
+            return None
+        if facts.hands.weakHand == item.hand:
+            return "REPEAT"
+        measured = facts.hands.ratio is not None and facts.hands.weakHand is None
+        return "BETTER" if measured else None
+    if pattern == "UNSTEADY":
+        unsteady = _unsteady(facts)
+        if unsteady:
+            return "REPEAT"
+        return "BETTER" if unsteady is False and _few_misses(facts) else None
+    if pattern in ("TRANSITION_LATE", "TRANSITION_MISS"):
+        # 구간 안 전환 수를 몰라 나아짐은 판단하지 않는다
+        return "REPEAT" if "TRANSITION" in facts.ruleCoach.causes else None
+    return None
+
+
+def _speaks_habit(tip: LiveTip | None) -> bool:
+    if tip is None:
+        return False
+    text = f"{tip.title} {tip.sub}"
+    return any(w in text for w in _HABIT_WORDS + _BETTER_WORDS)
+
+
+def habit_match(facts: LiveSegmentFacts) -> HabitMatch | None:
+    """습관 중 이번 구간과 관계있는 것 하나. 이번에도 같음이 나아짐보다 먼저다.
+
+    직전 문구가 이미 습관을 말했으면 잔소리가 되지 않게 이번 구간은 쓰지 않는다.
+    """
+    if facts.habit is None or _speaks_habit(facts.previous.lastTip):
+        return None
+    found = [(r, item) for item in facts.habit.items if (r := _repeat_or_better(item, facts))]
+    for kind in ("REPEAT", "BETTER"):
+        for r, item in found:
+            if r == kind:
+                return HabitMatch(kind, item)  # type: ignore[arg-type]
+    return None
+
+
+def _habit_ko(item: LiveHabitItem) -> str:
+    pad = _pad_ko(item.pad) if item.pad else "한 패드"
+    hand = {"LEFT": "왼손", "RIGHT": "오른손"}.get(item.hand or "", "한 손")
+    return {
+        "TIMING_LATE": "박보다 늦게 침",
+        "TIMING_EARLY": "박보다 빠르게 침",
+        "PAD_LATE": f"{pad}를 늦게 침",
+        "PAD_EARLY": f"{pad}를 빠르게 침",
+        "MISS_CLUSTER": f"{pad}를 자주 놓침",
+        "HAND_WEAK": f"{hand}이 약함",
+        "UNSTEADY": "박 간격이 들쭉날쭉함",
+        "TRANSITION_LATE": "패드를 옮길 때 늦음",
+        "TRANSITION_MISS": "패드를 옮기다 놓침",
+    }.get(item.pattern, item.pattern)
+
+
+def _habit_line(match: HabitMatch) -> str:
+    how = "자주" if match.item.share == "OFTEN" else "가끔"
+    what = _habit_ko(match.item)
+    if match.kind == "REPEAT":
+        return (
+            f"평소 습관({how}): {what} → 이번 구간에도 같음. "
+            "'이번에도'로 짚고 고치는 방법을 말하세요. 탓하는 말(또·자꾸)은 쓰지 마세요"
+        )
+    return f"평소 습관({how}): {what} → 이번 구간은 나아짐. '평소보다' 좋아졌다고 칭찬하세요"
+
+
 def build_user_prompt(facts: LiveSegmentFacts, hint: str | None = None) -> str:
     """사실을 한국어 줄로 바꾼다. 숫자는 모델이 문장에 옮기지 않도록 말로 풀어 쓴다(안내 칸에는 숫자를 쓰지 않는다)."""
     c = facts.counts
@@ -392,6 +535,9 @@ def build_user_prompt(facts: LiveSegmentFacts, hint: str | None = None) -> str:
         lines.append(f"직전 구간보다 놓침이 {trend}")
     if prev.lastTip is not None:
         lines.append(f'직전에 한 말(반복 금지): "{prev.lastTip.title} / {prev.lastTip.sub}"')
+    match = habit_match(facts)
+    if match is not None:
+        lines.append(_habit_line(match))
     if hint:
         lines.append(f"앞선 답의 문제(고쳐서 다시 쓰세요): {hint}")
     return "사실:\n" + "\n".join(f"- {line}" for line in lines)
@@ -415,12 +561,30 @@ def parse_tip(text: str) -> LiveTip | None:
 
 
 def allowed_pad_names(facts: LiveSegmentFacts) -> set[str]:
+    match = habit_match(facts)
+    habit_pad = {_pad_ko(match.item.pad)} if match is not None and match.item.pad else set()
     return (
         {_pad_ko(p.pad) for p in facts.pads}
         | {_pad_ko(p.instead) for p in facts.pads if p.instead}
         | {_pad_ko(a.pad) for a in facts.aim}
         | {_pad_ko(p) for p in ANCHOR_PADS}
+        | habit_pad
     )
+
+
+def _habit_problems(text: str, facts: LiveSegmentFacts) -> list[str]:
+    """습관 표현을 맞대기 결과대로만 썼는지(설계 습관 개인화 3.5)"""
+    out: list[str] = []
+    match = habit_match(facts)
+    if match is None and any(w in text for w in _HABIT_WORDS):
+        out.append("근거 없이 습관을 말함")
+    if match is not None and match.kind == "BETTER" and any(w in text for w in _REPEAT_WORDS):
+        out.append("습관 결과와 반대로 말함")
+    if match is not None and match.kind == "REPEAT" and any(w in text for w in _BETTER_WORDS):
+        out.append("습관 결과와 반대로 말함")
+    if _BLAME.search(text):
+        out.append("탓하는 말을 씀")
+    return out
 
 
 def _only_instead_pad(text: str, facts: LiveSegmentFacts) -> bool:
@@ -530,6 +694,7 @@ def check(tip: LiveTip, facts: LiveSegmentFacts) -> list[str]:
     if not _has_posture_evidence(facts) and any(w in both for w in _POSTURE_WORDS):
         problems.append("근거 없이 자세를 말함")
     problems.extend(_contradictions(both, facts))
+    problems.extend(_habit_problems(both, facts))
     extra = _mentioned_pads(both) - allowed_pad_names(facts)
     if extra:
         problems.append("사실에 없는 패드를 말함: " + ", ".join(sorted(extra)))
