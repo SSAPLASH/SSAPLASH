@@ -28,7 +28,8 @@ public class LiveCoachQueue {
     /** 임대 시간은 claim SQL의 interval '15 seconds'와 같다. */
     static final int LEASE_SECONDS = 15;
     static final int MAX_TITLE = 8;
-    static final int MAX_SUB = 16;
+    /** 안내 칸 보조 문구 상한. 16자로는 구체적인 지시가 들어가지 않아 20자로 늘렸다(V52, QA 2026-11-16). */
+    static final int MAX_SUB = 20;
     /** 이보다 오래 기다린 작업은 워커에 주지 않는다(연주는 이미 다음 구간이다). */
     static final int STALE_SECONDS = 30;
     /** 사용자 조회에서 결과를 보여 주는 최대 나이. 이보다 오래되면 410. */
