@@ -193,3 +193,43 @@ def test_live_run은_모델_이름이_없으면_설정_오류(tmp_path, monkeypa
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("SSAPLASH_NARRATIVE_MODEL", raising=False)
     assert main(["live-run", "--max-jobs", "1"]) == EXIT_CONFIG
+
+
+def test_BE가_붙인_습관이_프롬프트에_들어가고_습관_문구를_제출한다(tmp_path):
+    # BE LiveCoachHabit이 만드는 모양 그대로(설계 COACH-001 습관 개인화 3.1)와 FE playedPads
+    facts = {
+        **FACTS,
+        "playedPads": ["KICK", "SNARE"],
+        "habit": {"plays": 4, "items": [{"pattern": "TIMING_LATE", "share": "OFTEN"}]},
+    }
+    prompts: list[str] = []
+
+    def gen(system: str, user: str) -> str:
+        prompts.append(user)
+        return json.dumps(
+            {"title": "킥보다 먼저", "sub": "이번에도 늦어요, 먼저 쳐요"}, ensure_ascii=False
+        )
+
+    runner, session = _runner(
+        tmp_path,
+        gen,
+        _Response(200, {**CLAIM, "facts": facts}),
+        _Response(200, {"status": "DONE"}),
+    )
+    out = runner.poll()
+    assert out is not None and out.status == "DONE"
+    assert "평소 습관(자주): 박보다 늦게 침 → 이번 구간에도 같음" in prompts[0]
+    assert session.calls[1]["data"]["sub"] == "이번에도 늦어요, 먼저 쳐요"
+
+
+def test_습관이_없는데_습관_문구를_쓰면_OUTPUT_INVALID(tmp_path):
+    bad = json.dumps(
+        {"title": "킥보다 먼저", "sub": "평소처럼 늦어요, 먼저 쳐요"}, ensure_ascii=False
+    )
+    runner, session = _runner(
+        tmp_path, lambda s, u: bad, _Response(200, CLAIM), _Response(200, {"status": "FAILED"})
+    )
+    runner.poll()
+    assert session.calls[1]["url"].endswith("/9/failure")
+    assert session.calls[1]["data"]["code"] == "OUTPUT_INVALID"
+    assert "근거 없이 습관을 말함" in session.calls[1]["data"]["summary"]
