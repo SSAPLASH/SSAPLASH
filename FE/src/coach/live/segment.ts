@@ -28,6 +28,8 @@ const LATER_SEGMENT_BARS = 16;
 
 export type SegmentChart = TempoChart & Pick<Chart, 'beatsPerBar'>;
 export type InputKind = 'stick' | 'keyboard';
+/** 이 수 이상 노트가 있어야 그 패드를 이번 구간에 쳤다고 본다(한 번 스친 패드로 습관이 나아졌다고 하지 않는다) */
+export const PLAYED_MIN_NOTES = 2;
 
 export interface SegmentRange {
   index: number;
@@ -86,6 +88,8 @@ export interface SegmentFacts {
   stage: CoachStage;
   /** 스틱 끝 방향 치우침(선택). 스틱 입력이고 근거가 있을 때만 넣는다. contractVersion은 1 그대로다 */
   aim?: AimFact[];
+  /** 이번 구간에 노트가 2개 이상 있던 패드(처음 나온 순서). 습관이 나아졌는지 볼 때 그 패드를 쳤다는 근거다 */
+  playedPads: PadId[];
 }
 
 export interface AimFact {
@@ -270,6 +274,7 @@ export class SegmentTracker {
       previous: { counts: this.previousCounts, lastTip: this.lastTip },
       stage,
       ...(aim.length ? { aim } : {}),
+      playedPads: playedPads(b.notes),
     };
   }
 }
@@ -376,6 +381,13 @@ function countsOf(notes: readonly JudgedNote[]): SegmentFacts['counts'] {
     else if (n.judgement === 'MISS') c.miss += 1;
   }
   return c;
+}
+
+/** 노트가 PLAYED_MIN_NOTES개 이상 있던 패드. 처음 나온 순서. AI `live_segments.played_pads`와 같다 */
+export function playedPads(notes: readonly JudgedNote[]): PadId[] {
+  const count = new Map<PadId, number>();
+  for (const n of notes) count.set(n.pad, (count.get(n.pad) ?? 0) + 1);
+  return [...count.entries()].filter(([, c]) => c >= PLAYED_MIN_NOTES).map(([pad]) => pad);
 }
 
 /** 놓침이 많은 패드부터, 같으면 평균 오차가 큰 패드. 놓침도 큰 오차(15ms 이상)도 없는 패드는 넣지 않는다. 최대 3개 */
