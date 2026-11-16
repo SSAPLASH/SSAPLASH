@@ -1411,6 +1411,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 
 - **켜기:** `LIVE_COACH_LLM_ENABLED`(기본 `false`). 꺼져 있으면 요청이 204로 끝나고 아무것도 저장하지 않는다. FE는 실험 설정(`coach-live-config`의 `llm`)도 따로 본다.
 - **상한:** 판당 `LIVE_COACH_LLM_PER_RUN`(기본 10), 사용자당 1분 `LIVE_COACH_LLM_PER_MINUTE`(기본 6). 넘으면 429. 판은 FE가 판마다 만드는 임의 번호(`runId`)로 센다(`playId`가 아니다).
+- **습관 개인화:** `LIVE_COACH_HABIT_ENABLED`(기본 `false`). 켜면 `LiveCoachHabit`이 그 사용자의 최근 분석된 `RHYTHM`·`SHEET` 플레이 10개(`reports.weak_segments`)에서 3판 이상·40% 이상 나온 약점을 최대 2개 골라 `facts.habit`(`plays`, `items[]`: `pattern`, `pad` 또는 `hand`, `share` `OFTEN`·`SOMETIMES`)에 붙인다. 분석된 플레이가 3개 미만이면 붙이지 않는다. 숫자 비율·날짜·곡·`playId`는 넣지 않는다. FE가 보낸 `habit`은 켜고 끄기와 관계없이 지운다. 크기 상한 4096바이트는 FE가 보낸 부분(`habit` 제외)에 건다. 이번 구간과 맞대는 일은 워커가 한다(AI `AI/docs/live-coach-llm.md` "습관 개인화"). 끄면 코드 배포 없이 원래대로다(`api` 재시작).
 - **사실:** 객체, `contractVersion` 1, 4KB 이하만 받는다. 내용은 해석하지 않고 워커에 그대로 넘긴다. FE가 타격 원본·`playId`·곡 정보를 넣지 않는다.
 - **수명:** 워커는 만들어진 지 30초 안의 작업만 가져가고(그보다 오래되면 실패로 닫음), 임대 15초·시도 1번. 사용자 조회는 60초까지, 5분이 지난 행은 다음 요청 때 지운다.
 
@@ -1426,7 +1427,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | 호출 | 요청 | 응답 |
 | --- | --- | --- |
 | `POST /internal/v1/live-coach-jobs/claim` | `{workerId, claimRequestId}` | 작업이 없으면 204. 있으면 `{jobId, attemptId, leaseExpiresAt, facts}`. 같은 워커·같은 `claimRequestId`는 같은 배정 |
-| `POST /internal/v1/live-coach-jobs/{jobId}/result` | `{attemptId, title, sub, model, generationMs}` | `{status: DONE}`. `title` 1~8자, `sub` 0~16자, 제어 문자 없음, `model` 37자 이하, `generationMs` 0~60,000 |
+| `POST /internal/v1/live-coach-jobs/{jobId}/result` | `{attemptId, title, sub, model, generationMs}` | `{status: DONE}`. `title` 1~8자, `sub` 0~20자, 제어 문자 없음, `model` 37자 이하, `generationMs` 0~60,000 |
 | `POST /internal/v1/live-coach-jobs/{jobId}/failure` | `{attemptId, code, summary}` | `{status: FAILED}`. `code`는 `INPUT_INVALID`·`MODEL_FAILED`·`OUTPUT_INVALID`(재시도 없음) |
 
 - Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 IP 허용으로 연다.
