@@ -301,3 +301,41 @@ def test_기준_자세가_없으면_그_판에서_맞게_친_타격의_중앙값
     assert "aim" not in first.facts
     assert second.facts["aim"][0]["vertical"] == "LOW" and second.facts["aim"][0]["size"] == "CLEAR"
     assert poses_from_hits([AimHit(0, "SNARE", -30, 0, 0, False)] * 3) == {}
+
+
+def test_사실에_판정_폭과_대신_친_패드가_들어간다() -> None:
+    t = SegmentTracker(CHART, 60, "stick")
+    for ms in range(0, 8000, STEP):
+        if ms % 1000 == 0:
+            # 스몰탐 칠 차례에 미드탐을 쳤다(채보 밖 타격이 먼저, 놓침 판정이 뒤에 온다)
+            t.note_stray("MID_TOM", ms + 10)
+            t.push(note(ms, "MISS", None, "SMALL_TOM"), 1)
+        else:
+            t.push(note(ms), 1)
+    [seg] = t.push(note(8100), 2)
+    f = seg.facts
+    assert f["timing"]["goodMs"] == 60
+    tom = next(p for p in f["pads"] if p["pad"] == "SMALL_TOM")
+    assert tom["instead"] == "MID_TOM" and tom["misses"] == 8
+    LiveSegmentFacts.model_validate(f)
+
+
+def test_대신_친_패드가_없으면_null이다() -> None:
+    t = SegmentTracker(CHART, 60, "keyboard")
+    for ms in range(0, 8000, STEP):
+        t.push(note(ms, "MISS" if ms % 1000 == 0 else "GOOD", 30), 1)
+    [seg] = t.push(note(8100), 2)
+    assert seg.facts["pads"][0]["instead"] is None
+
+
+def test_played_pads_counts_pads_with_two_or_more_notes_in_order() -> None:
+    from ssaplash_ai.coach_eval.live_segments import JudgedNote, played_pads
+
+    def n(pad: str) -> JudgedNote:
+        return JudgedNote(0.0, 0.0, "GOOD", 10.0, pad, 0, 90)
+
+    assert played_pads([n("KICK"), n("SNARE"), n("KICK"), n("SMALL_TOM"), n("SNARE")]) == [
+        "KICK",
+        "SNARE",
+    ]
+    assert played_pads([]) == []
