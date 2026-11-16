@@ -326,3 +326,16 @@ def test_대신_친_패드가_없으면_null이다() -> None:
         t.push(note(ms, "MISS" if ms % 1000 == 0 else "GOOD", 30), 1)
     [seg] = t.push(note(8100), 2)
     assert seg.facts["pads"][0]["instead"] is None
+
+
+def test_played_pads_counts_pads_with_two_or_more_notes_in_order() -> None:
+    from ssaplash_ai.coach_eval.live_segments import JudgedNote, played_pads
+
+    def n(pad: str) -> JudgedNote:
+        return JudgedNote(0.0, 0.0, "GOOD", 10.0, pad, 0, 90)
+
+    assert played_pads([n("KICK"), n("SNARE"), n("KICK"), n("SMALL_TOM"), n("SNARE")]) == [
+        "KICK",
+        "SNARE",
+    ]
+    assert played_pads([]) == []
