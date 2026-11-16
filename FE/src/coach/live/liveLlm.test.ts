@@ -6,7 +6,7 @@ import { LlmCoach, type LlmCoachClient, type LlmRecord, type LlmTip } from './ll
 import { assignLlm, parseCoachLiveConfig } from './models/experiment';
 import type { HandAnchors, PadAnchor } from '@/domain/kit/calibration/calibration';
 import type { PadId } from '@/domain/kit/pads';
-import { AIM_CLEAR, MIN_SEGMENT_JUDGED, SegmentTracker, aimFacts, segmentBars, segmentIndexAt, segmentRange, type AimSource, type FinishedSegment, type SegmentChart } from './segment';
+import { AIM_CLEAR, MIN_SEGMENT_JUDGED, SegmentTracker, aimFacts, playedPads, segmentBars, segmentIndexAt, segmentRange, type AimSource, type FinishedSegment, type SegmentChart } from './segment';
 import type { JudgedNote } from './window';
 
 // 120BPM 4/4: 한 마디 2000ms, 첫 마디는 0ms
@@ -183,6 +183,22 @@ describe('판정 폭과 대신 친 패드', () => {
     for (let ms = 0; ms < 8000; ms += STEP) t.push(note(ms, ms % 1000 === 0 ? 'MISS' : 'GOOD', 30), 1);
     const [seg] = t.push(note(8100), 2);
     expect(seg.facts.pads[0].instead).toBeNull();
+  });
+});
+
+describe('이번 구간에 친 패드(playedPads)', () => {
+  it('노트가 2개 이상인 패드만, 처음 나온 순서로 넣는다', () => {
+    const notes = [note(0, 'GOOD', 20, 'KICK'), note(250, 'GOOD', 20, 'SNARE'), note(500, 'MISS', null, 'KICK'), note(750, 'GOOD', 20, 'SMALL_TOM'), note(1000, 'GOOD', 20, 'SNARE')];
+    // 스몰탐은 한 번뿐이라 친 패드로 보지 않는다. 놓친 노트도 그 패드가 나온 것으로 센다
+    expect(playedPads(notes)).toEqual(['KICK', 'SNARE']);
+    expect(playedPads([])).toEqual([]);
+  });
+
+  it('구간 사실에 실린다', () => {
+    const t = new SegmentTracker(CHART, 60, 'stick');
+    for (let ms = 0; ms < 8000; ms += STEP) t.push(note(ms, 'GOOD', 20, ms % 1000 === 0 ? 'KICK' : 'SNARE'), 1);
+    const [seg] = t.push(note(8100), 2);
+    expect(seg.facts.playedPads).toEqual(['KICK', 'SNARE']);
   });
 });
 
