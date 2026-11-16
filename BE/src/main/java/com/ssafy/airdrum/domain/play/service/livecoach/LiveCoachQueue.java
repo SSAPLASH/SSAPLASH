@@ -22,13 +22,16 @@ import tools.jackson.databind.node.ObjectNode;
  * 사용자가 구간 사실을 넣고 결과를 조회하며, GPU 워커가 claim으로 가져가 안내 칸 문구(title·sub)를 제출한다.
  * 늦은 답은 쓸모없어서 임대 15초·시도 1번이고, 만들어진 지 오래된 작업은 가져가지 않고 지운다.
  * 사실(facts)에는 타격 원본·playId·곡 정보가 없다. BE는 모양과 크기만 검사하고 내용을 해석하지 않는다.
+ * 습관 설정이 켜져 있으면 사용자의 습관 요약(LiveCoachHabit)을 facts.habit에 붙인다. FE가 보낸 habit은 늘 지운다
+ * (설계 COACH-001 습관 개인화 3.6).
  */
 @Service
 public class LiveCoachQueue {
     /** 임대 시간은 claim SQL의 interval '15 seconds'와 같다. */
     static final int LEASE_SECONDS = 15;
     static final int MAX_TITLE = 8;
-    static final int MAX_SUB = 16;
+    /** 안내 칸 보조 문구 상한. 16자로는 구체적인 지시가 들어가지 않아 20자로 늘렸다(V52, QA 2026-11-16). */
+    static final int MAX_SUB = 20;
     /** 이보다 오래 기다린 작업은 워커에 주지 않는다(연주는 이미 다음 구간이다). */
     static final int STALE_SECONDS = 30;
     /** 사용자 조회에서 결과를 보여 주는 최대 나이. 이보다 오래되면 410. */
@@ -45,13 +48,18 @@ public class LiveCoachQueue {
     private final boolean enabled;
     private final int perRun;
     private final int perMinute;
+    private final LiveCoachHabit habit;
+    private final boolean habitEnabled;
 
-    LiveCoachQueue(JdbcTemplate db, JsonMapper json,
+    LiveCoachQueue(JdbcTemplate db, JsonMapper json, LiveCoachHabit habit,
                    @Value("${live-coach.llm.enabled:false}") boolean enabled,
                    @Value("${live-coach.llm.per-run:10}") int perRun,
-                   @Value("${live-coach.llm.per-minute:6}") int perMinute) {
+                   @Value("${live-coach.llm.per-minute:6}") int perMinute,
+                   @Value("${live-coach.habit.enabled:false}") boolean habitEnabled) {
         this.db = db;
         this.json = json;
+        this.habit = habit;
+        this.habitEnabled = habitEnabled;
         this.enabled = enabled;
         this.perRun = Math.max(0, perRun);
         this.perMinute = Math.max(0, perMinute);
@@ -66,14 +74,18 @@ public class LiveCoachQueue {
 
     // ---------- 사용자 쪽 ----------
 
-    /** 구간 사실을 넣는다. 꺼져 있으면 null(컨트롤러가 204). 상한을 넘으면 429. */
+    /**
+     * 구간 사실을 넣는다. 꺼져 있으면 null(컨트롤러가 204). 상한을 넘으면 429.
+     * 크기 상한은 FE가 보낸 사실(habit 제외)에 건다. BE가 붙이는 습관 요약은 항목 2개라 작다.
+     */
     @Transactional
     public Created create(long userId, UUID runId, JsonNode facts) {
         if (!enabled) return null;
         if (runId == null || facts == null || !facts.isObject() || facts.path("contractVersion").asInt(0) != 1)
             throw new BusinessException(LiveCoachError.INVALID);
-        String body = json.writeValueAsString(facts);
-        if (body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_FACTS_BYTES)
+        ObjectNode stored = ((ObjectNode) facts).deepCopy();
+        stored.remove("habit");
+        if (json.writeValueAsString(stored).getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_FACTS_BYTES)
             throw new BusinessException(LiveCoachError.INVALID);
         db.update("DELETE FROM live_coach_jobs WHERE created_at < now() - make_interval(secs => ?)", PURGE_SECONDS);
         Integer inRun = db.queryForObject("SELECT count(*)::int FROM live_coach_jobs WHERE user_id=? AND run_id=?",
@@ -83,6 +95,8 @@ public class LiveCoachQueue {
             Integer.class, userId);
         if ((inRun != null && inRun >= perRun) || (inMinute != null && inMinute >= perMinute))
             throw new BusinessException(LiveCoachError.TOO_MANY);
+        if (habitEnabled) habit.forUser(userId).ifPresent(h -> stored.set("habit", h));
+        String body = json.writeValueAsString(stored);
         return db.queryForObject("""
             INSERT INTO live_coach_jobs(user_id, run_id, facts) VALUES(?, ?, ?::jsonb)
             RETURNING public_id, created_at

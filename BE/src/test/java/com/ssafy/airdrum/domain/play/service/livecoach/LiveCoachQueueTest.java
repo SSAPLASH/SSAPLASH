@@ -117,7 +117,7 @@ class LiveCoachQueueTest {
         var a = queue.claim("worker1", UUID.randomUUID());
         assertThatThrownBy(() -> queue.result(a.jobId(), "worker1", a.attemptId(), "스틱을 아주 많이 낮게", "", "m", 1L))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> queue.result(a.jobId(), "worker1", a.attemptId(), "낮게", "x".repeat(17), "m", 1L))
+        assertThatThrownBy(() -> queue.result(a.jobId(), "worker1", a.attemptId(), "낮게", "x".repeat(21), "m", 1L))
             .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> queue.result(a.jobId(), "worker2", a.attemptId(), "낮게", "", "m", 1L))
             .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode()).isEqualTo(WorkerError.CONFLICT));
@@ -126,9 +126,31 @@ class LiveCoachQueueTest {
             .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getErrorCode()).isEqualTo(WorkerError.CONFLICT));
     }
 
+    @Test void twentyCharSubIsAcceptedAndStored() {
+        // V52: 보조 문구 상한 20자. 검증 상한과 DB 열 크기가 같아야 저장 단계에서 깨지지 않는다
+        queue.create(user, RUN, facts());
+        var a = queue.claim("worker1", UUID.randomUUID());
+        var sub = "미드탐보다 왼쪽을 조금 더 세게 쳐요";
+        assertThat(sub).hasSize(LiveCoachQueue.MAX_SUB);
+        queue.result(a.jobId(), "worker1", a.attemptId(), "스몰탐은 왼쪽", sub, "m", 1L);
+        assertThat(db.queryForObject("SELECT sub FROM live_coach_jobs WHERE id=?", String.class, a.jobId())).isEqualTo(sub);
+    }
+
     @Test void disabledQueueAcceptsNothing() {
-        var off = new LiveCoachQueue(db, json, false, 10, 6);
+        var off = new LiveCoachQueue(db, json, null, false, 10, 6, false);
         assertThat(off.create(user, RUN, facts())).isNull();
         assertThat(off.enabled()).isFalse();
+    }
+
+    @Test void clientHabitIsDroppedWhenHabitIsOff() {
+        // 습관 설정이 꺼져 있으면(기본) FE가 보낸 habit을 지우고 나머지는 그대로 넣는다
+        var withHabit = (tools.jackson.databind.node.ObjectNode) facts();
+        withHabit.set("habit", json.readTree("{\"plays\":9,\"items\":[{\"pattern\":\"TIMING_LATE\",\"share\":\"OFTEN\"}]}"));
+        withHabit.set("playedPads", json.readTree("[\"KICK\",\"SNARE\"]"));
+        queue.create(user, RUN, withHabit);
+        var a = queue.claim("worker1", UUID.randomUUID());
+        assertThat(a.facts().has("habit")).isFalse();
+        assertThat(a.facts().path("playedPads")).hasSize(2);
+        assertThat(a.facts().path("segment").path("toBar").asInt()).isEqualTo(4);
     }
 }

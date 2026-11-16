@@ -304,7 +304,7 @@ PostgreSQL 메이저 버전은 16을 유지한다. V8은 기존 행을 이동하
 앱만 롤백하는 경우 DB를 유지한다. 일반 PostgreSQL로 돌아가려면 백업 복원 또는 명시적인
 데이터 역이관이 필요하며 확장을 CASCADE로 제거하지 않는다.
 
-일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 51). V8·V30 검사는 별도 필수 CI job
+일반 마이그레이션 검사는 V8 확장 경계를 위해 임베디드 PostgreSQL에서 V1~V7까지 별도 검사한다. 애플리케이션 테스트 컨텍스트는 확장 전용 V8·V30을 제외한 나머지를 적용한다. `support.EmbeddedPostgresInitializer`의 `spring.flyway.target`은 복사본에 실제로 있는 최신 버전이어야 한다(현재 52). V8·V30 검사는 별도 필수 CI job
 `be-timescale-test`가 수행한다. **마이그레이션을 추가하면 세 곳을 함께 올린다:** 위 target, `src/timescaleTest/.../TimescaleMigrationTest`의 적용 개수 2곳(V9까지 있는 DB에 V10 이후를 적용한 수, 새 DB에 전체를 적용한 수). 현재 CI는 `docker` 태그의 Linux Docker Runner에서
 TimescaleDB service를 사용한다. 로컬 Windows 검증 스크립트에는 Linux Docker 엔진 접근과
 이미지 pull 권한이 필요하다. 접근 실패 시 검사를 생략하지 않고 실패시킨다.
@@ -467,6 +467,7 @@ JSON 규칙: 필드명은 camelCase, 시각은 `Instant`를 ISO-8601 UTC(`2026-1
 | V48 | `V48__add_lessons.sql` | 입문 코스 레슨 `lessons`(곡별 순서·종류 `READ`/`PLAY`·설명·패드·`guide`, 카탈로그가 유일한 출처)와 알아보기 완료 기록 `lesson_completions`(사용자·곡 PK). 곡을 지우면 함께 지워진다. 11/10 V47로 병합됐으나 -299의 V47과 겹쳐 번호만 바꿨다 | -331 |
 | V50 | `V50__add_lesson_course.sql` | 학습 코스 `lessons.course`(`BEGINNER`·`INTERMEDIATE`, 기존 행은 `BEGINNER`). 순서 유일 조건을 `position`에서 `(course, position)`으로 바꿨다. 진도 표는 그대로 | 학습 코스(중급) |
 | V51 | `V51__create_chart_worker_presence.sql` | 채보 워커별 마지막 연락 시각 `chart_worker_presence`(`worker_id` PK, `last_seen_at`). claim·heartbeat가 올 때마다 갱신한다 | -383 |
+| V52 | `V52__widen_live_coach_sub.sql` | 연주 중 LLM 구간 코칭 `live_coach_jobs.sub`를 `varchar(16)`에서 `varchar(20)`으로 늘림. 검증 상한 `LiveCoachQueue.MAX_SUB`도 20(QA 2026-11-16: 16자로는 구체적인 지시가 안 들어감) | -300 |
 
 규칙:
 
@@ -1406,10 +1407,11 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 
 ## 연주 중 LLM 구간 코칭 작업 (COACH-001)
 
-연주 중 4·8·16마디 구간이 끝날 때 FE가 구간 사실(`facts`)을 보내면, 교내 GPU 서버의 워커가 가져가 리포트 총평과 같은 로컬 모델로 안내 칸 문구(`title` 8자, `sub` 16자)를 써서 제출한다. FE는 짧은 주기로 결과를 조회해 다음 구간에 띄운다. 늦은 답은 쓸모없어서 짧게 살다 지워지는 큐(`live_coach_jobs`, V47)다. 계약과 가드레일은 AI `AI/docs/live-coach-llm.md`.
+연주 중 4·8·16마디 구간이 끝날 때 FE가 구간 사실(`facts`)을 보내면, GPU 서버의 워커가 가져가 리포트 총평과 같은 로컬 모델로 안내 칸 문구(`title` 8자, `sub` 20자, V52에서 16자 → 20자)를 써서 제출한다. FE는 짧은 주기로 결과를 조회해 다음 구간에 띄운다. 늦은 답은 쓸모없어서 짧게 살다 지워지는 큐(`live_coach_jobs`, V47)다. 계약과 가드레일은 AI `AI/docs/live-coach-llm.md`.
 
 - **켜기:** `LIVE_COACH_LLM_ENABLED`(기본 `false`). 꺼져 있으면 요청이 204로 끝나고 아무것도 저장하지 않는다. FE는 실험 설정(`coach-live-config`의 `llm`)도 따로 본다.
 - **상한:** 판당 `LIVE_COACH_LLM_PER_RUN`(기본 10), 사용자당 1분 `LIVE_COACH_LLM_PER_MINUTE`(기본 6). 넘으면 429. 판은 FE가 판마다 만드는 임의 번호(`runId`)로 센다(`playId`가 아니다).
+- **습관 개인화:** `LIVE_COACH_HABIT_ENABLED`(기본 `false`). 켜면 `LiveCoachHabit`이 그 사용자의 최근 분석된 `RHYTHM`·`SHEET` 플레이 10개(`reports.weak_segments`)에서 3판 이상·40% 이상 나온 약점을 최대 2개 골라 `facts.habit`(`plays`, `items[]`: `pattern`, `pad` 또는 `hand`, `share` `OFTEN`·`SOMETIMES`)에 붙인다. 분석된 플레이가 3개 미만이면 붙이지 않는다. 숫자 비율·날짜·곡·`playId`는 넣지 않는다. FE가 보낸 `habit`은 켜고 끄기와 관계없이 지운다. 크기 상한 4096바이트는 FE가 보낸 부분(`habit` 제외)에 건다. 이번 구간과 맞대는 일은 워커가 한다(AI `AI/docs/live-coach-llm.md` "습관 개인화"). 끄면 코드 배포 없이 원래대로다(`api` 재시작).
 - **사실:** 객체, `contractVersion` 1, 4KB 이하만 받는다. 내용은 해석하지 않고 워커에 그대로 넘긴다. FE가 타격 원본·`playId`·곡 정보를 넣지 않는다.
 - **수명:** 워커는 만들어진 지 30초 안의 작업만 가져가고(그보다 오래되면 실패로 닫음), 임대 15초·시도 1번. 사용자 조회는 60초까지, 5분이 지난 행은 다음 요청 때 지운다.
 
@@ -1425,7 +1427,7 @@ AI가 약점 분석 응답의 루트에 붙이는 `summary`(`level`·`text`·`fo
 | 호출 | 요청 | 응답 |
 | --- | --- | --- |
 | `POST /internal/v1/live-coach-jobs/claim` | `{workerId, claimRequestId}` | 작업이 없으면 204. 있으면 `{jobId, attemptId, leaseExpiresAt, facts}`. 같은 워커·같은 `claimRequestId`는 같은 배정 |
-| `POST /internal/v1/live-coach-jobs/{jobId}/result` | `{attemptId, title, sub, model, generationMs}` | `{status: DONE}`. `title` 1~8자, `sub` 0~16자, 제어 문자 없음, `model` 37자 이하, `generationMs` 0~60,000 |
+| `POST /internal/v1/live-coach-jobs/{jobId}/result` | `{attemptId, title, sub, model, generationMs}` | `{status: DONE}`. `title` 1~8자, `sub` 0~20자, 제어 문자 없음, `model` 37자 이하, `generationMs` 0~60,000 |
 | `POST /internal/v1/live-coach-jobs/{jobId}/failure` | `{attemptId, code, summary}` | `{status: FAILED}`. `code`는 `INPUT_INVALID`·`MODEL_FAILED`·`OUTPUT_INVALID`(재시도 없음) |
 
 - Nginx는 `^~ /internal/v1/live-coach-jobs/`를 채보·총평 워커 경로와 같은 IP 허용으로 연다.
