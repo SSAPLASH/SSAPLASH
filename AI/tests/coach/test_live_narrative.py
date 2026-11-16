@@ -12,10 +12,12 @@ from ssaplash_ai.coach.live_narrative import (
     MAX_TITLE,
     SYSTEM_PROMPT,
     TIP_EXAMPLES,
+    LiveHabit,
     LiveSegmentFacts,
     LiveTip,
     build_user_prompt,
     check,
+    habit_match,
     parse_tip,
     write_live_tip,
 )
@@ -369,3 +371,149 @@ def test_clean_segment_gets_praise_not_correction() -> None:
         tip("킥보다 먼저", "킥 소리 전에 내려쳐요"),
         facts(timing={"meanDeltaMs": 3.0, "goodMs": 60}),
     )
+
+
+# --- 습관 개인화 (설계 COACH-001 습관 개인화 3.3~3.5) ---
+
+LATE_HABIT = {"plays": 6, "items": [{"pattern": "TIMING_LATE", "share": "OFTEN"}]}
+SMALL_TOM_MISS = {
+    "plays": 5,
+    "items": [{"pattern": "MISS_CLUSTER", "pad": "SMALL_TOM", "share": "SOMETIMES"}],
+}
+
+
+def steady(**over) -> LiveSegmentFacts:
+    """박에 거의 맞고 놓침이 적은 구간"""
+    base = {
+        "counts": {"perfect": 20, "good": 6, "miss": 1},
+        "timing": {"meanDeltaMs": 3.0, "stdDeltaMs": 10.0, "goodMs": 60},
+        "pads": [],
+        "ruleCoach": {},
+        "previous": {},
+    }
+    base.update(over)
+    return facts(**base)
+
+
+def test_no_habit_keeps_prompt_identical() -> None:
+    f = facts()
+    with_empty = facts(habit={"plays": 4, "items": []})
+    assert build_user_prompt(f) == build_user_prompt(with_empty)
+    assert "평소 습관" not in build_user_prompt(f)
+    assert habit_match(f) is None
+
+
+@pytest.mark.parametrize(
+    ("habit", "f", "expected"),
+    [
+        # 박 타이밍
+        (LATE_HABIT, facts(), "REPEAT"),
+        (LATE_HABIT, steady(), "BETTER"),
+        ({"plays": 5, "items": [{"pattern": "TIMING_EARLY"}]}, facts(), None),
+        # 패드 놓침: 이번에도 놓침 / 쳤고 문제 없음 / 친 근거 없음
+        (
+            SMALL_TOM_MISS,
+            facts(pads=[{"pad": "SMALL_TOM", "notes": 6, "misses": 3}]),
+            "REPEAT",
+        ),
+        (SMALL_TOM_MISS, steady(playedPads=["SMALL_TOM", "SNARE"]), "BETTER"),
+        (SMALL_TOM_MISS, steady(), None),
+        (SMALL_TOM_MISS, steady(playedPads=["SNARE"]), None),
+        # 패드 늦음
+        (
+            {"plays": 5, "items": [{"pattern": "PAD_LATE", "pad": "SNARE"}]},
+            facts(),
+            "REPEAT",
+        ),
+        (
+            {"plays": 5, "items": [{"pattern": "PAD_LATE", "pad": "SNARE"}]},
+            facts(pads=[{"pad": "SNARE", "notes": 8, "misses": 3, "meanDeltaMs": -30.0}]),
+            None,
+        ),
+        # 약한 손
+        (
+            {"plays": 5, "items": [{"pattern": "HAND_WEAK", "hand": "LEFT"}]},
+            facts(hands={"weakHand": "LEFT", "ratio": 0.6}),
+            "REPEAT",
+        ),
+        (
+            {"plays": 5, "items": [{"pattern": "HAND_WEAK", "hand": "LEFT"}]},
+            steady(hands={"weakHand": None, "ratio": 0.95}),
+            "BETTER",
+        ),
+        (
+            {"plays": 5, "items": [{"pattern": "HAND_WEAK", "hand": "LEFT"}]},
+            facts(input="keyboard", hands={"weakHand": "LEFT", "ratio": 0.6}),
+            None,
+        ),
+        # 박 간격
+        (
+            {"plays": 5, "items": [{"pattern": "UNSTEADY"}]},
+            facts(timing={"meanDeltaMs": 3.0, "stdDeltaMs": 40.0, "goodMs": 60}),
+            "REPEAT",
+        ),
+        ({"plays": 5, "items": [{"pattern": "UNSTEADY"}]}, steady(), "BETTER"),
+        # 전환은 이번에도만
+        (
+            {"plays": 5, "items": [{"pattern": "TRANSITION_MISS"}]},
+            facts(ruleCoach={"causes": ["TRANSITION"]}),
+            "REPEAT",
+        ),
+        ({"plays": 5, "items": [{"pattern": "TRANSITION_MISS"}]}, steady(), None),
+    ],
+)
+def test_habit_match_table(habit, f, expected) -> None:
+    m = habit_match(f.model_copy(update={"habit": LiveHabit.model_validate(habit)}))
+    assert (m.kind if m else None) == expected
+
+
+def test_repeat_wins_over_better_and_line_has_no_numbers() -> None:
+    f = facts(
+        playedPads=["SMALL_TOM", "SNARE"],
+        habit={
+            "plays": 7,
+            "items": [
+                {"pattern": "MISS_CLUSTER", "pad": "SMALL_TOM"},
+                {"pattern": "TIMING_LATE", "share": "OFTEN"},
+            ],
+        },
+    )
+    m = habit_match(f)
+    assert m is not None and m.kind == "REPEAT" and m.item.pattern == "TIMING_LATE"
+    p = build_user_prompt(f)
+    assert "평소 습관(자주): 박보다 늦게 침 → 이번 구간에도 같음" in p
+    assert "7" not in p.split("평소 습관")[1]
+
+
+def test_habit_skipped_when_last_tip_spoke_habit() -> None:
+    f = facts(
+        habit=LATE_HABIT,
+        previous={"lastTip": {"title": "킥보다 먼저", "sub": "이번에도 늦어요"}},
+    )
+    assert habit_match(f) is None
+    assert "평소 습관" not in build_user_prompt(f)
+
+
+def test_habit_guardrails() -> None:
+    plain = facts()
+    assert "근거 없이 습관을 말함" in check(tip("킥보다 먼저", "평소처럼 늦어요, 먼저 쳐요"), plain)
+    repeat = facts(habit=LATE_HABIT)
+    assert check(tip("킥보다 먼저", "이번에도 늦어요, 먼저 쳐요"), repeat) == []
+    assert "습관 결과와 반대로 말함" in check(tip("킥보다 먼저", "평소보다 좋아졌어요"), repeat)
+    assert "탓하는 말을 씀" in check(tip("킥보다 먼저", "또 늦어요, 먼저 쳐요"), repeat)
+    assert "탓하는 말을 씀" in check(tip("킥보다 먼저", "자꾸 늦어요"), repeat)
+    better = steady(playedPads=["SMALL_TOM"], habit=SMALL_TOM_MISS)
+    assert check(tip("스몰탐 그대로", "평소보다 스몰탐이 좋아졌어요"), better) == []
+    assert "습관 결과와 반대로 말함" in check(
+        tip("스몰탐 그대로", "이번에도 스몰탐 좋아요"), better
+    )
+    # 습관 패드는 이번 구간 사실에 없어도 말할 수 있다(맞대기 결과가 있을 때만)
+    assert "사실에 없는 패드를 말함" not in " ".join(
+        check(tip("스몰탐 그대로", "평소보다 스몰탐이 좋아졌어요"), better)
+    )
+    assert any(
+        v.startswith("사실에 없는 패드를 말함")
+        for v in check(tip("스몰탐 그대로", "스몰탐이 좋아요"), steady())
+    )
+    # '늘었어요'는 탓하는 말이 아니다
+    assert "탓하는 말을 씀" not in check(tip("킥보다 먼저", "놓침이 늘었어요"), plain)
