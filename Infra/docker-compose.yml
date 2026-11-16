@@ -113,6 +113,7 @@ services:
       LIVE_COACH_LLM_ENABLED: ${LIVE_COACH_LLM_ENABLED:-false}
       LIVE_COACH_LLM_PER_RUN: ${LIVE_COACH_LLM_PER_RUN:-10}
       LIVE_COACH_LLM_PER_MINUTE: ${LIVE_COACH_LLM_PER_MINUTE:-6}
+      LIVE_COACH_HABIT_ENABLED: ${LIVE_COACH_HABIT_ENABLED:-false}
       # 오브젝트 스토리지(SeaweedFS). 켜는 스위치는 .env에서 정하며 기본은 꺼짐이다.
       # 악보·반주는 읽기용 키로 서명 URL을 만든다. 공개 주소는 브라우저가 접속하는 도메인 루트다.
       CHART_ASSET_ENABLED: ${CHART_ASSET_ENABLED:-false}
