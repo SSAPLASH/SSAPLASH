@@ -257,6 +257,18 @@ def instead_pads(
     return out
 
 
+# 이 수 이상 노트가 있어야 그 패드를 이번 구간에 쳤다고 본다. FE `PLAYED_MIN_NOTES`와 같다
+PLAYED_MIN_NOTES = 2
+
+
+def played_pads(notes: Sequence[JudgedNote]) -> list[str]:
+    """노트가 PLAYED_MIN_NOTES개 이상 있던 패드. 처음 나온 순서. FE `playedPads`와 같다"""
+    count: dict[str, int] = {}
+    for n in notes:
+        count[n.pad] = count.get(n.pad, 0) + 1
+    return [pad for pad, c in count.items() if c >= PLAYED_MIN_NOTES]
+
+
 def top_pads(
     notes: Sequence[JudgedNote],
     strays: Sequence[tuple[str, float]] = (),
@@ -538,6 +550,7 @@ class SegmentTracker:
             "ruleCoach": {"tags": list(b.tags), "causes": list(b.causes)},
             "previous": {"counts": self._previous, "lastTip": self._last_tip},
             "stage": stage,
+            "playedPads": played_pads(b.notes),
         }
         if self.poses:
             aim = aim_facts(b.aim_hits, self.poses, trust_yaw=self.trust_yaw)

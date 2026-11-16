@@ -9,6 +9,7 @@ from pathlib import Path
 from ssaplash_ai.coach_eval.live_tip_compare import (
     DEFAULT_URL,
     build_cases,
+    build_habit_cases,
     markdown,
     out_path,
     percentile,
@@ -108,3 +109,26 @@ def test_여러_모델이면_모델마다_파일을_나눈다() -> None:
 
 def test_기본_주소는_우리_ollama다() -> None:
     assert DEFAULT_URL.endswith(":11435")
+
+
+def test_습관_상황은_4가지이고_통과율을_나눠_센다() -> None:
+    from ssaplash_ai.coach.live_narrative import build_user_prompt, habit_match
+
+    habit = build_habit_cases()
+    assert len(habit) == 4 and all(k.startswith("습관:") for k in habit)
+    kinds = {k: (m.kind if (m := habit_match(f)) else None) for k, f in habit.items()}
+    assert kinds == {
+        "습관: 늦음 이번에도": "REPEAT",
+        "습관: 스몰탐 나아짐": "BETTER",
+        "습관: 관계없는 습관": None,
+        "습관: 키보드 약한 손": None,
+    }
+    # 습관이 관계없으면 기존 상황과 프롬프트가 같다
+    base = build_cases()
+    assert build_user_prompt(habit["습관: 관계없는 습관"]) == build_user_prompt(base["빠름"])
+    cases = {**base, **habit}
+    s = summarize("fake", run(lambda s, u: GOOD, repeat=1, cases=cases))
+    assert s.trials == 16 and s.habitPassRate is not None and s.otherPassRate is not None
+    assert "습관 상황 통과" in markdown(s, run(lambda s, u: GOOD, repeat=1, cases=cases))
+    # 습관 상황이 없으면 나눠 세지 않는다
+    assert summarize("fake", run(lambda s, u: GOOD, repeat=1)).habitPassRate is None
