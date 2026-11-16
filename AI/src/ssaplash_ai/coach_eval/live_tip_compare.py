@@ -59,11 +59,13 @@ def _facts(**over) -> LiveSegmentFacts:
         "stage": 2,
     }
     base.update(over)
+    # 판정 폭이 있어야 늦음·빠름의 정도(살짝·많이)를 말한다. 지금 FE는 기본 60ms
+    base["timing"] = {"goodMs": 60.0, **base["timing"]}
     return LiveSegmentFacts.model_validate(base)
 
 
 def build_cases() -> dict[str, LiveSegmentFacts]:
-    """골든 구간 사실 10가지. 같은 입력이면 같은 사실이다."""
+    """골든 구간 사실 12가지. 같은 입력이면 같은 사실이다."""
     return {
         "늦음": _facts(
             timing={"meanDeltaMs": 32.0, "stdDeltaMs": 14.0, "sameSignRatio": 0.85},
@@ -79,8 +81,58 @@ def build_cases() -> dict[str, LiveSegmentFacts]:
         ),
         "패드 놓침": _facts(
             counts={"perfect": 12, "good": 6, "miss": 8},
-            pads=[{"pad": "SMALL_TOM", "notes": 8, "misses": 6, "meanDeltaMs": None}],
+            pads=[
+                {
+                    "pad": "SMALL_TOM",
+                    "notes": 8,
+                    "misses": 6,
+                    "meanDeltaMs": None,
+                    "instead": "MID_TOM",
+                }
+            ],
             ruleCoach={"tags": ["LIVE_PAD_MISS"], "causes": ["WRONG_PAD"]},
+            stage=3,
+        ),
+        "스틱 끝 낮음": _facts(
+            counts={"perfect": 12, "good": 8, "miss": 6},
+            pads=[{"pad": "FLOOR_TOM", "notes": 8, "misses": 4, "meanDeltaMs": None}],
+            ruleCoach={"tags": ["LIVE_PAD_MISS"]},
+            aim=[
+                {
+                    "pad": "FLOOR_TOM",
+                    "hits": 8,
+                    "wrongPad": 3,
+                    "vertical": "LOW",
+                    "horizontal": None,
+                    "size": "CLEAR",
+                    "hand": "RIGHT",
+                }
+            ],
+            stage=3,
+        ),
+        "패드 헷갈림": _facts(
+            counts={"perfect": 12, "good": 8, "miss": 6},
+            pads=[
+                {
+                    "pad": "SMALL_TOM",
+                    "notes": 8,
+                    "misses": 5,
+                    "meanDeltaMs": None,
+                    "instead": "MID_TOM",
+                }
+            ],
+            ruleCoach={"tags": ["LIVE_PAD_MISS"], "causes": ["WRONG_PAD"]},
+            aim=[
+                {
+                    "pad": "SMALL_TOM",
+                    "hits": 7,
+                    "wrongPad": 5,
+                    "vertical": None,
+                    "horizontal": "RIGHT",
+                    "size": "SLIGHT",
+                    "hand": None,
+                }
+            ],
             stage=3,
         ),
         "패드 이동": _facts(
@@ -180,6 +232,21 @@ def run(
     return trials
 
 
+def title_variety(passed: list[Trial]) -> float:
+    """상황별 대표 제목(가장 많이 나온 제목)이 상황끼리 얼마나 다른가: 서로 다른 대표 제목 수 / 상황 수.
+
+    같은 상황을 반복하면 같은 제목이 나오는 것이 정상이라 반복끼리는 비교하지 않는다. 상황이 달라도 늘 '손목'처럼
+    같은 제목을 쓰는지를 본다.
+    """
+    by: dict[str, Counter[str]] = {}
+    for t in passed:
+        by.setdefault(t.case, Counter())[t.title or ""] += 1
+    if not by:
+        return 0.0
+    modes = {c.most_common(1)[0][0] for c in by.values()}
+    return len(modes) / len(by)
+
+
 def summarize(model: str, trials: list[Trial]) -> Summary:
     n = len(trials)
     passed = [t for t in trials if t.passed]
@@ -190,7 +257,7 @@ def summarize(model: str, trials: list[Trial]) -> Summary:
             reasons[v.split(":")[0]] += 1
     pass_rate = len(passed) / n if n else 0.0
     p95 = percentile(ms, 0.95)
-    variety = len({t.title for t in passed}) / len(passed) if passed else 0.0
+    variety = title_variety(passed)
     return Summary(
         model=model,
         trials=n,
@@ -221,7 +288,7 @@ def markdown(
         "",
         f"- 시도 {summary.trials}번, 통과 {summary.passRate:.0%}, 첫 시도 통과 {summary.firstTryRate:.0%}",
         f"- 지연 중앙값 {summary.medianMs:.0f} ms, 95백분위 {summary.p95Ms:.0f} ms",
-        f"- 통과 문구의 서로 다른 제목 비율 {summary.titleVariety:.0%}",
+        f"- 상황별 대표 제목이 서로 다른 비율 {summary.titleVariety:.0%}",
         f"- 목표(통과 {TARGET_PASS:.0%} 이상, 95백분위 {TARGET_P95_MS} ms 이하, 제목 다양성 "
         f"{TARGET_TITLE_VARIETY:.0%} 이상): {'충족' if summary.meetsTarget else '미달'}",
         f"- 거절 이유: {summary.violations or '없음'}",
