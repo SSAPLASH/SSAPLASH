@@ -162,6 +162,30 @@ describe('스틱 끝 방향(aim)', () => {
   });
 });
 
+describe('판정 폭과 대신 친 패드', () => {
+  it('사실에 판정 폭과, 놓친 패드마다 대신 가장 많이 친 패드가 들어간다', () => {
+    const t = new SegmentTracker(CHART, 60, 'keyboard');
+    for (let ms = 0; ms < 8000; ms += STEP) {
+      if (ms % 1000 === 0) {
+        // 스몰탐 칠 차례에 미드탐을 쳤다: 채보 밖 타격이 먼저, 놓침 판정이 뒤에 온다. 키보드 타격도 센다
+        t.noteStray('MID_TOM', ms + 10);
+        t.push(note(ms, 'MISS', null, 'SMALL_TOM'), 1);
+      } else t.push(note(ms), 1);
+    }
+    const [seg] = t.push(note(8100), 2);
+    expect(seg.facts.timing.goodMs).toBe(60);
+    expect(seg.facts.pads.find((p) => p.pad === 'SMALL_TOM')).toMatchObject({ misses: 8, instead: 'MID_TOM' });
+    expect(seg.facts.aim).toBeUndefined();
+  });
+
+  it('근처에 채보 밖 타격이 없으면 instead는 null이다', () => {
+    const t = new SegmentTracker(CHART, 60, 'stick');
+    for (let ms = 0; ms < 8000; ms += STEP) t.push(note(ms, ms % 1000 === 0 ? 'MISS' : 'GOOD', 30), 1);
+    const [seg] = t.push(note(8100), 2);
+    expect(seg.facts.pads[0].instead).toBeNull();
+  });
+});
+
 /** 응답 순서를 정해 둔 가짜 BE와 수동 시계 */
 function fakeClient(polls: Awaited<ReturnType<LlmCoachClient['poll']>>[], request: Awaited<ReturnType<LlmCoachClient['request']>> = { requestId: 'r1' }) {
   const calls: { runId: string }[] = [];

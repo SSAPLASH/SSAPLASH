@@ -8,7 +8,7 @@ const FACTS = {
   segment: { index: 0, fromBar: 1, toBar: 4 },
   input: 'stick',
   counts: { perfect: 10, good: 4, miss: 2 },
-  timing: { meanDeltaMs: 20, stdDeltaMs: 10, sameSignRatio: 0.8 },
+  timing: { meanDeltaMs: 20, stdDeltaMs: 10, sameSignRatio: 0.8, goodMs: 60 },
   pads: [],
   hands: { weakHand: null, ratio: null },
   ruleCoach: { tags: [], causes: [] },
