@@ -26,7 +26,12 @@ describe('LandingView', () => {
   });
 
   it('루트 .lp 아래에 그려진다', () => {
-    expect(render(true)).toMatch(/^<div class="lp">/);
+    // 워드마크 이미지 때문에 React가 preload 링크를 맨 앞에 끌어올린다. 그 뒤가 곧바로 루트다
+    expect(render(true).replace(/^(<link [^>]*\/>)+/, '')).toMatch(/^<div class="lp">/);
+  });
+
+  it('상단 바 로고는 워드마크 이미지이고 이름을 alt로 읽어 준다', () => {
+    expect(render(true)).toMatch(/<a class="lp-logo" href="#hero"><img src="\/images\/ssaplash-wordmark\.webp" alt="SSAPLASH"/);
   });
 
   it('모드 3개가 히어로와 모드 섹션에 각각 있고 단축키가 붙는다', () => {

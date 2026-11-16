@@ -78,10 +78,16 @@
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+/* 워드마크 이미지(public/images/ssaplash-wordmark.webp) */
 .lp .lp-logo {
-  font-weight: 800;
-  font-size: 24px;
-  letter-spacing: -0.03em;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.lp .lp-logo img {
+  display: block;
+  width: auto;
+  height: 22px;
 }
 .lp .lp-nav .lp-pill {
   height: 40px;
