@@ -233,7 +233,48 @@ def coach_stage(judged: int) -> int:
     return 3 if judged >= third else 2 if judged >= second else 1 if judged >= first else 0
 
 
-def top_pads(notes: Sequence[JudgedNote]) -> list[dict[str, Any]]:
+def instead_pads(
+    notes: Sequence[JudgedNote], strays: Sequence[tuple[str, float]], good_ms: float
+) -> dict[str, str]:
+    """놓친 노트 패드마다 대신 가장 많이 친 패드. 채보 밖 타격을 ±good_ms 안의 가장 가까운 다른 패드 놓침에 붙인다.
+    같은 수면 먼저 나온 패드. FE `segment.ts`의 insteadPads와 같다"""
+    missed = [n for n in notes if n.judgement == "MISS"]
+    counts: dict[str, dict[str, int]] = {}
+    for pad, t in strays:
+        best: JudgedNote | None = None
+        for n in missed:
+            if n.pad == pad or abs(t - n.noteTimeMs) > good_ms:
+                continue
+            if best is None or abs(t - n.noteTimeMs) < abs(t - best.noteTimeMs):
+                best = n
+        if best is not None:
+            row = counts.setdefault(best.pad, {})
+            row[pad] = row.get(pad, 0) + 1
+    out: dict[str, str] = {}
+    for pad, row in counts.items():
+        top = max(row.values())
+        out[pad] = next(k for k, v in row.items() if v == top)
+    return out
+
+
+# 이 수 이상 노트가 있어야 그 패드를 이번 구간에 쳤다고 본다. FE `PLAYED_MIN_NOTES`와 같다
+PLAYED_MIN_NOTES = 2
+
+
+def played_pads(notes: Sequence[JudgedNote]) -> list[str]:
+    """노트가 PLAYED_MIN_NOTES개 이상 있던 패드. 처음 나온 순서. FE `playedPads`와 같다"""
+    count: dict[str, int] = {}
+    for n in notes:
+        count[n.pad] = count.get(n.pad, 0) + 1
+    return [pad for pad, c in count.items() if c >= PLAYED_MIN_NOTES]
+
+
+def top_pads(
+    notes: Sequence[JudgedNote],
+    strays: Sequence[tuple[str, float]] = (),
+    good_ms: float = 0.0,
+) -> list[dict[str, Any]]:
+    instead = instead_pads(notes, strays, good_ms) if strays else {}
     by: dict[str, list[JudgedNote]] = {}
     for n in notes:
         by.setdefault(n.pad, []).append(n)
@@ -247,6 +288,7 @@ def top_pads(notes: Sequence[JudgedNote]) -> list[dict[str, Any]]:
                 "notes": len(ns),
                 "misses": sum(n.judgement == "MISS" for n in ns),
                 "meanDeltaMs": mean,
+                "instead": instead.get(pad),
             }
         )
     rows = [
@@ -379,6 +421,8 @@ class _Bucket:
     tags: list[str] = field(default_factory=list)
     causes: list[str] = field(default_factory=list)
     aim_hits: list[AimHit] = field(default_factory=list)
+    # 채보 밖 타격 (패드, 곡 시각). 대신 친 패드(instead)를 센다
+    strays: list[tuple[str, float]] = field(default_factory=list)
     # FE에도 있는 구간인지(판정이나 지적이 들어옴). 각도 타격만 있는 구간은 FE에 없다
     seen: bool = False
 
@@ -422,6 +466,16 @@ class SegmentTracker:
             b.notes.append(note)
             b.seen = True
         return self._finish_until(note.songTimeMs, stage)
+
+    def note_stray(self, pad: str, song_time_ms: float) -> None:
+        """FE `noteStray`와 같다. 구간마다 64개까지"""
+        i = segment_index_at(self.chart, song_time_ms)
+        if i < self._next:
+            return
+        b = self._bucket(i)
+        b.seen = True
+        if len(b.strays) < 64:
+            b.strays.append((pad, song_time_ms))
 
     def note_aim(self, hit: AimHit) -> None:
         i = segment_index_at(self.chart, hit.noteTimeMs)
@@ -487,14 +541,16 @@ class SegmentTracker:
                 "stdDeltaMs": None if std is None else js_round(std, 1),
                 # FE: round1(same * 100) / 100
                 "sameSignRatio": None if same is None else js_round(same * 100, 1) / 100,
+                "goodMs": js_round(self.good_ms, 1),
             },
-            "pads": top_pads(b.notes),
+            "pads": top_pads(b.notes, b.strays, self.good_ms),
             "hands": weak_hand(valid)
             if self.input == "stick"
             else {"weakHand": None, "ratio": None},
             "ruleCoach": {"tags": list(b.tags), "causes": list(b.causes)},
             "previous": {"counts": self._previous, "lastTip": self._last_tip},
             "stage": stage,
+            "playedPads": played_pads(b.notes),
         }
         if self.poses:
             aim = aim_facts(b.aim_hits, self.poses, trust_yaw=self.trust_yaw)
@@ -663,6 +719,12 @@ def rebuild_segments(
     # 같은 시각이면 판정이 먼저다(FE push: 구간 마무리 → 지적 붙이기)
     timeline: list[tuple[float, int, str, Any]] = [(n.songTimeMs, 0, "note", n) for n in judged]
     timeline += [(t, 1, kind, v) for t, kind, v in _rule_events(play.events)]
+    # 채보 밖 타격은 친 시각에 FE로 들어온다(pushStray)
+    timeline += [
+        (float(h["t_ms"]), 0, "stray", pad)
+        for h in play.hits
+        if h.get("judgement") is None and (pad := normalize_pad(h["pad"])) is not None
+    ]
     timeline.sort(key=lambda x: (x[0], x[1]))
     out: list[FinishedSegment] = []
     seen = 0
@@ -670,6 +732,8 @@ def rebuild_segments(
         if kind == "note":
             seen += 1
             out.extend(tracker.push(v, coach_stage(seen)))
+        elif kind == "stray":
+            tracker.note_stray(v, t)
         elif kind == "rule":
             tag, cause = v
             tracker.note_rule_coach(t, tag, cause)
