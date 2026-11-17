@@ -35,6 +35,7 @@ import {
   transitionWindow,
   type Focus,
 } from '@/features/result/domain/reportView';
+import { playedHitsFromLog, playedHitsFromNotes, type PlayedHits } from '@/features/result/domain/segmentPlayback';
 import { getPlayLog } from '@/engine/playLog';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
@@ -107,6 +108,13 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const bins = useMemo(() => flowBins(noteList ?? [], totalMs), [noteList, totalMs]);
   // 구간을 마디로 세는 격자. 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다 — 기록이 없으면 구간을 시각만으로 보인다
   const grid = useMemo(() => reportGrid(log), [log]);
+  // 내 타격 목록: 이 브라우저의 연주 기록이 있으면 그것(헛친 타격 포함), 없으면 서버 노트의 판정된 타격. 둘 다 없으면 null
+  const reportRate = report.s === 'ok' ? report.v.playbackRate : 1;
+  const played = useMemo<PlayedHits | null>(() => {
+    if (log) return { hits: playedHitsFromLog(log), source: 'LOG' };
+    if (noteList) return { hits: playedHitsFromNotes(noteList, reportRate), source: 'NOTES' };
+    return null;
+  }, [log, noteList, reportRate]);
 
   // 추천: API 곡 소스 + 로그인일 때만, 리포트가 처음 OK가 된 뒤 요청한다(D1·D6). 중복은 store가 막는다(D2)
   const navigate = useNavigate();
@@ -313,7 +321,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
 
       {/* 화면 이동의 목적지는 이 틀이다. 안쪽 FocusPanel은 선택마다 다시 만들어져서, 거기로 부드럽게 옮기면 도중에 목적지가 사라져 이동이 끊긴다 */}
       <div id="rp-focus" className="rp-focus-anchor">
-        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} grid={grid} />}
+        {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} grid={grid} played={played} />}
       </div>
 
       <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />
