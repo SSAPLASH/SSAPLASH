@@ -6,8 +6,8 @@ import type { ChartNote } from '@/domain/song/chart';
 
 const NOTES: ChartNote[] = Array.from({ length: 80 }, (_, i) => ({ timeMs: 500 + i * 125, pad: i % 2 === 0 ? 'KICK' : 'HIHAT', velocityHint: 90 }));
 
-/** 실제 연주처럼 곡 0ms 전에 리드인이 있다(카운트다운 5초 + 카운트인 1마디). 곡 시각 = now − LEAD_IN */
-const LEAD_IN = 7000;
+/** 실제 연주처럼 곡 0ms 전에 리드인이 있다(카운트다운 3초 + 카운트인 1마디). 곡 시각 = now − LEAD_IN */
+const LEAD_IN = 5000;
 
 function setup(ahead: number, useAhead = true) {
   let now = 0;

@@ -3,15 +3,13 @@ import { COUNTDOWN_MS, COUNTDOWN_STEP_MS, countdownValue } from './leadIn';
 
 describe('countdownValue(gridMs, leadBarMs)', () => {
   it('상수', () => {
-    expect(COUNTDOWN_MS).toBe(5000);
+    expect(COUNTDOWN_MS).toBe(3000);
     expect(COUNTDOWN_STEP_MS).toBe(1000);
   });
 
-  it('준비 마디 2667ms: 준비 마디 시작(격자 −2667)까지 5·4·3·2·1', () => {
-    expect(countdownValue(-7667, 2667)).toBe(5);
-    expect(countdownValue(-6667.1, 2667)).toBe(5);
-    expect(countdownValue(-6667, 2667)).toBe(4);
+  it('준비 마디 2667ms: 준비 마디 시작(격자 −2667)까지 3·2·1', () => {
     expect(countdownValue(-5667, 2667)).toBe(3);
+    expect(countdownValue(-4667.1, 2667)).toBe(3);
     expect(countdownValue(-4667, 2667)).toBe(2);
     expect(countdownValue(-3667, 2667)).toBe(1);
     expect(countdownValue(-2667 - 0.1, 2667)).toBe(1);
@@ -29,14 +27,15 @@ describe('countdownValue(gridMs, leadBarMs)', () => {
     expect(countdownValue(-0.1, 0)).toBeNull();
   });
 
-  it('카운트다운보다 앞(BEGIN_LEAD 등)이어도 5를 넘지 않는다', () => {
-    expect(countdownValue(-9000, 2667)).toBe(5);
-    expect(countdownValue(-60000, 2667)).toBe(5);
+  it('카운트다운보다 앞(BEGIN_LEAD 등)이어도 3을 넘지 않는다', () => {
+    expect(countdownValue(-6667, 2667)).toBe(3);
+    expect(countdownValue(-9000, 2667)).toBe(3);
+    expect(countdownValue(-60000, 2667)).toBe(3);
   });
 
   it('준비 마디 길이가 달라도 숫자 간격은 1초', () => {
-    expect(countdownValue(-7000, 2000)).toBe(5);
-    expect(countdownValue(-6000, 2000)).toBe(4);
+    expect(countdownValue(-5000, 2000)).toBe(3);
+    expect(countdownValue(-4000, 2000)).toBe(2);
     expect(countdownValue(-3000, 2000)).toBe(1);
     expect(countdownValue(-2000, 2000)).toBeNull();
   });
