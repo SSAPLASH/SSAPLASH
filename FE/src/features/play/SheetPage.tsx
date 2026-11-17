@@ -57,7 +57,7 @@ import { useBestRecords } from './useBestRecords';
 import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import '@/components/lesson/lesson.css';
-import { isBeginnerChart, lessonOfChart, type Lesson } from '@/domain/play/lesson';
+import { isBeginnerChart, lessonOfChart, trimLessonTail, type Lesson } from '@/domain/play/lesson';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
@@ -202,7 +202,12 @@ function SheetPageBody() {
   const pickedRate = usePracticeRate((r) => rateFor(r, rateKey));
   const setPracticeRate = usePracticeRate((r) => r.setRate);
   const rate = accUrl === null && !lessonPlay ? pickedRate : 1;
-  const readyChart: Chart | null = useMemo(() => (sourceChart ? scaleChart(sourceChart, rate) : null), [sourceChart, rate]);
+  // 연주 레슨은 마지막 노트 뒤 빈 구간을 줄인다(385 후속) — 세션·악보·진행 표시·기록이 줄인 길이를 그대로 본다
+  const readyChart: Chart | null = useMemo(() => {
+    if (!sourceChart) return null;
+    const scaled = scaleChart(sourceChart, rate);
+    return lessonPlay ? trimLessonTail(scaled) : scaled;
+  }, [sourceChart, rate, lessonPlay]);
 
   // 판정 폭: 쉬운 채보·입문 코스 연주 레슨이면 GOOD을 넓힌다(PLAY-004 3-5). 세션·타이밍 막대·진단 줄·플레이 로그가 이 값 하나를 쓴다
   const beginner = readyChart ? isBeginnerChart({ difficulty: readyChart.difficulty, chartId: readyChart.chartId, lessons }) : false;
