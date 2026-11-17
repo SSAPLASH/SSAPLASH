@@ -334,6 +334,11 @@ class BuiltinSongSeederTest {
 			var pads = db.queryForList("SELECT DISTINCT n->>'pad' FROM charts c JOIN chart_versions v ON v.chart_id=c.id JOIN songs s ON s.id=c.song_id "
 					+ "CROSS JOIN jsonb_array_elements(v.notes) n WHERE s.title=? AND c.difficulty='NORMAL'", String.class, renamed.title());
 			assertThat(pads).as(entry.title()).containsExactlyInAnyOrderElementsOf(entry.lesson().pads());
+			// 시연용으로 이 레슨만 2마디다(385번): 킥 8번, 마지막 노트 뒤 한 마디까지 11박(70 BPM)
+			if (entry.title().equals("입문 · 킥으로 박자 세기")) {
+				assertThat(((Number) counts.get("normal")).intValue()).as(entry.title()).isEqualTo(8);
+				assertThat(db.queryForObject("SELECT duration_ms FROM songs WHERE title=?", Integer.class, renamed.title())).as(entry.title()).isEqualTo(9429);
+			}
 		}
 	}
 

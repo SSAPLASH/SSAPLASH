@@ -26,8 +26,9 @@ CRASH_EIGHT_BEAT = {"CRASH": [0], "HIHAT": list(range(1, 8)), "KICK": [0, 4], "S
 TOM_FILL = {"SNARE": [0, 1], "SMALL_TOM": [2, 3], "MID_TOM": [4, 5], "FLOOR_TOM": [6, 7]}
 
 # 연주 레슨: 한 마디를 8분음표 8칸으로 나눈 위치. 사전 하나면 4마디 반복하고, 목록이면 마디마다 그 패턴이다.
+# 「킥으로 박자 세기」만 2마디다(385번, 시연에서 첫 연주 레슨이 길다는 의견).
 PLAY = {
-    "lesson-kick-quarter.mid": {"KICK": [0, 2, 4, 6]},
+    "lesson-kick-quarter.mid": [{"KICK": [0, 2, 4, 6]}] * 2,
     "lesson-snare-backbeat.mid": {"SNARE": [2, 6]},
     "lesson-kick-snare.mid": {"KICK": [0, 4], "SNARE": [2, 6]},
     "lesson-hihat-quarter.mid": {"HIHAT": [0, 2, 4, 6]},
@@ -91,12 +92,12 @@ def main():
     bar = EIGHTH * 8
     for name, pattern in PLAY.items():
         bars = pattern if isinstance(pattern, list) else [pattern] * PLAY_BARS
-        assert len(bars) == PLAY_BARS, name
+        assert len(bars) in (2, PLAY_BARS), name
         hits = [(b * bar + slot * EIGHTH, pad) for b, p in enumerate(bars) for pad, slots in p.items() for slot in slots]
         # NORMAL 솎기는 같은 시각 2개까지만 남긴다. 넘으면 레슨 채보가 MIDI와 달라진다
         ticks = [t for t, _ in hits]
         assert all(ticks.count(t) <= 2 for t in ticks), name
-        (OUT / name).write_bytes(midi(hits, PLAY_BARS * bar))
+        (OUT / name).write_bytes(midi(hits, len(bars) * bar))
         print(f"{name}: notes={len(hits)}")
     for name, pads in READ.items():
         hits = [(i * PPQ, pad) for i, pad in enumerate(pads)]
