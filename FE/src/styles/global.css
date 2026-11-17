@@ -282,11 +282,8 @@ p {
 /* S 심벌은 페이지 제목 왼쪽에 표시한다. */
 .brand-symbol {
   flex: none;
-  font-family: var(--font-display);
-  font-weight: 400;
-  line-height: 1;
-  color: var(--brand-text);
-  transform: translateY(1px);
+  display: block;
+  width: auto;
 }
 /* 워드마크 이미지. 접고 펼치는 동안에는 줄어들지 않고 칸 밖이 잘린다 */
 .side-wordmark {
@@ -449,7 +446,7 @@ p {
   gap: 12px;
 }
 .topbar-logo {
-  font-size: 24px;
+  height: 24px;
 }
 .topbar-title {
   margin: 0;
