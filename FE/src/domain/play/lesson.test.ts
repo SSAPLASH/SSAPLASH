@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { JUDGEMENT_SCORE } from './judgement';
 import {
   AUTO_ADVANCE_SECONDS,
+  LESSON_TAIL_MS,
   COURSES,
   autoAdvanceTarget,
   autoAdvanceText,
@@ -21,6 +22,7 @@ import {
   playPassed,
   shouldInvite,
   stageStates,
+  trimLessonTail,
   type Lesson,
 } from './lesson';
 
@@ -305,5 +307,38 @@ describe('자동 넘김 판단', () => {
   it('카운트다운은 3초이고 안내 문구에 남은 초가 들어간다', () => {
     expect(AUTO_ADVANCE_SECONDS).toBe(3);
     expect(autoAdvanceText(2)).toBe('2초 뒤 다음 레슨으로 넘어가요.');
+  });
+});
+
+describe('trimLessonTail (연주 레슨 끝의 빈 구간 줄이기, 385 후속)', () => {
+  const notes = (...times: number[]) => times.map((timeMs) => ({ timeMs }));
+
+  it('마지막 노트 뒤 LESSON_TAIL_MS까지만 남긴다', () => {
+    // 킥으로 박자 세기(70 BPM 2마디): 마지막 킥 6000ms, 서버 곡 길이 9429ms
+    const chart = { title: '레슨', durationMs: 9429, notes: notes(0, 857, 6000) };
+    const out = trimLessonTail(chart);
+    expect(out.durationMs).toBe(6000 + LESSON_TAIL_MS);
+    expect(out.title).toBe('레슨');
+    expect(out.notes).toBe(chart.notes);
+  });
+
+  it('노트 순서와 무관하게 가장 늦은 노트를 기준으로 한다', () => {
+    expect(trimLessonTail({ durationMs: 9429, notes: notes(6000, 0, 857) }).durationMs).toBe(6000 + LESSON_TAIL_MS);
+  });
+
+  it('이미 짧으면 늘리지 않고 같은 객체를 돌려준다', () => {
+    const chart = { durationMs: 6500, notes: notes(0, 6000) };
+    expect(trimLessonTail(chart)).toBe(chart);
+  });
+
+  it('노트가 없으면 그대로 둔다', () => {
+    const chart = { durationMs: 9429, notes: notes() };
+    expect(trimLessonTail(chart)).toBe(chart);
+  });
+
+  it('원본을 바꾸지 않는다', () => {
+    const chart = { durationMs: 9429, notes: notes(6000) };
+    trimLessonTail(chart);
+    expect(chart.durationMs).toBe(9429);
   });
 });
