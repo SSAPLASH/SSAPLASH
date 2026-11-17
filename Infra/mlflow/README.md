@@ -118,7 +118,7 @@ GPU 서버는 오프라인이라 노트북을 거쳐 옮긴다. **이 절차는 
 
 - 처음 반영하면 `mlflow-db-init`이 `mlflow` DB를 만들고 `seaweedfs-init`이 `airdrum-mlflow` 버킷을 만든다. 둘 다 일회성이라 끝나면 `Exited (0)`이 정상이다.
 - 백엔드 DB 주소에 `POSTGRES_PASSWORD`를 그대로 넣는다. 비밀번호에 `@`, `/`, `:`, `%` 같은 문자가 있으면 주소가 깨지므로 영문·숫자 비밀번호를 쓴다(서버는 `openssl rand -hex`로 만든다).
-- MLflow 3.x는 요청의 호스트 이름을 검사하는 보안 기능이 있다. `localhost`·`127.0.0.1`(SSH 터널과 게시 도구)은 허용되지만, 다른 컨테이너가 `mlflow:5000` 같은 주소로 접속하면 거부될 수 있다. 그런 접속이 필요해지면 `--allowed-hosts` 옵션을 추가한다(아직 서버에서 확인하지 못했다).
+- MLflow 3.x는 요청의 호스트 이름(`Host` 헤더)을 검사하고, 기본으로 `localhost`와 사설 IP만 받는다. 다른 컨테이너가 `http://mlflow:5000`으로 접속하면 `403 Invalid Host header - possible DNS rebinding attack detected`로 거부된다(2026-11-17 추천 배치에서 확인, `Infra/TROUBLESHOOTING.md` I9). 그래서 compose의 `mlflow` 명령에 `--allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000`을 준다. 이 값은 기본 목록을 대신하므로 SSH 터널·게시 도구가 쓰는 `localhost`·`127.0.0.1`도 함께 적는다. 새 호스트 이름으로 접속해야 하면 이 목록에 더한다. `*`는 쓰지 않는다.
 - `models` 볼륨은 배포로 지워지지 않는다. `docker volume prune`이나 `docker system prune --volumes`를 실행하지 않는다(멈춘 서비스의 데이터가 삭제된다).
 
 ## 실패 시 대안
