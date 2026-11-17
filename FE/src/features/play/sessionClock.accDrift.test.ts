@@ -81,8 +81,8 @@ describe('PlayClock accDrift', () => {
     listen();
     const t = setup(1.0001);
     t.clock.begin();
-    // 반주 0초 = 8300. 25ms 타이머로 3분 진행
-    for (let n = 1025; n <= 8300 + 180_000; n += 25) t.tick(n);
+    // 반주 0초 = 6300. 25ms 타이머로 3분 진행
+    for (let n = 1025; n <= 6300 + 180_000; n += 25) t.tick(n);
     const d = drifts();
     expect(d.length).toBeGreaterThan(300);
     const last = d[d.length - 1];
@@ -98,9 +98,9 @@ describe('PlayClock accDrift', () => {
     listen();
     const t = setup(1);
     t.clock.begin();
-    for (let n = 1025; n < 8300; n += 25) t.tick(n);
+    for (let n = 1025; n < 6300; n += 25) t.tick(n);
     expect(drifts()).toHaveLength(0);
-    for (let n = 8300; n <= 8300 + 5000; n += 25) t.tick(n);
+    for (let n = 6300; n <= 6300 + 5000; n += 25) t.tick(n);
     expect(drifts().length).toBe(Math.floor(5000 / ACC_DRIFT_INTERVAL_MS) + 1);
     for (const x of drifts()) expect(Math.abs(x.drift)).toBeLessThan(1e-9);
   });

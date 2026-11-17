@@ -57,20 +57,20 @@ function playing(notes = NOTES, opts = OPTS): RhythmSession {
 }
 
 describe('시작·카운트인', () => {
-  it('idle일 때 곡 시각은 −preRollMs(7000)로 고정된다', () => {
+  it('idle일 때 곡 시각은 −preRollMs(5000)로 고정된다', () => {
     const s = new RhythmSession(chart(NOTES), OPTS);
     expect(s.countInMs).toBe(2000);
-    expect(s.songTime(5000)).toBe(-7000);
-    expect(s.songTime(99999)).toBe(-7000);
+    expect(s.songTime(5000)).toBe(-5000);
+    expect(s.songTime(99999)).toBe(-5000);
   });
 
-  it('preRollMs: 카운트다운 끔이면 0, 켬이면 5000 + 1마디', () => {
+  it('preRollMs: 카운트다운 끔이면 0, 켬이면 3000 + 1마디', () => {
     expect(new RhythmSession(chart(NOTES), { ...OPTS, countInBars: 0 }).preRollMs).toBe(0);
     expect(new RhythmSession(chart(NOTES), { ...OPTS, countInBars: 0 }).songTime(1)).toBe(0);
-    expect(new RhythmSession(chart(NOTES), OPTS).preRollMs).toBe(7000);
-    // 카운트다운 5초에 1마디(90bpm 4/4 = 2667ms, 40bpm 4/4 = 6000ms)를 더한다
-    expect(new RhythmSession({ ...chart(NOTES), bpm: 90 }, OPTS).preRollMs).toBeCloseTo(7666.67, 1);
-    expect(new RhythmSession({ ...chart(NOTES), bpm: 40 }, OPTS).preRollMs).toBe(11000);
+    expect(new RhythmSession(chart(NOTES), OPTS).preRollMs).toBe(5000);
+    // 카운트다운 3초에 1마디(90bpm 4/4 = 2667ms, 40bpm 4/4 = 6000ms)를 더한다
+    expect(new RhythmSession({ ...chart(NOTES), bpm: 90 }, OPTS).preRollMs).toBeCloseTo(5666.67, 1);
+    expect(new RhythmSession({ ...chart(NOTES), bpm: 40 }, OPTS).preRollMs).toBe(9000);
   });
 
   it('start 후 카운트인, 곡 0ms부터 playing', () => {
