@@ -78,10 +78,16 @@
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+/* 워드마크 이미지(public/images/ssaplash-wordmark.webp) */
 .lp .lp-logo {
-  font-weight: 800;
-  font-size: 24px;
-  letter-spacing: -0.03em;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.lp .lp-logo img {
+  display: block;
+  width: auto;
+  height: 22px;
 }
 .lp .lp-nav .lp-pill {
   height: 40px;
@@ -221,19 +227,44 @@
   color: var(--text-2);
   margin-bottom: 14px;
 }
+/* 서비스명 워드마크(public/images/ssaplash-wordmark.webp, 744×96).
+   ::before는 제목 뒤에 깔리는 흐린 네온 빛으로, 로고 줄무늬의 청록·자홍을 낮은 불투명도로 섞어 천천히 숨 쉬게 한다 */
 .lp .lp-title {
-  font-weight: 800;
-  font-size: clamp(64px, 12.5vw, 196px);
-  line-height: 0.9;
-  letter-spacing: -0.055em;
-  background: linear-gradient(180deg, #ffffff 0%, #d9dce1 45%, #7d828a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  /* 네온 잔광: 은빛 글자는 그대로 두고 브랜드 파랑(--brand #35a3d4) 빛만 뒤에 번지게 한다.
-     가까운 빛(22px)은 글자 윤곽, 먼 빛(110px)은 단어 전체를 감싸는 범위 */
-  filter: drop-shadow(0 0 22px rgba(53, 163, 212, 0.5)) drop-shadow(0 0 110px rgba(53, 163, 212, 0.32))
-    drop-shadow(0 20px 50px rgba(0, 0, 0, 0.5));
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  line-height: 0;
+}
+.lp .lp-title::before {
+  content: '';
+  position: absolute;
+  inset: -60% -8%;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 45% 50% at 38% 50%, rgba(107, 242, 253, 0.34), transparent 70%),
+    radial-gradient(ellipse 45% 50% at 64% 52%, rgba(232, 62, 190, 0.22), transparent 70%);
+  filter: blur(36px);
+  pointer-events: none;
+  animation: lp-title-neon 6s ease-in-out infinite;
+}
+/* 이미지 가까이에는 약한 파란 윤곽 빛과 사진 위 가독성용 그림자만 둔다 */
+.lp .lp-title img {
+  display: block;
+  width: auto;
+  height: clamp(44px, 9vw, 140px);
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(53, 163, 212, 0.35)) drop-shadow(0 16px 40px rgba(0, 0, 0, 0.55));
+}
+@keyframes lp-title-neon {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 /* 슬로건: 서비스명(최대 196px)의 약 1/4 비율, 사진 위에서도 읽히게 그림자 */
 .lp .lp-slogan {
@@ -1079,6 +1110,10 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .lp .lp-title::before {
+    animation: none;
+    opacity: 0.8;
+  }
   .lp .lp-cue-mouse::before {
     animation: none;
     opacity: 1;

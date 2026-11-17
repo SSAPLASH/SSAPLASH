@@ -62,7 +62,7 @@ describe('fire 테마(연속 그림 + 입자)', () => {
         }
       }
     }
-  });
+  }, 30_000); // 전수 조합이라 CI 러너에서 기본 5초를 넘는다(로컬 약 1초)
 
   it('묶음 고르기: 납작한 드럼은 side-a/b, 심벌은 cymbal, 원판·킥은 front, 페달은 그림 없음(Lite와 같다)', () => {
     expect(['fire-side-a', 'fire-side-b']).toContain(sheetOf(runGeo('drum', 70, 24, 1))!.sheet);

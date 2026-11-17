@@ -63,7 +63,7 @@ describe('water 테마(연속 그림 + 입자)', () => {
         }
       }
     }
-  });
+  }, 30_000); // 전수 조합이라 CI 러너에서 기본 5초를 넘는다(로컬 약 1초)
 
   it('묶음 고르기: 실물 큰 그림의 드럼·심벌(헤드 비율 0.57~0.73)은 옆 그림, 킥과 원판 패드는 정면, 페달은 그림 없음', () => {
     expect(['water-side-a', 'water-side-b']).toContain(sheetOf(run('acoustic', 'SNARE', 1).list)!.sheet);

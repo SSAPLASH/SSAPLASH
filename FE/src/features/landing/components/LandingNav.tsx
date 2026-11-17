@@ -1,4 +1,4 @@
-// 상단 바: 로고·앵커·로그인 버튼. 스크롤이 조금 내려가면 반투명 배경이 깔린다.
+// 상단 바: 로고(워드마크 이미지)·앵커·로그인 버튼. 스크롤이 조금 내려가면 반투명 배경이 깔린다.
 import { useEffect, useState } from 'react';
 import { NAV_LINKS } from './landingContent';
 
@@ -28,7 +28,7 @@ export function LandingNav({ showLogin, onStart, onNavigate }: Props) {
   return (
     <header className={solid ? 'lp-nav lp-solid' : 'lp-nav'}>
       <a className="lp-logo" href="#hero" onClick={go('hero')}>
-        ssaplash
+        <img src="/images/ssaplash-wordmark.webp" alt="SSAPLASH" width={744} height={96} draggable={false} />
       </a>
       <nav className="lp-nav-links" aria-label="랜딩 섹션">
         {NAV_LINKS.map((l) => (
