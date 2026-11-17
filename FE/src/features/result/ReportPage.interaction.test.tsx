@@ -320,7 +320,7 @@ describe('리포트 화면 구성', () => {
 
   it('이 브라우저에 연주 기록이 있으면 구간 시각 앞에 마디가 붙고, 5초 칸은 시각만이다(설계 COACH-002-report-timing-direction D8·D9)', async () => {
     // BPM 120·4박·원점 0 — 한 마디 2초
-    const log = { title: '곡', difficulty: 'EASY', mode: 'SHEET', startedAt: '2026-11-15T00:00:00.000Z', durationMs: 60000, timing: { perfectMs: 25, goodMs: 60 }, bpm: 120, beatsPerBar: 4, offsetMs: 0 };
+    const log = { title: '곡', difficulty: 'EASY', mode: 'SHEET', startedAt: '2026-11-15T00:00:00.000Z', durationMs: 60000, timing: { perfectMs: 25, goodMs: 60 }, bpm: 120, beatsPerBar: 4, offsetMs: 0, hits: [], notes: [] };
     vi.mocked(getPlayLog).mockReturnValue(log as unknown as PlayLog);
     setReport(report({ weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
     show();
@@ -328,6 +328,23 @@ describe('리포트 화면 구성', () => {
     expect(screen.getByRole('button', { name: /^7~9마디 · 0:12\.3–0:17\.3/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: '24~27마디 · 0:46–0:54 예시 보기' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^0:10–0:15: / })).toBeTruthy();
+  });
+
+  it('연주 기록이 없으면 서버 노트로 「내 연주 듣기」가 켜지고 노트 재료 문구가 보인다', async () => {
+    setReport(report({ weakSegments: [CLUSTER] }));
+    vi.mocked(loadAllReportNotes).mockResolvedValue([N(1, 13340, 'RIDE', 'GOOD'), ...NOTES.slice(1)]);
+    show();
+    const mine = await screen.findByRole('button', { name: '내 연주 듣기' });
+    expect((mine as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText('이 기기에는 이 판의 연주 기록이 없어 노트에 맞은 타격만 들려요')).toBeTruthy();
+  });
+
+  it('노트가 전부 MISS이고 연주 기록도 없으면 「내 연주 듣기」는 꺼진다', async () => {
+    setReport(report({ weakSegments: [CLUSTER] }));
+    show();
+    const mine = await screen.findByRole('button', { name: '내 연주 듣기' });
+    expect((mine as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('이 구간에서 노트에 맞은 타격이 없어 내 연주는 들을 수 없어요')).toBeTruthy();
   });
 
   it('연습 속도로 친 리포트에만 「시각은 원래 빠르기 기준이에요」가 보인다(D7)', async () => {
