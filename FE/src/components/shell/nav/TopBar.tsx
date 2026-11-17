@@ -16,7 +16,16 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="topbar-heading">
-        <span className="brand-symbol topbar-logo" aria-hidden="true">S</span>
+        {/* 로고 S 심벌(public/images/ssaplash-symbol.webp, 113×96). 장식이라 읽지 않는다 */}
+        <img
+          className="brand-symbol topbar-logo"
+          src="/images/ssaplash-symbol.webp"
+          alt=""
+          aria-hidden="true"
+          width={113}
+          height={96}
+          draggable={false}
+        />
         <h1 className="topbar-title t-title-20" tabIndex={-1}>{title || defaultTitle(pathname)}</h1>
       </div>
       {/* Figma에 없는 센서 종류 표시. 기능 손실을 피하려 제목 옆에 작게 남긴다 */}
