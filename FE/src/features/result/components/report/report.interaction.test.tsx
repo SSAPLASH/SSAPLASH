@@ -6,6 +6,7 @@ import type { UseSegmentPlayer } from './useSegmentPlayer';
 import type { PadId } from '@/domain/kit/pads';
 import type { PadStat, Report, ReportNote, WeakSegment } from '@/domain/play/report';
 import { flowBins, focusOfBin, focusOfCluster, focusOfTransition, type ReportGrid } from '@/features/result/domain/reportView';
+import type { PlayedHit, PlayedHits } from '@/features/result/domain/segmentPlayback';
 import { FocusPanel } from './FocusPanel';
 import { NoteFlowChart } from './NoteFlowChart';
 import { AnalysisNotice, ObservationList, PadTable, StatsLine } from './ReportSections';
@@ -242,14 +243,76 @@ describe('FocusPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '정답 듣기' }));
     expect(p.play).toHaveBeenCalledTimes(1);
     const [key, plan, url] = vi.mocked(p.play).mock.calls[0];
-    expect(key).toBe(f.key);
+    expect(key).toBe(`${f.key}#answer`);
     expect(plan).toMatchObject({ fromMs: 12300, toMs: 17300 });
     expect(plan.events).toHaveLength(3);
     expect(url).toBe('https://x/acc.wav');
-    const playing = fakePlayer({ playingKey: f.key });
+    const playing = fakePlayer({ playingKey: `${f.key}#answer` });
     rerender(<FocusPanel focus={f} notes={NOTES} player={playing} accompanimentUrl={null} />);
     fireEvent.click(screen.getByRole('button', { name: '정지' }));
     expect(playing.stop).toHaveBeenCalled();
+  });
+
+  describe('내 연주 듣기', () => {
+    const hit = (timeMs: number, anchorMs = timeMs): PlayedHit => ({ timeMs, anchorMs, pad: 'RIDE', velocity: 70 });
+    const MINE: PlayedHits = { hits: [hit(13310, 13340), hit(14800, 14790)], source: 'LOG' };
+    const names = () => [...document.querySelectorAll('.rp-player .rp-control')].map((b) => b.textContent);
+
+    it('버튼 순서는 정답 · 내 연주 · 1배 · 0.75배 · 반복이다', () => {
+      render(<FocusPanel focus={focusOfCluster(cluster())} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} played={MINE} />);
+      expect(names()).toEqual(['정답 듣기', '내 연주 듣기', '1배', '0.75배', '반복']);
+      expect(screen.getByText('정답은 악보대로, 내 연주는 내가 친 박자와 세기대로 드럼 소리로 다시 들려줘요')).toBeTruthy();
+      expect(screen.queryByText(/연주 기록이 없어/)).toBeNull();
+    });
+
+    it('누르면 #mine 키와 내 타격 일정으로 재생한다', () => {
+      const f = focusOfCluster(cluster());
+      const p = fakePlayer();
+      render(<FocusPanel focus={f} notes={NOTES} player={p} accompanimentUrl="https://x/acc.wav" played={MINE} />);
+      fireEvent.click(screen.getByRole('button', { name: '내 연주 듣기' }));
+      const [key, plan, url] = vi.mocked(p.play).mock.calls[0];
+      expect(key).toBe(`${f.key}#mine`);
+      // 구간(12300~17300) 첫 타격이 13310이라 재생 시작은 구간 시작 그대로
+      expect(plan.fromMs).toBe(12300);
+      expect(plan.events.map((e) => [e.atMs, e.velocity])).toEqual([[1010, 70], [2500, 70]]);
+      expect(url).toBe('https://x/acc.wav');
+    });
+
+    it('정답 재생 중에는 정답 버튼만 정지이고, 내 연주를 누르면 #mine으로 재생한다', () => {
+      const f = focusOfCluster(cluster());
+      const p = fakePlayer({ playingKey: `${f.key}#answer` });
+      render(<FocusPanel focus={f} notes={NOTES} player={p} accompanimentUrl={null} played={MINE} />);
+      expect(names()).toEqual(['정지', '내 연주 듣기', '1배', '0.75배', '반복']);
+      fireEvent.click(screen.getByRole('button', { name: '내 연주 듣기' }));
+      expect(p.play).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(p.play).mock.calls[0][0]).toBe(`${f.key}#mine`);
+      expect(p.stop).not.toHaveBeenCalled();
+    });
+
+    it('내 연주 재생 중에는 내 연주 버튼만 정지이고 누르면 멈춘다', () => {
+      const f = focusOfCluster(cluster());
+      const p = fakePlayer({ playingKey: `${f.key}#mine` });
+      render(<FocusPanel focus={f} notes={NOTES} player={p} accompanimentUrl={null} played={MINE} />);
+      expect(names()).toEqual(['정답 듣기', '정지', '1배', '0.75배', '반복']);
+      fireEvent.click(screen.getByRole('button', { name: '정지' }));
+      expect(p.stop).toHaveBeenCalled();
+    });
+
+    it('played가 null이면 비활성이고 이유 문구는 없다', () => {
+      render(<FocusPanel focus={focusOfCluster(cluster())} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} played={null} />);
+      expect((screen.getByRole('button', { name: '내 연주 듣기' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByText(/들을 수 없어요/)).toBeNull();
+    });
+
+    it('구간에 타격이 없으면 비활성이고 재료별 이유를 보인다', () => {
+      const f = focusOfCluster(cluster());
+      const { rerender } = render(<FocusPanel focus={f} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} played={{ hits: [hit(30000)], source: 'LOG' }} />);
+      expect((screen.getByRole('button', { name: '내 연주 듣기' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText('이 구간에서 친 타격이 없어 내 연주는 들을 수 없어요')).toBeTruthy();
+      rerender(<FocusPanel focus={f} notes={NOTES} player={fakePlayer()} accompanimentUrl={null} played={{ hits: [], source: 'NOTES' }} />);
+      expect(screen.getByText('이 기기에는 이 판의 연주 기록이 없어 노트에 맞은 타격만 들려요')).toBeTruthy();
+      expect(screen.getByText('이 구간에서 노트에 맞은 타격이 없어 내 연주는 들을 수 없어요')).toBeTruthy();
+    });
   });
 
   it('배속·반복: 눌린 쪽이 표시되고, 다른 배속을 누를 때만 바꾼다(A6)', () => {
