@@ -34,6 +34,10 @@ describe('LandingView', () => {
     expect(render(true)).toMatch(/<a class="lp-logo" href="#hero"><img src="\/images\/ssaplash-wordmark\.webp" alt="SSAPLASH"/);
   });
 
+  it('히어로 제목은 h1 안의 워드마크 이미지이고 이름을 alt로 읽어 준다', () => {
+    expect(render(true)).toMatch(/<h1 class="lp-title"><img src="\/images\/ssaplash-wordmark\.webp" alt="SSAPLASH"/);
+  });
+
   it('모드 3개가 히어로와 모드 섹션에 각각 있고 단축키가 붙는다', () => {
     const html = render(true);
     expect(html.match(/aria-label="(자유|악보|게임) 모드로 시작"/g)).toHaveLength(6);
