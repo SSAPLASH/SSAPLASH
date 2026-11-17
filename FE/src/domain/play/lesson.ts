@@ -255,6 +255,19 @@ export function isBeginnerChart(i: { difficulty: string | null | undefined; char
   return lessonOfChart(i.lessons, i.chartId)?.kind === 'PLAY';
 }
 
+/** 연주 레슨에서 마지막 노트 뒤에 남기는 길이(ms). 엔진이 곡 길이 + 0.8초에 끝내므로 마지막 노트 약 2.2초 뒤에 결과로 넘어간다 */
+export const LESSON_TAIL_MS = 1400;
+
+/**
+ * 연주 레슨 채보의 끝을 당긴다. 서버 곡 길이는 "마지막 노트 + 한 마디"라 짧은 레슨에서는 치는 것 없이 기다리는 구간이 길다(385 후속).
+ * 길이만 줄인 새 채보를 돌려주고, 이미 짧거나 노트가 없으면 받은 채보 그대로다. 세션·악보·진행 표시·기록이 이 길이 하나를 쓴다
+ */
+export function trimLessonTail<T extends { durationMs: number; notes: readonly { timeMs: number }[] }>(chart: T): T {
+  if (chart.notes.length === 0) return chart;
+  const end = chart.notes.reduce((max, n) => Math.max(max, n.timeMs), 0) + LESSON_TAIL_MS;
+  return end < chart.durationMs ? { ...chart, durationMs: end } : chart;
+}
+
 /**
  * 레슨을 여는 주소. 연주 레슨은 [학습 코스]와 그 코스를 유지한 악보 연습(시작 확인 창부터, `start=1`) — 곡 고르기로 돌아오면 같은 코스가 보인다.
  * 알아보기는 알아보기 화면. `auto`면 연주 레슨 주소에 `auto=1`을 붙여 시작 확인 창의 플레이까지 자동으로 시작하게 한다(설계 SETUP-학습-코스-자동-넘김 3-3)
