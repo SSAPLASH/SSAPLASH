@@ -22,12 +22,14 @@ export const AIM_MIN_HITS = 4;
 /** 한 손이 이 비율 이상이면 그 손으로 본다 */
 const AIM_HAND_SHARE = 0.75;
 /** 구간마다 모아 두는 채보 밖 타격 상한 */
-const MAX_AIM_STRAYS = 64;
+const MAX_STRAYS = 64;
 const FIRST_SEGMENTS: readonly number[] = [4, 4, 8, 16];
 const LATER_SEGMENT_BARS = 16;
 
 export type SegmentChart = TempoChart & Pick<Chart, 'beatsPerBar'>;
 export type InputKind = 'stick' | 'keyboard';
+/** 이 수 이상 노트가 있어야 그 패드를 이번 구간에 쳤다고 본다(한 번 스친 패드로 습관이 나아졌다고 하지 않는다) */
+export const PLAYED_MIN_NOTES = 2;
 
 export interface SegmentRange {
   index: number;
@@ -76,14 +78,18 @@ export interface SegmentFacts {
   segment: { index: number; fromBar: number; toBar: number };
   input: InputKind;
   counts: { perfect: number; good: number; miss: number };
-  timing: { meanDeltaMs: number | null; stdDeltaMs: number | null; sameSignRatio: number | null };
-  pads: { pad: PadId; notes: number; misses: number; meanDeltaMs: number | null }[];
+  /** goodMs: 그 판의 판정 폭(GOOD, ms). 늦음·빠름의 정도(살짝·많이)를 이 폭 대비로 말한다 */
+  timing: { meanDeltaMs: number | null; stdDeltaMs: number | null; sameSignRatio: number | null; goodMs: number };
+  /** instead: 이 패드 칠 차례에 대신 가장 많이 친 패드(놓친 노트 근처의 채보 밖 타격). 없으면 null */
+  pads: { pad: PadId; notes: number; misses: number; meanDeltaMs: number | null; instead: PadId | null }[];
   hands: { weakHand: 'LEFT' | 'RIGHT' | null; ratio: number | null };
   ruleCoach: { tags: string[]; causes: string[] };
   previous: { counts: { perfect: number; good: number; miss: number } | null; lastTip: LiveTipText | null };
   stage: CoachStage;
   /** 스틱 끝 방향 치우침(선택). 스틱 입력이고 근거가 있을 때만 넣는다. contractVersion은 1 그대로다 */
   aim?: AimFact[];
+  /** 이번 구간에 노트가 2개 이상 있던 패드(처음 나온 순서). 습관이 나아졌는지 볼 때 그 패드를 쳤다는 근거다 */
+  playedPads: PadId[];
 }
 
 export interface AimFact {
@@ -114,12 +120,12 @@ export interface AimHit {
   wrongPad: boolean;
 }
 
-/** 채보 밖 타격(다른 패드로 잡힌 타격 후보) */
-interface AimStray {
+/** 채보 밖 타격(대신 친 패드·다른 패드로 잡힌 타격 후보). 손·방향은 센서 타격만 있다 */
+interface StrayRecord {
   pad: PadId;
   songTimeMs: number;
-  stickId: 0 | 1;
-  pose: Pose;
+  stickId: 0 | 1 | null;
+  pose: Pose | null;
 }
 
 /** 끝난 구간 하나: 사실과, 다음 구간 길이(기한 계산용) */
@@ -139,7 +145,7 @@ interface Bucket {
   tags: string[];
   causes: string[];
   aimHits: AimHit[];
-  strays: AimStray[];
+  strays: StrayRecord[];
 }
 
 /**
@@ -178,13 +184,17 @@ export class SegmentTracker {
     return this.finishUntil(note.songTimeMs, stage);
   }
 
-  /** 채보 밖 타격. 같은 구간에서 놓친 노트 근처면 그 노트를 치려다 다른 패드로 잡힌 타격으로 본다 */
-  noteStray(pad: PadId, songTimeMs: number, stickId: 0 | 1 | null, pose: Pose | null): void {
-    if (!this.aim || !pose || (stickId !== 0 && stickId !== 1) || !Number.isFinite(songTimeMs)) return;
+  /**
+   * 채보 밖 타격. 같은 구간에서 놓친 노트 근처면 그 노트를 칠 차례에 대신 친 패드(instead)로 센다.
+   * 센서 타격이고 방향이 있으면 스틱 끝 방향(aim)의 다른 패드로 잡힌 타격으로도 쓴다. 키보드 타격도 받는다
+   */
+  noteStray(pad: PadId, songTimeMs: number, stickId: 0 | 1 | null = null, pose: Pose | null = null): void {
+    if (!Number.isFinite(songTimeMs)) return;
     const i = segmentIndexAt(this.chart, songTimeMs);
     if (i < this.nextToFinish) return;
     const b = this.bucket(i);
-    if (b.strays.length < MAX_AIM_STRAYS) b.strays.push({ pad, songTimeMs, stickId, pose });
+    const hand = stickId === 0 || stickId === 1 ? stickId : null;
+    if (b.strays.length < MAX_STRAYS) b.strays.push({ pad, songTimeMs, stickId: hand, pose: hand === null ? null : pose });
   }
 
   /** 이 구간에 규칙이 띄운 지적과 고른 원인. 지적이 뜬 시각의 구간에 붙인다 */
@@ -252,28 +262,66 @@ export class SegmentTracker {
       segment: { index: range.index, fromBar: range.fromBar, toBar: range.toBar },
       input: this.input,
       counts: countsOf(b.notes),
-      timing: { meanDeltaMs: mean === null ? null : round1(mean), stdDeltaMs: std === null ? null : round1(std), sameSignRatio: same === null ? null : round1(same * 100) / 100 },
-      pads: topPads(b.notes),
+      timing: {
+        meanDeltaMs: mean === null ? null : round1(mean),
+        stdDeltaMs: std === null ? null : round1(std),
+        sameSignRatio: same === null ? null : round1(same * 100) / 100,
+        goodMs: round1(this.goodMs),
+      },
+      pads: topPads(b.notes, insteadPads(b, this.goodMs)),
       hands: this.input === 'stick' ? weakHand(valid) : { weakHand: null, ratio: null },
       ruleCoach: { tags: [...b.tags], causes: [...b.causes] },
       previous: { counts: this.previousCounts, lastTip: this.lastTip },
       stage,
       ...(aim.length ? { aim } : {}),
+      playedPads: playedPads(b.notes),
     };
   }
 }
 
 /** 놓친 노트 ±goodMs 안에서 다른 패드로 잡힌 채보 밖 타격 → 그 노트 패드의 근거(wrongPad) */
+/** 채보 밖 타격 s를 ±goodMs 안에서 가장 가까운 다른 패드 놓침에 붙인다. 없으면 null */
+function missedNoteFor(missed: readonly JudgedNote[], s: StrayRecord, goodMs: number): JudgedNote | null {
+  let best: JudgedNote | null = null;
+  for (const n of missed) {
+    if (n.pad === s.pad || Math.abs(s.songTimeMs - n.noteTimeMs) > goodMs) continue;
+    if (!best || Math.abs(s.songTimeMs - n.noteTimeMs) < Math.abs(s.songTimeMs - best.noteTimeMs)) best = n;
+  }
+  return best;
+}
+
+/** 놓친 노트 ±goodMs 안에서 다른 패드로 잡힌 센서 타격 → 그 노트 패드의 근거(wrongPad) */
 function wrongPadHits(b: Bucket, goodMs: number): AimHit[] {
   const missed = b.notes.filter((n) => n.judgement === 'MISS');
   const out: AimHit[] = [];
   for (const s of b.strays) {
-    let best: JudgedNote | null = null;
-    for (const n of missed) {
-      if (n.pad === s.pad || Math.abs(s.songTimeMs - n.noteTimeMs) > goodMs) continue;
-      if (!best || Math.abs(s.songTimeMs - n.noteTimeMs) < Math.abs(s.songTimeMs - best.noteTimeMs)) best = n;
-    }
+    if (s.stickId === null || !s.pose) continue;
+    const best = missedNoteFor(missed, s, goodMs);
     if (best) out.push({ notePad: best.pad, stickId: s.stickId, pose: s.pose, wrongPad: true });
+  }
+  return out;
+}
+
+/** 놓친 노트 패드마다 대신 가장 많이 친 패드. 같은 수면 먼저 나온 패드. AI `live_segments.instead_pads`와 같다 */
+function insteadPads(b: Bucket, goodMs: number): Map<PadId, PadId> {
+  const missed = b.notes.filter((n) => n.judgement === 'MISS');
+  const counts = new Map<PadId, Map<PadId, number>>();
+  for (const s of b.strays) {
+    const best = missedNoteFor(missed, s, goodMs);
+    if (!best) continue;
+    const row = counts.get(best.pad) ?? new Map<PadId, number>();
+    row.set(s.pad, (row.get(s.pad) ?? 0) + 1);
+    counts.set(best.pad, row);
+  }
+  const out = new Map<PadId, PadId>();
+  for (const [pad, row] of counts) {
+    const top = Math.max(...row.values());
+    for (const [hit, n] of row) {
+      if (n === top) {
+        out.set(pad, hit);
+        break;
+      }
+    }
   }
   return out;
 }
@@ -335,14 +383,21 @@ function countsOf(notes: readonly JudgedNote[]): SegmentFacts['counts'] {
   return c;
 }
 
+/** 노트가 PLAYED_MIN_NOTES개 이상 있던 패드. 처음 나온 순서. AI `live_segments.played_pads`와 같다 */
+export function playedPads(notes: readonly JudgedNote[]): PadId[] {
+  const count = new Map<PadId, number>();
+  for (const n of notes) count.set(n.pad, (count.get(n.pad) ?? 0) + 1);
+  return [...count.entries()].filter(([, c]) => c >= PLAYED_MIN_NOTES).map(([pad]) => pad);
+}
+
 /** 놓침이 많은 패드부터, 같으면 평균 오차가 큰 패드. 놓침도 큰 오차(15ms 이상)도 없는 패드는 넣지 않는다. 최대 3개 */
-function topPads(notes: readonly JudgedNote[]): SegmentFacts['pads'] {
+function topPads(notes: readonly JudgedNote[], instead: ReadonlyMap<PadId, PadId> = new Map()): SegmentFacts['pads'] {
   const by = new Map<PadId, JudgedNote[]>();
   for (const n of notes) by.set(n.pad, [...(by.get(n.pad) ?? []), n]);
   const rows = [...by.entries()].map(([pad, ns]) => {
     const ds = ns.filter(isValid).map((n) => n.deltaMs);
     const mean = ds.length ? round1(ds.reduce((s, d) => s + d, 0) / ds.length) : null;
-    return { pad, notes: ns.length, misses: ns.filter((n) => n.judgement === 'MISS').length, meanDeltaMs: mean };
+    return { pad, notes: ns.length, misses: ns.filter((n) => n.judgement === 'MISS').length, meanDeltaMs: mean, instead: instead.get(pad) ?? null };
   });
   return rows
     .filter((r) => r.misses > 0 || (r.meanDeltaMs !== null && Math.abs(r.meanDeltaMs) >= 15))

@@ -45,7 +45,7 @@ describe('StartDialog play', () => {
     setup();
     expect(screen.getByRole('dialog', { name: '별빛 산책' })).toBeTruthy();
     expect(screen.getByText(/악보 연습 · BPM 120 · 3:05/)).toBeTruthy();
-    expect(screen.getByText('시작하면 5초 카운트다운과 준비 1마디 뒤 노트가 시작돼요.')).toBeTruthy();
+    expect(screen.getByText('시작하면 3초 카운트다운과 준비 1마디 뒤 노트가 시작돼요.')).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '플레이' }));
   });
 

@@ -163,8 +163,12 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="주 메뉴">
       {/* 헤더: 로고 + 접기/펼치기(UX-19, 2026-10-30). 태블릿은 강제 접힘이라 버튼을 숨긴다 */}
       <div className="side-header">
-        {/* 펼친 사이드바에는 워드마크를 표시한다. */}
-        {!collapsed && <span className="side-wordmark">SSAPLASH</span>}
+        {/* 펼친 사이드바에는 워드마크 이미지를 표시한다(public/images/ssaplash-wordmark.webp, 744×96). */}
+        {!collapsed && (
+          <span className="side-wordmark">
+            <img src="/images/ssaplash-wordmark.webp" alt="SSAPLASH" width={744} height={96} draggable={false} />
+          </span>
+        )}
         {!tablet && (
           <button
             type="button"

@@ -22,7 +22,7 @@ import {
   type NoteVerdict,
   type ReportGrid,
 } from '@/features/result/domain/reportView';
-import { planSegment } from '@/features/result/domain/segmentPlayback';
+import { planPlayed, planSegment, type PlayedHits } from '@/features/result/domain/segmentPlayback';
 import './report.css';
 
 interface Props {
@@ -35,6 +35,8 @@ interface Props {
   accompanimentUrl: string | null;
   /** 마디 격자. 있으면 제목과 구간 줄에 마디를 같이 적는다 */
   grid?: ReportGrid | null;
+  /** 내가 친 타격 목록. null이면 「내 연주 듣기」를 쓸 수 없다(연주 기록도 서버 노트도 없음) */
+  played?: PlayedHits | null;
 }
 
 const MARK_CLASS: Record<NoteVerdict, string> = { PERFECT: 'perfect', EARLY: 'early', LATE: 'late', MISS: 'miss' };
@@ -45,7 +47,7 @@ function readoutVerdict(n: ReportNote): string {
   return (verdict === 'EARLY' || verdict === 'LATE') && deltaText(n.deltaMs) !== '' ? '' : VERDICT_LABEL[verdict];
 }
 
-export function FocusPanel({ focus, notes, notesFailed = false, player, accompanimentUrl, grid = null }: Props) {
+export function FocusPanel({ focus, notes, notesFailed = false, player, accompanimentUrl, grid = null, played = null }: Props) {
   const [selected, setSelected] = useState(0);
   const { stop } = player;
   // 선택이 바뀌어 이 패널이 사라지면 재생을 멈춘다
@@ -63,7 +65,12 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
   const counts = verdictCounts(inWindow);
   // 시간축 눈금: 1초마다(창이 길면 8칸으로)
   const tickCount = Math.min(8, Math.max(1, Math.ceil(span / 1000)));
-  const playing = player.playingKey === focus.key;
+  // 정답·내 연주는 같은 재생기를 쓰므로 키를 나눠 어느 쪽이 울리는지 가린다
+  const answerKey = `${focus.key}#answer`;
+  const mineKey = `${focus.key}#mine`;
+  const playing = player.playingKey === answerKey;
+  const playingMine = player.playingKey === mineKey;
+  const minePlayable = played !== null && planPlayed(played.hits, focus.fromMs, focus.toMs, 1).events.length > 0;
 
   return (
     <section className="rp-focus" aria-labelledby="rp-focus-title">
@@ -181,10 +188,22 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
           aria-pressed={playing}
           onClick={() => {
             if (playing) player.stop();
-            else if (notes) player.play(focus.key, planSegment(notes, focus.fromMs, focus.toMs, player.rate), accompanimentUrl);
+            else if (notes) player.play(answerKey, planSegment(notes, focus.fromMs, focus.toMs, player.rate), accompanimentUrl);
           }}
         >
           {playing ? '정지' : '정답 듣기'}
+        </button>
+        <button
+          type="button"
+          className="rp-control"
+          disabled={!minePlayable}
+          aria-pressed={playingMine}
+          onClick={() => {
+            if (playingMine) player.stop();
+            else if (played) player.play(mineKey, planPlayed(played.hits, focus.fromMs, focus.toMs, player.rate), accompanimentUrl);
+          }}
+        >
+          {playingMine ? '정지' : '내 연주 듣기'}
         </button>
         <button type="button" className="rp-control" aria-pressed={player.rate === 1} onClick={() => player.rate !== 1 && player.toggleRate()}>
           1배
@@ -196,7 +215,13 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
           반복
         </button>
       </div>
-      <p className="rp-player-note">FE 드럼 소리로 재연한 정답 연주예요</p>
+      <p className="rp-player-note">정답은 악보대로, 내 연주는 내가 친 박자와 세기대로 드럼 소리로 다시 들려줘요</p>
+      {played?.source === 'NOTES' && <p className="rp-player-note">이 기기에는 이 판의 연주 기록이 없어 노트에 맞은 타격만 들려요</p>}
+      {played && !minePlayable && (
+        <p className="rp-player-note">
+          {played.source === 'LOG' ? '이 구간에서 친 타격이 없어 내 연주는 들을 수 없어요' : '이 구간에서 노트에 맞은 타격이 없어 내 연주는 들을 수 없어요'}
+        </p>
+      )}
     </section>
   );
 }

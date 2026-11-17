@@ -36,7 +36,10 @@ export function HeroScene({ onMode, onScrollDown }: Props) {
         <m.div className="lp-hero-inner" style={reduce ? undefined : { opacity: innerOpacity, y: innerY, scale: innerScale }}>
           <div>
             <p className="lp-eyebrow">{HERO_COPY.eyebrow}</p>
-            <h1 className="lp-title">{HERO_COPY.title}</h1>
+            {/* 서비스명은 워드마크 이미지로 그리고, alt로 h1 제목 의미를 남긴다 */}
+            <h1 className="lp-title">
+              <img src="/images/ssaplash-wordmark.webp" alt={HERO_COPY.title} width={744} height={96} draggable={false} />
+            </h1>
             <p className="lp-slogan">{HERO_COPY.slogan}</p>
             <p className="lp-slogan-sub">{HERO_COPY.sub}</p>
           </div>

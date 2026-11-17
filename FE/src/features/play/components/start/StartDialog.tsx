@@ -109,7 +109,7 @@ export function StartDialog({
   const title = isPlay ? song.title : '기기 준비가 필요해요';
   const guide = isPlay
     ? countInBars > 0
-      ? '시작하면 5초 카운트다운과 준비 1마디 뒤 노트가 시작돼요.'
+      ? '시작하면 3초 카운트다운과 준비 1마디 뒤 노트가 시작돼요.'
       : '시작하면 바로 노트가 시작돼요.'
     : '스틱·페달 연결과 첫 보정이 끝나면 플레이할 수 있어요.';
 
