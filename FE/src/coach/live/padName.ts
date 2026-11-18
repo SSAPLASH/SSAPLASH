@@ -29,11 +29,6 @@ function finalConsonant(word: string): 'none' | 'rieul' | 'other' | null {
   return jong === 0 ? 'none' : jong === 8 ? 'rieul' : 'other';
 }
 
-/** 방향 조사. 받침이 없거나 ㄹ이면 '로', 그 밖의 받침이면 '으로' */
-export function directionParticle(word: string): '로' | '으로' {
-  return finalConsonant(word) === 'other' ? '으로' : '로';
-}
-
 /** 주제 조사 */
 export function topicParticle(word: string): '은' | '는' {
   const f = finalConsonant(word);

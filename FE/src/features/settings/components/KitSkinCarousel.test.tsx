@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/kit/drumKit';
-import { KitSkinCarousel, nextSkin } from './KitSkinCarousel';
+import { KitSkinCarousel } from './KitSkinCarousel';
+import { nextSkin } from '@/features/settings/domain/carouselStep';
 
 describe('nextSkin', () => {
   it('다음·이전으로 넘기고 끝에서 순환한다', () => {

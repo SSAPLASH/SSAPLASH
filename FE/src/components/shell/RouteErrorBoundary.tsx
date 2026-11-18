@@ -89,6 +89,7 @@ export function RouteErrorElement() {
     if (decided.current) return; // StrictMode의 이중 실행에서 가드에 스스로 걸리지 않게 한다
     decided.current = true;
     if (chunk) {
+      // oxlint-disable-next-line react/set-state-in-effect -- tryAutoReload가 sessionStorage 기록·reload를 하는 부수효과라 렌더로 옮길 수 없고, 그 결과로 화면 모드를 정해야 한다
       setMode(tryAutoReload(window.location.pathname, { busy: isBusy() }) === 'reloading' ? 'reloading' : 'chunk');
     } else {
       console.error(error);

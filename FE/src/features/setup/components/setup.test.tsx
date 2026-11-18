@@ -1,43 +1,13 @@
-// 단계 카드·복귀 띠·대화상자 렌더 테스트(정적 렌더). Enter 조건은 순수 함수로 검증한다.
+// 복귀 띠·대화상자 렌더 테스트(정적 렌더). Enter 조건은 순수 함수로 검증한다.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { KitPreset } from '@/domain/kit/preset';
 import { PresetNameDialog } from './preset/PresetNameDialog';
 import { isEnterBlockedTarget, shouldReturnOnEnter } from './preset/enterKey';
 import { ReturnBanner } from './ReturnBanner';
-import { StepCard } from './StepCard';
 import { UnsavedLeaveDialog } from './preset/UnsavedLeaveDialog';
 
 const noop = () => {};
-
-describe('StepCard', () => {
-  const card = (status: 'needed' | 'done' | 'skipped', expanded: boolean, actionLabel?: string) =>
-    renderToStaticMarkup(
-      <StepCard id="step-stick" index={1} title="스틱 연결" status={status} summary="요약 문구" actionLabel={actionLabel} expanded={expanded} onCollapse={noop}>
-        <p>본문</p>
-      </StepCard>,
-    );
-
-  it('상태별 배지', () => {
-    expect(card('needed', false)).toContain('>필요<');
-    expect(card('done', false)).toContain('>완료<');
-    expect(card('skipped', false)).toContain('>필요 없음<');
-  });
-  it('완료는 체크, 그 밖은 번호', () => {
-    expect(card('done', false)).toContain('✓');
-    expect(card('needed', false)).toContain('>1<');
-  });
-  it('접힘이면 본문 없이 동작 버튼, 펼침이면 본문과 접기', () => {
-    const folded = card('done', false, '다시 연결');
-    expect(folded).toContain('다시 연결');
-    expect(folded).not.toContain('본문');
-    const open = card('needed', true, '변경');
-    expect(open).toContain('본문');
-    expect(open).toContain('접기');
-    expect(open).not.toContain('>변경<');
-    expect(open).toContain('id="step-stick"');
-  });
-});
 
 describe('ReturnBanner', () => {
   const banner = (ready: boolean) =>

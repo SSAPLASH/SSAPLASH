@@ -29,15 +29,7 @@ export interface MidiDraft {
 }
 
 export type MidiPrecheckReason = 'EMPTY' | 'TOO_LARGE' | 'TOO_LARGE_MUSICXML' | 'UNKNOWN_TYPE';
-export type MidiPrecheck = { ok: true } | { ok: false; reason: MidiPrecheckReason };
 export type UploadPrecheck = { ok: true; kind: UploadKind } | { ok: false; reason: MidiPrecheckReason };
-
-/** 전송 전 검사(MIDI만). 크기만 본다 — 확장자는 파일 선택 창 필터로만 걸고 내용 판별은 BE에 맡긴다(D7) */
-export function precheckMidi(file: { size: number }): MidiPrecheck {
-  if (file.size <= 0) return { ok: false, reason: 'EMPTY' };
-  if (file.size > MAX_MIDI_BYTES) return { ok: false, reason: 'TOO_LARGE' };
-  return { ok: true };
-}
 
 /** 전송 전 검사(MIDI·MusicXML). 확장자로 종류를 정하고 종류별 상한을 본다. 내용 판별은 BE가 한다 */
 export function precheckUpload(file: { name: string; size: number }): UploadPrecheck {

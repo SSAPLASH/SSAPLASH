@@ -82,7 +82,7 @@ export default function App() {
           <Route path="sheet" element={<SheetPage />} />
           <Route path="sheet/lesson/:songId" element={<LessonReadPage />} />
           <Route path="studio" element={<StudioPage />} />
-          {/* 악보 뷰어(스위치 꺼짐이면 페이지가 /studio로 보낸다) */}
+          {/* 악보 뷰어 */}
           <Route path="studio/sheets/:id" element={<SheetViewerPage />} />
           <Route path="me" element={<Navigate to="/settings" replace />} />
           <Route path="settings" element={<SettingsPage />} />

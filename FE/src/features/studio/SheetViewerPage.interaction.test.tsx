@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// 악보 뷰어 (설계 CHART-001 악보 보관 4-3~4-5). 이미지 쪽 넘김·몰입 모드·없는 악보/일시 오류·만료 갱신·제목 수정·삭제·스위치 꺼짐.
+// 악보 뷰어 (설계 CHART-001 악보 보관 4-3~4-5). 이미지 쪽 넘김·몰입 모드·없는 악보/일시 오류·만료 갱신·제목 수정·삭제.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -7,12 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deleteSheet, getSheet, updateSheetTitle } from '@/features/studio/api/sheets';
 import { SheetError, type SheetDetail } from '@/features/studio/domain/sheetMusic';
 
-const flags = vi.hoisted(() => ({ archive: true }));
-vi.mock('@/config/features', () => ({
-  get SHEET_ARCHIVE_ENABLED() {
-    return flags.archive;
-  },
-}));
 vi.mock('@/features/studio/api/sheets', () => ({ getSheet: vi.fn(), updateSheetTitle: vi.fn(), deleteSheet: vi.fn() }));
 // pdf.js는 happy-dom에서 돌지 않는다. 쪽 수·보이는 쪽 보고만 흉내 낸다
 vi.mock('@/features/studio/components/sheet/PdfPages', () => ({
@@ -52,7 +46,6 @@ const counter = () => document.querySelector('.sheet-viewer-bar .sheet-counter')
 const area = () => screen.getByTestId('sheet-image-area');
 
 beforeEach(() => {
-  flags.archive = true;
   vi.mocked(getSheet).mockReset().mockResolvedValue(detail());
   vi.mocked(updateSheetTitle).mockReset();
   vi.mocked(deleteSheet).mockReset();
@@ -222,13 +215,6 @@ describe('SheetViewerPage', () => {
     await screen.findByRole('img', { name: '내 악보 1쪽' });
     await userEvent.click(screen.getByRole('button', { name: '뒤로' }));
     expect(screen.getByTestId('where').textContent).toContain('/studio');
-  });
-
-  it('악보 스위치가 꺼져 있으면 /studio로 보내고 조회하지 않는다', async () => {
-    flags.archive = false;
-    await show();
-    expect(screen.getByTestId('where').textContent).toContain('/studio');
-    expect(getSheet).not.toHaveBeenCalled();
   });
 
   it('숫자가 아닌 id는 없는 악보로 본다', async () => {

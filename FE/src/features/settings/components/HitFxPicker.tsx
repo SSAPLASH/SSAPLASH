@@ -9,14 +9,8 @@ import { HIT_FX_THEMES, HIT_FX_THEME_LABELS, hitFxThemeDef } from '@/domain/hitF
 import type { HitFxTheme } from '@/domain/hitFx/types';
 import type { PadId } from '@/domain/kit/pads';
 import { createFxEmitter } from '@/components/fx/fxSource';
+import { nextFxTheme } from '@/features/settings/domain/carouselStep';
 import './KitSkinCarousel.css';
-
-/** 이전(-1)·다음(1) 테마. 끝에서 넘기면 반대편 끝으로 순환한다 */
-export function nextFxTheme(cur: HitFxTheme, dir: 1 | -1): HitFxTheme {
-  const n = HIT_FX_THEMES.length;
-  const i = HIT_FX_THEMES.indexOf(cur);
-  return HIT_FX_THEMES[(i + dir + n) % n] ?? cur;
-}
 
 /** 데모 타격 순서와 간격 */
 const DEMO_PADS: readonly PadId[] = ['SNARE', 'CRASH', 'KICK'];

@@ -67,11 +67,6 @@ function glowSprite(color: string, type: 'soft' | 'bokeh' = 'soft'): CanvasImage
   return c;
 }
 
-/** 스프라이트 캐시 비우기(테스트용) */
-export function clearGlowSprites() {
-  sprites.clear();
-}
-
 const sample: FxSample = createSample();
 const scratch = new Float64Array((BOLT_SUB * 8 + 2) * 2 * 2);
 const TAU = Math.PI * 2;

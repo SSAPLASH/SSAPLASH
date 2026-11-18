@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   accompanimentBarView,
-  formatClock,
   formatSpoken,
   pickableForAccompaniment,
   seekTarget,
@@ -11,24 +10,6 @@ import {
 } from './freeAccompaniment';
 
 const pick: AccompanimentPick = { songId: 1, title: '곡', artist: '가수', coverUrl: null };
-
-describe('formatClock', () => {
-  it.each([
-    [0, '0:00'],
-    [999, '0:00'],
-    [1000, '0:01'],
-    [72_000, '1:12'],
-    [204_500, '3:24'],
-    [3_599_000, '59:59'],
-    [3_600_000, '1:00:00'],
-    [3_723_000, '1:02:03'],
-    [-5, '0:00'],
-    [Number.NaN, '0:00'],
-    [Number.POSITIVE_INFINITY, '0:00'],
-  ])('%d ms → %s', (ms, text) => {
-    expect(formatClock(ms)).toBe(text);
-  });
-});
 
 describe('formatSpoken', () => {
   it('분·초를 말로 쓴다', () => {

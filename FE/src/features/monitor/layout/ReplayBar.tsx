@@ -1,11 +1,6 @@
 // 녹화 재생 바: 재생 모드에서만 상단 바 아래에 보인다. 재생·일시정지, 처음부터, 배속, 진행(경과/전체), 파일 이름, 닫기.
+import { formatClock } from '@/domain/time/formatTime';
 import { REPLAY_SPEEDS, type ReplaySpeed } from '@/features/monitor/core/recording/replay';
-
-/** ms → m:ss */
-function fmtClock(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
 
 export interface ReplayBarStatus {
   state: 'paused' | 'playing' | 'ended';
@@ -51,7 +46,7 @@ export function ReplayBar({
       </span>
       <progress className="mon-replay-bar" max={Math.max(1, status.totalMs)} value={status.elapsedMs} aria-label="재생 진행" />
       <span className="mon-replay-time">
-        {fmtClock(status.elapsedMs)} / {fmtClock(status.totalMs)}
+        {formatClock(status.elapsedMs)} / {formatClock(status.totalMs)}
       </span>
       <button className="btn-ghost small" onClick={onClose}>
         닫기

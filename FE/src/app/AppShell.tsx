@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/config/features';
 import { needsRecommendationPrompt } from '@/domain/account/recommendationConsent';
 import { recommendationConsentEnabled } from '@/domain/account/signupTerms';
 import { metronome } from '@/engine/Metronome';
@@ -150,12 +149,8 @@ export function AppShell({ authRequired }: Props) {
           <GlassDock />
         </div>
       )}
-      {RECORDING_ENABLED && (
-        <>
-          <SaveRecordingDialog />
-          <RecordingToast />
-        </>
-      )}
+      <SaveRecordingDialog />
+      <RecordingToast />
       <div className="shell-right">
         {MONITOR_ENABLED && !inMonitor && (
           <button

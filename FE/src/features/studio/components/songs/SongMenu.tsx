@@ -17,7 +17,7 @@ interface Props {
   title: string;
   status: string;
   onPick: (kind: SongEditKind) => void;
-  /** 악보-곡 연결 스위치가 켜졌을 때만 넘긴다. 있으면 완료 곡 메뉴에 [악보 보기 | 악보 올리기]가 들어간다. 없으면 메뉴는 그대로 */
+  /** 있으면 완료 곡 메뉴에 [악보 보기 | 악보 올리기]가 들어간다. 없으면 메뉴는 그대로 */
   sheet?: { sheetId: number | null; onPick: (kind: SongSheetKind) => void };
   /** 트리거를 감싸는 요소의 클래스. 카드는 커버 위 오른쪽 위에 겹쳐 놓는다 */
   className?: string;

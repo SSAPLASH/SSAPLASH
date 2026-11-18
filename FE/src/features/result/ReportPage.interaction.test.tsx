@@ -17,6 +17,13 @@ import { useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
 import { ReportPage } from './ReportPage';
 
+// 인증 검사 스위치는 모듈 상수라 실행 중 env로 못 바꾼다. 끈 빌드 케이스만 이 플래그로 false가 된다
+const flags = vi.hoisted(() => ({ authRequired: true }));
+vi.mock('@/config/auth', () => ({
+  get AUTH_REQUIRED() {
+    return flags.authRequired;
+  },
+}));
 vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn(), postRecommendationClick: vi.fn() }));
 vi.mock('@/api/song/similarSongs', () => ({ fetchSimilarSongs: vi.fn() }));
 vi.mock('@/api/song/charts', () => ({ getChartAssets: vi.fn().mockResolvedValue({ accompanimentUrl: null }) }));
@@ -78,7 +85,7 @@ beforeEach(() => {
   useAuth.setState({ status: 'authenticated' });
   useSongs.setState({ source: 'api' });
 });
-afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); flags.authRequired = true; });
 
 describe('리포트 하단 추천', () => {
   it('리포트 OK 뒤 REPORT 파라미터로 1회 요청하고 카드를 그린다', async () => {
@@ -244,7 +251,7 @@ describe('약점 연계 연습', () => {
   });
 
   it('인증 검사를 끈 빌드에서는 로그인 상태여도 DRILL을 조회하지 않는다', async () => {
-    vi.stubEnv('VITE_AUTH_REQUIRED', 'false');
+    flags.authRequired = false;
     show();
     await screen.findByText(/연주 리포트/);
     await waitFor(() => expect(loadAllReportNotes).toHaveBeenCalled());

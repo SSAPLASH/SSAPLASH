@@ -1,5 +1,6 @@
 // 네온 스킨(Figma Play / Pad Neon). 검은 원판 + 네온 림 + HUD 눈금. 색은 CSS 변수 --neon(모양별)
-import { FlatJudgeRing, FlatMotion, FlatTexts, FlatTilt, PEDAL_GROOVES, PEDAL_PLATE, type FlatSkinProps } from './flatParts';
+import { FlatJudgeRing, FlatMotion, FlatTexts, FlatTilt, type FlatSkinProps } from './flatParts';
+import { PEDAL_GROOVES, PEDAL_PLATE } from './flatGeometry';
 
 /** 심벌 광택 부채꼴(원뿔 그라디언트 근사): 골드·시안을 번갈아, 중심 (80,80) 반지름 70 */
 function sector(from: number, to: number): string {

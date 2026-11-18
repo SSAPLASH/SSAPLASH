@@ -1,4 +1,4 @@
-// Figma 반영 후 세팅 컴포넌트 테스트(HitLog·hitLogFormat·StepCard·ReturnBanner·PresetNameDialog 마크업).
+// Figma 반영 후 세팅 컴포넌트 테스트(HitLog·hitLogFormat·ReturnBanner·PresetNameDialog 마크업).
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { KitPreset } from '@/domain/kit/preset';
@@ -7,7 +7,6 @@ import { HitLog } from './HitLog';
 import { HIT_LOG_FLOAT_ROWS, HIT_LOG_ROWS, hitAgoText } from './hitLogFormat';
 import { PresetNameDialog } from './preset/PresetNameDialog';
 import { ReturnBanner } from './ReturnBanner';
-import { StepCard } from './StepCard';
 
 const noop = () => {};
 
@@ -65,54 +64,6 @@ describe('HitLog', () => {
     const hits = [6, 5, 4, 3, 2, 1].map((id) => hit(id, { velocity: id }));
     const html = renderToStaticMarkup(<HitLog hits={hits} now={now} rows={3} />);
     expect((html.match(/<li /g) ?? []).length).toBe(3);
-  });
-});
-
-describe('StepCard Figma 상태', () => {
-  const card = (status: 'needed' | 'done' | 'skipped', expanded: boolean, urgent = false) =>
-    renderToStaticMarkup(
-      <StepCard id="s" index={2} title="시작 위치 보정" status={status} summary="요약" actionLabel="보정하기" expanded={expanded} onCollapse={noop} urgent={urgent}>
-        <p>본문</p>
-      </StepCard>,
-    );
-
-  it('필요는 danger 알약과 is-needed', () => {
-    const html = card('needed', false);
-    expect(html).toContain('ui-pill-danger');
-    expect(html).toContain('is-needed');
-    expect(html).toContain('보정하기');
-  });
-  it('완료는 ok 알약, ✓, is-done, 번호 없음', () => {
-    const html = card('done', false);
-    expect(html).toContain('ui-pill-ok');
-    expect(html).toContain('is-done');
-    expect(html).toContain('✓');
-    expect(html).not.toContain('>2<');
-  });
-  it('필요 없음은 neutral 알약', () => {
-    const html = card('skipped', false);
-    expect(html).toContain('ui-pill-neutral');
-    expect(html).toContain('>필요 없음<');
-  });
-  it('필요 단계를 펼치면 「진행 중」(accent), 복귀 중(urgent)이면 「필요」 유지', () => {
-    const open = card('needed', true);
-    expect(open).toContain('ui-pill-accent');
-    expect(open).toContain('>진행 중<');
-    expect(open).toContain('is-progress');
-    const urgent = card('needed', true, true);
-    expect(urgent).toContain('ui-pill-danger');
-    expect(urgent).toContain('>필요<');
-  });
-  it('펼치면 접기 버튼이 동작 버튼을 대신한다', () => {
-    const open = card('needed', true);
-    expect(open).toContain('접기');
-    expect(open).not.toContain('>보정하기<');
-    expect(open).toContain('본문');
-  });
-  it('제목이 aria-labelledby로 연결된다', () => {
-    const html = card('done', false);
-    expect(html).toContain('aria-labelledby="s-title"');
-    expect(html).toContain('id="s-title"');
   });
 });
 

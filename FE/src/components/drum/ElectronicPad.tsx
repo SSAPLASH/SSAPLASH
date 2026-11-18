@@ -1,5 +1,6 @@
 // 전자 드럼 스킨(Figma Play / Pad Electronic). 흰 후프·검은 개스킷·메시 헤드, 심벌은 검은 고무 + 금색 테두리
-import { FlatJudgeRing, FlatMotion, FlatTexts, FlatTilt, PEDAL_GROOVES, PEDAL_PLATE, onCircle, type FlatSkinProps } from './flatParts';
+import { FlatJudgeRing, FlatMotion, FlatTexts, FlatTilt, type FlatSkinProps } from './flatParts';
+import { PEDAL_GROOVES, PEDAL_PLATE, onCircle } from './flatGeometry';
 
 /** 심벌 홈 줄 지름 */
 const GROOVES = [126, 112, 98, 84, 70];

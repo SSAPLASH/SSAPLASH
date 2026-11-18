@@ -17,7 +17,6 @@ import { addPlayStartHook } from '@/engine/diagReport';
 import { preloadSprites } from '@/components/drum/acoustic/sprites';
 import { startClockDiag } from './diag/clockDiag';
 import type { ResolvedHit, StickId } from '@/domain/events';
-import type { PadId } from '@/domain/kit/pads';
 import { calibrationSession } from '@/runtime/calibrationSession';
 import { timingCalSession } from '@/runtime/timingCalSession';
 import { metronomePreview } from '@/runtime/metronomePreview';
@@ -450,29 +449,4 @@ export function bootstrapMetronome(): void {
   });
 
   if (import.meta.env.DEV) (window as unknown as { __metronome?: typeof metronome }).__metronome = metronome;
-}
-
-let previewSeq = 0;
-/**
- * 세팅 화면의 "톡 치기". 소리와 화면 표시(lastHit·hitSeq)만 내고 텔레메트리·통계에는 넣지 않는다(source 'preview').
- */
-export async function previewHit(pad: PadId, velocity: number): Promise<void> {
-  await unlockAudio();
-  const now = performance.now();
-  const hit: ResolvedHit = {
-    id: --previewSeq,
-    stickId: 0,
-    pad,
-    velocity,
-    tHit: now,
-    tRecv: now,
-    tResolved: now,
-    source: 'preview',
-    pose: { pitch: 0, yaw: 0 },
-    peakAccel: 0,
-    judgedBy: 'pose',
-  };
-  const tAudio = audioEngine.trigger(pad, velocity);
-  if (tAudio !== null) hit.tAudio = tAudio;
-  useLive.setState((s) => ({ lastHit: hit, hitSeq: s.hitSeq + 1 }));
 }

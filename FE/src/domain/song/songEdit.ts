@@ -50,7 +50,7 @@ export type SongSheetKind = 'sheetView' | 'sheetUpload';
 
 /**
  * 곡 상태별 ⋯ 메뉴 항목(D5): 완료 = 커버·곡 정보·삭제, 실패 = 삭제만, 처리 중·알 수 없는 상태 = 없음.
- * sheet를 주면(악보-곡 연결 스위치 켜짐) 완료 곡 메뉴 맨 앞에 [악보 보기](sheetId 있음) 또는 [악보 올리기](없음)를 넣는다(Figma 순서). 주지 않으면 그대로다.
+ * sheet를 주면(악보-곡 연결) 완료 곡 메뉴 맨 앞에 [악보 보기](sheetId 있음) 또는 [악보 올리기](없음)를 넣는다(Figma 순서). 주지 않으면 그대로다.
  */
 export function menuKinds(status: string, sheet?: { sheetId: number | null }): (SongEditKind | SongSheetKind)[] {
   if (status === 'READY') {

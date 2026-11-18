@@ -15,6 +15,7 @@ import {
   sheetCategorySearch,
   visibleSheetCategories,
 } from '@/domain/song/sheetCategory';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { PREFETCH_HOVER_MS } from '@/config/prefetch';
 import { useAuth } from '@/store/authStore';
 import { useChartJob } from '@/store/chartJobStore';
@@ -121,7 +122,7 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
   const songSource = useSongs((s) => s.source);
   const sheetCategories =
     !collapsed && isSheetPath(pathname)
-      ? visibleSheetCategories({ source: songSource, authed, authRequired: import.meta.env.VITE_AUTH_REQUIRED !== 'false' })
+      ? visibleSheetCategories({ source: songSource, authed, authRequired: AUTH_REQUIRED })
       : [];
   const sheetCurrent = resolveSheetCategory(sheetCategoryAt(pathname, search), sheetCategories);
 
