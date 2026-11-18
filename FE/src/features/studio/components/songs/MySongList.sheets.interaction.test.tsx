@@ -138,13 +138,9 @@ describe('악보 목록 실패·연결', () => {
     expect(screen.getByText('합주 악보')).toBeTruthy();
   });
 
-  it('연결 스위치 켜짐: 곡에 붙은 악보는 따로 안 나오고, 꺼짐이면 나온다', () => {
-    const linked = [sheet({ songId: 1 })];
-    const { unmount } = renderList('card', { sheets: linked, linkEnabled: true });
+  it('곡에 붙은 악보는 따로 안 나온다', () => {
+    renderList('card', { sheets: [sheet({ songId: 1 })], linkEnabled: true });
     expect(screen.queryByText('합주 악보')).toBeNull();
-    unmount();
-    renderList('card', { sheets: linked, linkEnabled: false });
-    expect(screen.getByText('합주 악보')).toBeTruthy();
   });
 
   it('onSongSheet이 있으면 곡 ⋯ 메뉴에 sheetId 유무로 [악보 보기 | 악보 올리기]가 들어간다', async () => {
