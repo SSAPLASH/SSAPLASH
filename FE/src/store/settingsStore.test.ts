@@ -91,34 +91,15 @@ describe('migrateSettings v3 → v4 (튜닝)', () => {
 });
 
 describe('migrateSettings v4 → v5 (사운드 세트)', () => {
-  it('soundSetId·testVelocity 기본값을 채운다', () => {
+  it('soundSetId 기본값을 채운다', () => {
     const out = migrateSettings({ volume: 0.5 }, 4) as unknown as Record<string, unknown>;
     expect(out.soundSetId).toBe('ssaplash');
-    expect(out.testVelocity).toBe(96);
     expect(out.volume).toBe(0.5);
   });
 
   it('이미 유효한 값은 보존한다', () => {
-    const out = migrateSettings({ soundSetId: 'synth', testVelocity: 120 }, 4) as unknown as Record<string, unknown>;
+    const out = migrateSettings({ soundSetId: 'synth' }, 4) as unknown as Record<string, unknown>;
     expect(out.soundSetId).toBe('synth');
-    expect(out.testVelocity).toBe(120);
-  });
-});
-
-describe('migrateSettings v5 → v6 (게임 뷰)', () => {
-  it('gameView 기본값 highway를 채운다', () => {
-    const out = migrateSettings({ volume: 0.5 }, 5) as unknown as Record<string, unknown>;
-    expect(out.gameView).toBe('highway');
-    expect(out.volume).toBe(0.5);
-  });
-
-  it('유효한 값은 보존하고 잘못된 값은 highway', () => {
-    expect((migrateSettings({ gameView: 'kit' }, 5) as unknown as Record<string, unknown>).gameView).toBe('kit');
-    expect((migrateSettings({ gameView: 'xx' }, 5) as unknown as Record<string, unknown>).gameView).toBe('highway');
-  });
-
-  it('v1에서도 v6까지 한 번에 이행', () => {
-    expect((migrateSettings({}, 1) as unknown as Record<string, unknown>).gameView).toBe('highway');
   });
 });
 
