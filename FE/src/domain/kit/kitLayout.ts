@@ -45,75 +45,13 @@ export function fillLayout(partial: Partial<KitLayout>): KitLayout {
   return out;
 }
 
-/** 캔버스 높이/너비. 배치 좌표계(KitCanvas 16:10)에서 y 거리를 반지름(가로 기준) 단위로 바꿀 때 쓴다 */
-const CANVAS_ASPECT = 10 / 16;
-
-/** 정보 카드가 캔버스 오른쪽 아래에서 차지하는 정규화 영역(PLAY-004 D10: 기본 배치에서 x>0.8, y>0.78은 빈 자리) */
-export const OVERLAY_REGION = { w: 0.2, h: 0.22 } as const;
-
-export type OverlayCorner = 'right' | 'left';
-
-/**
- * 정보 카드를 둘 모서리를 고른다. 기본은 오른쪽 아래이고, 주어진 패드 원이 그 영역과 겹치면 왼쪽 아래로 보낸다.
- * 원과 사각형의 겹침은 사각형에서 원 중심에 가장 가까운 점까지의 거리로 판정한다(맞닿기만 하면 겹침이 아니다)
- */
-export function overlayCorner(pad: PadPlacement, region: { w: number; h: number } = OVERLAY_REGION): OverlayCorner {
-  const left = 1 - region.w;
-  const top = 1 - region.h;
-  const nearX = Math.min(Math.max(pad.x, left), 1);
-  const nearY = Math.min(Math.max(pad.y, top), 1);
-  const dx = pad.x - nearX;
-  const dy = (pad.y - nearY) * CANVAS_ASPECT;
-  return dx * dx + dy * dy < pad.r * pad.r ? 'left' : 'right';
-}
-
-/** 겹침 판정에 쓰는 그림 영역 상자(px 비율이면 충분). 기본 16:10 */
+/** 그림 영역 상자(px 비율이면 충분) */
 export interface FigBox {
   w: number;
   h: number;
 }
-const DEFAULT_FIG_BOX: FigBox = { w: 16, h: 10 };
 
-/** 그림 크기 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6. 원근 보기의 초점 거리와 겹침 판정의 원 반지름이 같이 쓴다 */
+/** 그림 크기 기준 길이: 16:10이면 폭, 더 넓으면 높이×1.6. 원근 보기의 초점 거리에 쓴다 */
 export function radiusBasisOf(box: FigBox): number {
   return Math.min(box.w, box.h * 1.6);
-}
-
-/** 원(정규 좌표, 반지름은 radiusBasisOf(box) 기준)이 사각형 [x0,x1]×[y0,y1]과 겹치는가. 맞닿기만 하면 겹침이 아니다 */
-function circleHitsRect(pad: PadPlacement, x0: number, x1: number, y0: number, y1: number, box: FigBox): boolean {
-  const dx = (pad.x - Math.min(Math.max(pad.x, x0), x1)) * box.w;
-  const dy = (pad.y - Math.min(Math.max(pad.y, y0), y1)) * box.h;
-  const r = pad.r * radiusBasisOf(box);
-  return dx * dx + dy * dy < r * r;
-}
-
-/**
- * 카드가 그림 위에 겹쳐 뜰 때 놓을 모서리를 고른다(PLAY-004 D10·D11 v0.3).
- * region은 카드가 그림에서 차지하는 영역(그림 정규 좌표, 아래 모서리 기준). null이면 카드가 없어 항상 right.
- * box는 그림 영역 상자(px)로, 원 반지름(r × min(w, h×1.6))과 정규 좌표를 px로 환산하는 데 쓴다. 생략하면 16:10.
- * 모든 패드 중 가려지는 수가 적은 모서리를 고르되, focus(지금 칠·선택 패드)를 가리는 모서리는 피한다. 같으면 right
- */
-export function pickOverlayCorner(
-  layout: Partial<Record<string, PadPlacement>>,
-  region: { w: number; h: number } | null,
-  focus: readonly string[] = [],
-  box: FigBox = DEFAULT_FIG_BOX,
-): OverlayCorner {
-  if (!region || !(region.w > 0) || !(region.h > 0)) return 'right';
-  const pads = Object.entries(layout).filter((e): e is [string, PadPlacement] => e[1] !== undefined);
-  const score = (corner: OverlayCorner) => {
-    const [x0, x1] = corner === 'right' ? [1 - region.w, 1] : [0, region.w];
-    let covered = 0;
-    let focusHit = 0;
-    for (const [id, pad] of pads) {
-      if (!circleHitsRect(pad, x0, x1, 1 - region.h, 1, box)) continue;
-      covered += 1;
-      if (focus.includes(id)) focusHit += 1;
-    }
-    return { covered, focusHit };
-  };
-  const r = score('right');
-  const l = score('left');
-  if (r.focusHit !== l.focusHit) return r.focusHit < l.focusHit ? 'right' : 'left';
-  return l.covered < r.covered ? 'left' : 'right';
 }

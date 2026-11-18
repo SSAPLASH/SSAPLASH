@@ -6,7 +6,7 @@ import { DEFAULT_KIT_LAYOUT, type KitLayout } from './kitLayout';
 import type { PadId } from './pads';
 import { STICK_PADS } from './pads';
 import type { StickId } from '../events';
-import { computeBoundaries, meanPose, poseToVec, type HandAnchors, type HandAnchorSet, type PadAnchor } from './calibration/calibration';
+import { computeBoundaries, meanPose, type HandAnchors, type HandAnchorSet, type PadAnchor } from './calibration/calibration';
 import { DEFAULT_ANGLE_RANGE, poseToScreen, screenToPose, type AngleRange } from './kitMapping';
 import type { Pose } from '../events';
 import { DEFAULT_SENSOR_TUNING, type SensorTuning } from './calibration/tuning';
@@ -64,36 +64,6 @@ export function defaultHandAnchorSet(stickId: StickId, tuning: SensorTuning = DE
 /** 양손 기본 앵커 */
 export function defaultHandAnchors(tuning: SensorTuning = DEFAULT_SENSOR_TUNING): HandAnchors {
   return [defaultHandAnchorSet(0, tuning), defaultHandAnchorSet(1, tuning)];
-}
-
-/** 몸 기준 cm 좌표(x 오른쪽·y 앞·z 위). 화면 표시용(UX-64 D8) */
-export type PointCm = { x: number; y: number; z: number };
-
-/**
- * 한 손의 앵커(방향)를 몸 기준 cm 좌표로(UX-64 D8). 스틱은 거리를 모르므로 3D 모델에서 그 손 출발점 → 그 패드까지의
- * 거리를 가정값으로 쓴다. 스틱 벡터(x 정면·y 오른쪽·z 위)를 모델 축(x 오른쪽·y 앞·z 위)으로 옮긴다
- */
-export function anchorToPoint(stickId: StickId, pad: PadId, pose: Pose): PointCm | null {
-  if (!isStickPad(pad)) return null;
-  const o = HAND_ORIGINS[stickId];
-  const p = PAD_POINTS[pad];
-  const dist = Math.hypot(p[0] - o[0], p[1] - o[1], p[2] - o[2]);
-  const v = poseToVec(pose);
-  return { x: (o[0] + v[1] * dist) * 100, y: (o[1] + v[0] * dist) * 100, z: (o[2] + v[2] * dist) * 100 };
-}
-
-/** 패드 하나의 손별 앵커 → 표시 좌표. 양손이면 두 점의 평균, 둘 다 없으면 null */
-export function padPointOf(pad: PadId, slot: readonly [{ pitch: number; yaw: number } | undefined, { pitch: number; yaw: number } | undefined]): PointCm | null {
-  const pts: PointCm[] = [];
-  for (const h of [0, 1] as const) {
-    const a = slot[h];
-    if (!a) continue;
-    const pt = anchorToPoint(h, pad, { pitch: a.pitch, yaw: a.yaw });
-    if (pt) pts.push(pt);
-  }
-  if (pts.length === 0) return null;
-  const n = pts.length;
-  return { x: pts.reduce((s, p) => s + p.x, 0) / n, y: pts.reduce((s, p) => s + p.y, 0) / n, z: pts.reduce((s, p) => s + p.z, 0) / n };
 }
 
 const clamp01 = (v: number) => Math.min(0.95, Math.max(0.05, v));
