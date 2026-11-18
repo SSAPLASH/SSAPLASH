@@ -7,11 +7,6 @@ export function getChartLatest(chartId: number, signal?: AbortSignal): Promise<C
   return apiFetch<ChartDetailDto>(`/api/v1/charts/${chartId}`, { signal });
 }
 
-/** `GET /api/v1/chart-versions/{id}` — 지정 버전. 재시도·재시작은 이쪽 */
-export function getChartVersion(chartVersionId: number, signal?: AbortSignal): Promise<ChartDetailDto> {
-  return apiFetch<ChartDetailDto>(`/api/v1/chart-versions/${chartVersionId}`, { signal });
-}
-
 /** `GET /api/v1/chart-versions/{id}/assets` — 서명 URL 발급·갱신 */
 export function getChartAssets(chartVersionId: number, signal?: AbortSignal): Promise<ChartAssetsDto> {
   return apiFetch<ChartAssetsDto>(`/api/v1/chart-versions/${chartVersionId}/assets`, { signal });

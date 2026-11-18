@@ -16,8 +16,6 @@ export type RecordingModeFilter = 'ALL' | Exclude<RecordingMode, 'TEMPO'>;
 
 export const RECORDING_PAGE_SIZE = 20;
 export const SEARCH_DEBOUNCE_MS = 300;
-export const BUSY_RETRY_MS = 1000;
-
 export interface RecordingListQuery {
   mode: RecordingModeFilter;
   sort: RecordingSort;

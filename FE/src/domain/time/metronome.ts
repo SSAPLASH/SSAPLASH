@@ -5,7 +5,6 @@ export const BPM_MIN = 40;
 export const BPM_MAX = 240;
 export const BPM_DEFAULT = 120;
 export const BPM_STEP = 5;
-export const BEATS_PER_BAR_OPTIONS = [4, 3] as const;
 export type BeatsPerBar = 3 | 4;
 /** 탭 간격이 이 이상 벌어지면 누적을 버린다 */
 export const TAP_RESET_MS = 2000;
