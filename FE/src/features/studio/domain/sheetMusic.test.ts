@@ -95,17 +95,17 @@ describe('mergeLibraryItems', () => {
 
   it('처리 중 → 실패 → 그 밖(곡·악보 섞어 createdAt 내림차순)', () => {
     const sheets = [sheet(10, '2026-11-02T00:00:00Z'), sheet(11, '2026-10-30T00:00:00Z')];
-    expect(tag(mergeLibraryItems(songs, sheets, false))).toEqual(['s2', 's3', 'h10', 's1', 'h11']);
+    expect(tag(mergeLibraryItems(songs, sheets))).toEqual(['s2', 's3', 'h10', 's1', 'h11']);
   });
 
   it('링크 켜짐: 목록의 곡을 가리키는 악보는 빼고, 곡이 없거나 songId가 null이면 넣는다', () => {
     const sheets = [sheet(10, '2026-11-02T00:00:00Z', 1), sheet(11, '2026-11-03T00:00:00Z', 999), sheet(12, '2026-11-04T00:00:00Z', null)];
-    expect(tag(mergeLibraryItems(songs, sheets, true))).toEqual(['s2', 's3', 'h12', 'h11', 's1']);
+    expect(tag(mergeLibraryItems(songs, sheets))).toEqual(['s2', 's3', 'h12', 'h11', 's1']);
   });
 
   it('원본 배열을 바꾸지 않는다', () => {
     const copy = [...songs];
-    mergeLibraryItems(songs, [], true);
+    mergeLibraryItems(songs, []);
     expect(songs).toEqual(copy);
   });
 });

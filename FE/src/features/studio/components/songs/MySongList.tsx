@@ -41,8 +41,6 @@ interface Props {
   /** 악보 목록만 읽지 못했다. 곡은 그대로 두고 목록 위에 한 줄을 보인다 */
   sheetsFailed?: boolean;
   onSheetsRetry?: () => void;
-  /** 악보-곡 연결 스위치. 켜져 있고 곡에 연결된 악보는 곡 안으로 들어가 따로 보이지 않는다 */
-  linkEnabled?: boolean;
   /** 악보 썸네일을 불러오지 못했을 때(서명 URL 만료). 악보 목록을 다시 읽는다 */
   onSheetCoverError?: () => void;
   /** 악보 항목 ⋯ 메뉴 선택 */
@@ -95,7 +93,6 @@ export function MySongList({
   sheets,
   sheetsFailed = false,
   onSheetsRetry,
-  linkEnabled = false,
   onSheetMenu,
   onSheetCoverError,
   onSongSheet,
@@ -150,7 +147,7 @@ export function MySongList({
   const jobShown = active !== null && progress !== null;
   const rows = jobShown ? sorted.filter((s) => s.id !== active.songId) : sorted;
   // 곡과 악보를 한 목록으로 합친다(악보가 없으면 곡 순서 그대로)
-  const entries = mergeLibraryItems(rows, sheets ?? [], linkEnabled);
+  const entries = mergeLibraryItems(rows, sheets ?? []);
 
   return (
     <>

@@ -13,12 +13,6 @@ export const RECORDING_ENABLED = import.meta.env.VITE_RECORDING !== 'false';
 export const SHEET_ARCHIVE_ENABLED = import.meta.env.VITE_SHEET_ARCHIVE !== 'false';
 
 /**
- * 악보-곡 연결(곡 ⋯ 메뉴의 악보 항목·업로드의 songId 파트) 사용 여부. 기본은 켜짐이고 VITE_SHEET_SONG_LINK=false로 빌드할 때만 끈다.
- * BE 곡 연결(songId·sheetId, MR !352)이 v3.0에 배포돼 2026-11-09 켜짐으로 전환(278).
- */
-export const SHEET_SONG_LINK_ENABLED = import.meta.env.VITE_SHEET_SONG_LINK !== 'false';
-
-/**
  * 악보 나중 연결(악보만 항목의 [곡 올리기]·곡 삭제 시 악보 보존 안내) 사용 여부. 기본은 꺼짐이고 VITE_SHEET_RELINK=true로 빌드할 때만 켠다.
  * BE가 PATCH /sheets/{id}의 songId를 받고 곡 삭제 시 악보를 남기는 11/13 릴리즈(BE 회신 3) 뒤에 켠다(설계 CHART-001 D19).
  */
