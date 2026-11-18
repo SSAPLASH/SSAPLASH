@@ -2,7 +2,8 @@
 // 녹음 보관함의 녹음 재생바도 같이 쓴다(읽히는 이름만 `label`로 바꾼다).
 // 끄는 동안은 채움과 시간 글자만 따라가고, 손을 떼면 onSeek을 한 번만 부른다. 위치 계산(자르기)은 호출자가 한다.
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { formatClock, formatSpoken } from '@/domain/song/freeAccompaniment';
+import { formatSpoken } from '@/domain/song/freeAccompaniment';
+import { formatClock } from '@/domain/time/formatTime';
 import './SeekBar.css';
 
 /** ←/→ 한 번에 옮기는 간격(ms) */

@@ -7,7 +7,7 @@ import { DeletedSongChip } from '@/components/song/DeletedSongChip';
 import { LevelBadge } from '@/components/song/LevelBadge';
 import { Button } from '@/components/ui/action/Button';
 import { accuracyTier, formatPlayClock, playModeName } from '@/domain/play/playLogView';
-import { formatRecordingLength } from '@/domain/play/recordingView';
+import { formatDuration } from '@/domain/time/formatTime';
 import type { PlayRowView } from './playLogRows';
 import './history.css';
 
@@ -118,7 +118,7 @@ export function PlayLogRow({ row, onRetry }: PlayLogRowProps) {
         <div className="history-row-sub">
           <span>{playModeName(row.mode)}</span>
           <span>{formatPlayClock(row.at)}</span>
-          {row.durationMs == null ? null : <span className="history-num">{formatRecordingLength(row.durationMs)}</span>}
+          {row.durationMs == null ? null : <span className="history-num">{formatDuration(row.durationMs)}</span>}
           {row.wideGoodMs == null ? null : <span>판정 여유 ±{row.wideGoodMs}ms</span>}
           {row.rate == null ? null : <span>{rateLabel(row.rate)} 속도</span>}
         </div>
