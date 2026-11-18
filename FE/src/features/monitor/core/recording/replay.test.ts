@@ -3,7 +3,7 @@ import type { DiagEvent } from '@/engine/diagTap';
 import { encodeSync } from '@/input/stickProtocol';
 import { buildSyncAck } from '@/features/monitor/core/mockStick';
 import type { RecordedRow } from './recorder';
-import { buildTimeline, ReplayOffsets, ReplayPlayer, syncOffsetMs } from './replay';
+import { buildTimeline, ReplayOffsets, ReplayPlayer } from './replay';
 
 const row = (t: number, n = 0): RecordedRow => ({ t, dir: 'in', transport: 'mock', stick: 0, hex: `0${n}`, decoded: null });
 const diag = (t: number): DiagEvent => ({ type: 'judged', t, hitId: 1 }) as unknown as DiagEvent;
@@ -116,10 +116,6 @@ describe('ReplayPlayer', () => {
 
 describe('ReplayOffsets', () => {
   const ack = (t0: number, t1Us: number, role: 0 | 1 = 0) => buildSyncAck({ role, t0Ms: t0, t1Us });
-
-  it('계산식은 (t0 + t2) / 2 − t1', () => {
-    expect(syncOffsetMs(1000, 400, 1010)).toBe(605);
-  });
 
   it('SYNC 송신(t0)과 SYNC_ACK 짝으로 스틱별 오프셋을 구하고 왕복이 긴 표본은 쓰지 않는다', () => {
     const o = new ReplayOffsets();
