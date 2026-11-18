@@ -1,5 +1,6 @@
 // 녹음 표시용 순수 함수 (설계 REC-001 6-2). React·스토어·네트워크에 접근하지 않는다.
 import type { Difficulty } from '@/domain/song/chart';
+import { formatDuration } from '@/domain/time/formatTime';
 import { FREE_RECORDING_NAME, recordingTitleSuffix, type RecordingHit, type RecordingMode, type RecordingSummary } from './recording';
 
 /** 보관함 최대 녹음 개수(도구 줄 문구용) */
@@ -24,20 +25,6 @@ export function formatHitCount(n: number): string {
   return `${n.toLocaleString('ko-KR')}타`;
 }
 
-/** 녹음 중 경과 mm:ss (내림, 음수는 0, 분은 두 자리 이상) */
-export function formatElapsed(ms: number): string {
-  const total = Math.floor(Math.max(0, ms) / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-/** 보관함 길이 m:ss (반올림). domain/time/formatTime의 formatDuration과 같은 규칙 */
-export function formatRecordingLength(ms: number): string {
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
 /** 저장 창 요약: `{모드명} · {곡 제목} · {m:ss} · 타격 {n}개`. 곡 제목이 null이면 그 칸을 뺀다 */
 export function recordingSummaryLine(args: {
   mode: RecordingMode;
@@ -47,7 +34,7 @@ export function recordingSummaryLine(args: {
 }): string {
   const parts = [recordingModeName(args.mode)];
   if (args.songTitle !== null) parts.push(args.songTitle);
-  parts.push(formatRecordingLength(args.durationMs));
+  parts.push(formatDuration(args.durationMs));
   parts.push(`타격 ${args.hitCount.toLocaleString('ko-KR')}개`);
   return parts.join(' · ');
 }

@@ -85,7 +85,7 @@ describe('MySongCard (v0.4)', () => {
     expect(html).not.toContain('ui-more-menu');
   });
 
-  it('기능 스위치 꺼짐(onEdit 없음)이면 ⋯ 메뉴가 없다', () => {
+  it('onEdit이 없으면 ⋯ 메뉴가 없다', () => {
     expect(card(song(), false)).not.toContain('ui-more-menu');
   });
 });

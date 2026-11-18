@@ -66,7 +66,7 @@ describe('SongMenu 악보 항목', () => {
     return el.props.children({ close: () => {} }) as ReactElement<{ onClick: () => void; children: string }>[];
   }
 
-  it('sheet를 넘기지 않으면(스위치 꺼짐) 메뉴는 그대로다', () => {
+  it('sheet를 넘기지 않으면 메뉴는 그대로다', () => {
     expect(items('READY')).not.toContain('악보');
   });
 

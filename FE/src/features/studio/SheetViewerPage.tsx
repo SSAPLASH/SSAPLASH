@@ -1,9 +1,8 @@
 // 악보 뷰어 화면 (설계 CHART-001 악보 보관 4-3~4-5). /studio/sheets/:id — 상세 조회·만료 전 갱신·바·몰입 모드·제목 수정·삭제.
 // 그림은 SheetViewer·PdfPages가 그린다. URL·파일은 메모리에만 둔다(localStorage·Cache 저장 안 함).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { deleteSheet, getSheet, updateSheetTitle } from '@/features/studio/api/sheets';
-import { SHEET_ARCHIVE_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { SheetViewer, type SheetViewerState } from '@/features/studio/components/sheet/SheetViewer';
@@ -34,7 +33,6 @@ function parseId(raw: string | undefined): number | null {
 
 export function SheetViewerPage() {
   const { id } = useParams();
-  if (!SHEET_ARCHIVE_ENABLED) return <Navigate to="/studio" replace />;
   // id가 바뀌면 상태를 새로 시작한다
   return <ViewerBody key={id} />;
 }

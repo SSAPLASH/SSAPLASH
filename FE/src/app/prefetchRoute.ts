@@ -8,7 +8,6 @@ import { useLive } from '@/store/liveStore';
 import { useShellStore } from '@/store/shellStore';
 import { useRecordingStore } from '@/runtime/recordingStore';
 import { useSongs } from '@/store/songStore';
-import { SHEET_ARCHIVE_ENABLED } from '@/config/features';
 import { queryClient } from '@/runtime/queryClient';
 import { loadRoute, type RouteKey } from './routeModules';
 
@@ -46,7 +45,7 @@ function prefetchData(path: string): void {
     void queryClient.prefetchQuery(songListQuery({ scope: useSongs.getState().scope, q: '', playableOnly: true }, source));
   } else if (path === '/studio') {
     void queryClient.prefetchQuery(mineSongsQuery(source));
-    if (SHEET_ARCHIVE_ENABLED) void queryClient.prefetchQuery(sheetListQuery());
+    void queryClient.prefetchQuery(sheetListQuery());
   } else if (path === '/history') {
     const userId = useAuth.getState().user?.id;
     // 연주 기록 화면이 처음 읽는 조건(전체·최신순)의 첫 쪽

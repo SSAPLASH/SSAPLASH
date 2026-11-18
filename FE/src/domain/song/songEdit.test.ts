@@ -89,7 +89,7 @@ describe('songEditFailure', () => {
   });
 });
 
-describe('menuKinds 악보 항목(연결 스위치 켜짐)', () => {
+describe('menuKinds 악보 항목', () => {
   it('연결된 악보가 있으면 [악보 보기], 없으면 [악보 올리기]를 맨 앞에 넣는다(Figma 순서)', () => {
     expect(menuKinds('READY', { sheetId: 5 })).toEqual(['sheetView', 'cover', 'meta', 'delete']);
     expect(menuKinds('READY', { sheetId: null })).toEqual(['sheetUpload', 'cover', 'meta', 'delete']);

@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { startFree, stopFree, toggleArm, useRecordingStore, type RecordingPhase } from '@/runtime/recordingStore';
-import { formatElapsed } from '@/domain/play/recordingView';
+import { formatElapsed } from '@/domain/time/formatTime';
 import { recordButtonVisible } from './recordButtonRoute';
 import './recording.css';
 

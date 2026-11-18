@@ -54,7 +54,9 @@ import { useBestRecords } from './useBestRecords';
 import type { PadId } from '@/domain/kit/pads';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import { appliedWindows } from '@/domain/play/judgement';
-import { isBeginnerChart, type Lesson } from '@/domain/play/lesson';
+import { isBeginnerChart } from '@/domain/play/lesson';
+import { ACCOMPANIMENT_OVERRIDE } from '@/config/accompaniment';
+import { GO_MS, NO_LESSONS, parseId } from '@/features/play/domain/playShared';
 import { useLessons } from '@/store/lessonStore';
 import { KEY_MAP } from '@/domain/kit/keyMap';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -92,22 +94,8 @@ type Stage = PlayStageName;
 /** 하이웨이 위에 겹쳐 뜨는 HUD가 덮는 높이(px, PlayStage.css의 HUD 위 여백 8 + 높이 96). 레인 이름·콤보를 그 아래로 내린다 */
 const GAME_HUD_INSET = 104;
 
-/** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
-const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
-
-/** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
-const GO_MS = 400;
 /** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
-
-function parseId(raw: string | null): number | null {
-  if (raw === null || !/^-?\d+$/.test(raw)) return null;
-  const n = Number(raw);
-  return Number.isSafeInteger(n) ? n : null;
-}
-
-/** 입문 코스 목록을 아직 못 읽었을 때 쓰는 빈 목록(구독 값 정체성 유지) */
-const NO_LESSONS: readonly Lesson[] = [];
 
 /** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
 interface AccResult {
