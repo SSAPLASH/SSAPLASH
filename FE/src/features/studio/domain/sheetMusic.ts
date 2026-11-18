@@ -167,15 +167,15 @@ export function isValidSheetTitle(title: string): boolean {
 }
 
 /**
- * 라이브러리 합친 목록. 곡은 모두 넣고, 악보는 songId가 null이거나 링크 스위치가 꺼져 있으면 악보 항목으로 넣는다.
- * 링크가 켜져 있고 songId가 목록의 곡을 가리키면 그 곡 안으로 들어가므로 따로 넣지 않는다.
+ * 라이브러리 합친 목록. 곡은 모두 넣고, 악보는 songId가 null이거나 목록에 없는 곡을 가리키면 악보 항목으로 넣는다.
+ * songId가 목록의 곡을 가리키면 그 곡 안으로 들어가므로 따로 넣지 않는다.
  * 정렬은 내 곡 규칙(처리 중 → 실패 → 그 밖, 같은 그룹은 createdAt 내림차순). 악보 항목은 「그 밖」 그룹이다.
  */
-export function mergeLibraryItems(songs: readonly SongSummary[], sheets: readonly SheetSummary[], linkEnabled: boolean): LibraryItem[] {
+export function mergeLibraryItems(songs: readonly SongSummary[], sheets: readonly SheetSummary[]): LibraryItem[] {
   const songIds = new Set(songs.map((s) => s.id));
   const items: LibraryItem[] = songs.map((song) => ({ type: 'song', song }));
   for (const sheet of sheets) {
-    if (linkEnabled && sheet.songId !== null && songIds.has(sheet.songId)) continue;
+    if (sheet.songId !== null && songIds.has(sheet.songId)) continue;
     items.push({ type: 'sheet', sheet });
   }
   const group = (it: LibraryItem) => (it.type === 'song' ? mineGroup(it.song.status) : 2);

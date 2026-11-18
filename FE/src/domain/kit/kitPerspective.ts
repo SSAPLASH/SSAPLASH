@@ -2,11 +2,11 @@
 // 저장 값(배치 x·y, 손별 앵커)은 그대로 두고, 그릴 때만 배치 좌표를 3D 점(몸 기준 미터: x 오른쪽·y 앞·z 위)으로 바꿔 투영한다.
 // 스틱은 방향만 알고 거리를 모르므로 거리는 3D 모델(kitModel.PAD_POINTS)의 패드별 값을 가정값으로 쓴다.
 import { poseToVec } from './calibration/calibration';
-import type { Pose, StickId } from '../events';
+import type { Pose } from '../events';
 import { radiusBasisOf, type FigBox, type KitLayout, type PadPlacement } from './kitLayout';
 import { DEFAULT_ANGLE_RANGE, screenToPose, type AngleRange } from './kitMapping';
 import { HIHAT_PEDAL_FIT } from './kitArt';
-import { HAND_ORIGINS, PAD_POINTS, type Point3 } from './kitModel';
+import { PAD_POINTS, type Point3 } from './kitModel';
 import { LANE_PADS, type PadId } from './pads';
 
 /** 내려다보는 각도(도) */
@@ -79,7 +79,6 @@ function isStickPad(pad: PadId): pad is StickPad {
 
 const sub = (a: Point3, b: Point3): Point3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = (a: Point3) => Math.hypot(a[0], a[1], a[2]);
-const clampPos = (v: number) => Math.min(0.95, Math.max(0.05, v));
 
 /** 자세(고도·방위) → 모델 축 단위 방향. 스틱 벡터(정면·오른쪽·위)를 모델 축(오른쪽·앞·위)으로 옮긴다 */
 export function poseDir(pose: Pose): Point3 {
@@ -155,11 +154,6 @@ export function makeCamera(box: FigBox, range: AngleRange = DEFAULT_ANGLE_RANGE)
 /** 기준점(AIM_ORIGIN)에서 그 패드까지의 모델 거리(m) */
 export function padReach(pad: StickPad): number {
   return len(sub(PAD_POINTS[pad], AIM_ORIGIN));
-}
-
-/** 끌어 옮길 수 있는 패드인가. 킥은 자리가 고정이고 하이햇 페달은 하이햇을 따라다닌다 */
-export function isMovablePad(pad: PadId): boolean {
-  return pad !== 'KICK' && pad !== 'HIHAT_PEDAL';
 }
 
 /**
@@ -247,139 +241,4 @@ export function kitShapes(layout: KitLayout, cam: Camera, range: AngleRange = DE
   const hihat = list.find((s) => s.pad === 'HIHAT');
   if (hihat) list.push(pedalShape(hihat));
   return list.sort((a, b) => b.depth - a.depth);
-}
-
-/** 점이 그 패드의 윗면 타원이나 통 옆면 안인가 */
-function inShape(s: PadShape, px: number, py: number): boolean {
-  const nx = (px - s.cx) / s.rx;
-  if (Math.abs(nx) > 1) return false;
-  const ny = (py - s.cy) / s.ry;
-  if (nx * nx + ny * ny <= 1) return true;
-  if (s.wall <= 0) return false;
-  // 옆면: 윗면 중심선 아래로 통 높이만큼, 아래 끝은 타원의 앞쪽 호
-  const edge = s.ry * Math.sqrt(1 - nx * nx);
-  return py >= s.cy && py <= s.cy + s.wall + edge;
-}
-
-/** 클릭 판정: 가까운(앞에 보이는) 패드부터. shapes는 kitShapes 순서(먼 것부터) */
-export function hitTestPads(shapes: readonly PadShape[], px: number, py: number): PadId | null {
-  for (let i = shapes.length - 1; i >= 0; i--) {
-    if (inShape(shapes[i], px, py)) return shapes[i].pad;
-  }
-  return null;
-}
-
-/**
- * 세로 자리(px)가 sy에 가장 가까운 배치 y(0.05~0.95)를 찾는다. syAt(y)는 그 y에서의 화면 세로 자리다.
- * 넓게 훑고 좁혀 가며 여덟 번 찾는다(단조가 아니어도 가장 가까운 값을 고른다. 오차 1e-7 아래)
- */
-function solveLayoutY(syAt: (y: number) => number, sy: number): number {
-  let lo = 0.05;
-  let hi = 0.95;
-  let best = lo;
-  for (let pass = 0; pass < 8; pass++) {
-    const step = (hi - lo) / 18;
-    let bestErr = Infinity;
-    for (let i = 0; i <= 18; i++) {
-      const y = lo + step * i;
-      const err = Math.abs(syAt(y) - sy);
-      if (err < bestErr) {
-        bestErr = err;
-        best = y;
-      }
-    }
-    lo = Math.max(0.05, best - step);
-    hi = Math.min(0.95, best + step);
-  }
-  return best;
-}
-
-/**
- * 끌기: 패드의 새 화면 중심(px) → 배치 좌표(0.05~0.95).
- * 가로는 그림 가로 자리가 곧 배치 x다(가로 펴기의 역변환). 그래서 어느 패드든 그림 영역 좌우 끝까지 간다.
- * 스틱 패드의 세로는 그 x에서 화면 세로 자리가 포인터에 가장 가까운 배치 y를 찾는다.
- * 킥과 하이햇 페달은 끌 수 없어 지금 좌표를 그대로 돌려준다
- */
-export function dragToLayout(pad: PadId, sx: number, sy: number, current: Pick<PadPlacement, 'x' | 'y'>, cam: Camera, range: AngleRange = DEFAULT_ANGLE_RANGE): { x: number; y: number } {
-  if (!isMovablePad(pad)) return { x: current.x, y: current.y };
-  const x = clampPos(cam.layoutXAt(sx));
-  return { x, y: solveLayoutY((y) => cam.place(padPoint(pad, { x, y }, range)).sy, sy) };
-}
-
-/** 손 출발점(center면 두 손 가운데)에서 pt를 보는 방향과 거리 */
-function aimFrom(origin: Point3, pt: Point3): { dir: Point3; dist: number } {
-  const v = sub(pt, origin);
-  const dist = len(v) || 1;
-  return { dir: [v[0] / dist, v[1] / dist, v[2] / dist], dist };
-}
-
-/** 자세 마커의 출발점. hand가 'center'면 두 손 가운데(포인터 모의 IMU: 마우스 자세는 손 구분이 없다) */
-function poseOrigin(hand: StickId | 'center'): Point3 {
-  return hand === 'center' ? AIM_ORIGIN : HAND_ORIGINS[hand];
-}
-
-/**
- * 스틱이 가리키는 끝점. 출발점에서 자세 방향으로 가되, 거리는 방향이 가까운 패드들의 거리를 가까운 정도로 섞는다
- * (패드를 정확히 가리키면 그 패드 위에 닿고, 사이에서는 부드럽게 이어진다)
- */
-export function poseTip(hand: StickId | 'center', pose: Pose, shapes: readonly PadShape[]): Point3 {
-  const origin = poseOrigin(hand);
-  const d = poseDir(pose);
-  let wsum = 0;
-  let dsum = 0;
-  for (const s of shapes) {
-    if (s.kind === 'pedal' || s.kind === 'kick') continue;
-    const a = aimFrom(origin, s.point);
-    const dot = Math.min(1, Math.max(-1, a.dir[0] * d[0] + a.dir[1] * d[1] + a.dir[2] * d[2]));
-    const ang = Math.acos(dot);
-    const w = 1 / (ang * ang + 1e-4);
-    wsum += w;
-    dsum += w * a.dist;
-  }
-  const dist = wsum > 0 ? dsum / wsum : 0.6;
-  return [origin[0] + d[0] * dist, origin[1] + d[1] * dist, origin[2] + d[2] * dist];
-}
-
-/**
- * 화면 점(px) → 자세. 포인터 모의 IMU용: 가로는 그림 가로 자리가 곧 방위각이고, 세로는 포인터 아래(없으면 화면에서 가장 가까운)
- * 스틱 패드의 모델 거리에서 화면 세로 자리가 포인터에 가장 가까운 고도를 찾는다. 패드 중심 위에서는 그 패드의 배치 자세와 같다
- */
-export function screenPointToPose(px: number, py: number, shapes: readonly PadShape[], cam: Camera, range: AngleRange = DEFAULT_ANGLE_RANGE): Pose {
-  const sticks = shapes.filter((s) => s.kind !== 'pedal' && s.kind !== 'kick');
-  if (sticks.length === 0) return { pitch: 0, yaw: 0 };
-  const hit = hitTestPads(sticks, px, py);
-  let base = sticks.find((s) => s.pad === hit);
-  if (!base) {
-    let best = Infinity;
-    for (const s of sticks) {
-      const dd = Math.hypot(px - s.cx, py - s.cy);
-      if (dd < best) {
-        best = dd;
-        base = s;
-      }
-    }
-  }
-  const pad = base!.pad;
-  const x = cam.layoutXAt(px);
-  const y = solveLayoutY((v) => cam.place(padPoint(pad, { x, y: v }, range)).sy, py);
-  return screenToPose(x, y, range);
-}
-
-/**
- * 정보 카드 자리 고르기(kitLayout.pickOverlayCorner)에 넘길 패드별 원. 화면 타원을 가로 반지름의 원으로 본다(넉넉한 쪽).
- * x·y는 그림 영역 정규 좌표, r은 radiusBasisOf(box) 기준 비율이다
- */
-export function padScreenCircles(layout: KitLayout, box: FigBox, range: AngleRange = DEFAULT_ANGLE_RANGE): Record<PadId, PadPlacement> {
-  const basis = radiusBasisOf(box);
-  const out = {} as Record<PadId, PadPlacement>;
-  for (const s of kitShapes(layout, makeCamera(box, range), range)) {
-    out[s.pad] = { x: s.cx / box.w, y: (s.cy + s.wall / 2) / box.h, r: s.rx / basis };
-  }
-  return out;
-}
-
-/** 패드의 표시 좌표(cm, 몸 기준: x 오른쪽·y 앞·z 위). 그림에 놓인 3D 점 그대로다 */
-export function padPointCm(pad: PadId, pl: Pick<PadPlacement, 'x' | 'y'>, range: AngleRange = DEFAULT_ANGLE_RANGE): { x: number; y: number; z: number } {
-  const p = padPoint(pad, pl, range);
-  return { x: p[0] * 100, y: p[1] * 100, z: p[2] * 100 };
 }

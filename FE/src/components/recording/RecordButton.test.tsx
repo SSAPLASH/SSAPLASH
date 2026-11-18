@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetRecordingForTest, useRecordingStore } from '@/runtime/recordingStore';
-import { formatElapsed } from '@/domain/play/recordingView';
+import { formatElapsed } from '@/domain/time/formatTime';
 import { RecordButton } from './RecordButton';
 import { recordButtonVisible } from './recordButtonRoute';
 

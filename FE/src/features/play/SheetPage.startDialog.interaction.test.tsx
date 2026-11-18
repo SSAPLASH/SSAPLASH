@@ -20,6 +20,19 @@ import type { SongDetail } from '@/domain/song/songCatalog';
 import { Accompaniment } from '@/audio/Accompaniment';
 import { SheetPage } from './SheetPage';
 
+// 코칭 동작은 그대로 두고 LiveCoach 생성자에 넘어온 옵션만 기록한다
+const coachOpts = vi.hoisted(() => [] as { goodMs: number }[]);
+vi.mock('@/coach/live', async (orig) => {
+  const mod = await orig<typeof import('@/coach/live')>();
+  class RecordingLiveCoach extends mod.LiveCoach {
+    constructor(opts: ConstructorParameters<typeof mod.LiveCoach>[0]) {
+      super(opts);
+      coachOpts.push(opts);
+    }
+  }
+  return { ...mod, LiveCoach: RecordingLiveCoach };
+});
+
 vi.mock('@/api/play/plays', () => ({ getBestRecords: vi.fn() }));
 vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), getSong: vi.fn(), listSongs: vi.fn(), listAllSongs: vi.fn(async (p: object) => (await vi.mocked(listSongs)(p as never)).items) }));
 vi.mock('@/api/song/recommendations', () => ({ fetchRecommendations: vi.fn().mockResolvedValue({ requestId: '', strategy: '', items: [] }), postRecommendationClick: vi.fn() }));
@@ -78,6 +91,7 @@ const show = (url: string) =>
 const where = () => screen.getByTestId('where').textContent ?? '';
 
 beforeEach(() => {
+  coachOpts.length = 0;
   vi.mocked(getBestRecords).mockReset().mockResolvedValue({ items: [] });
   vi.mocked(listSongs).mockReset().mockResolvedValue({ items: [detail], hasNext: false });
   vi.mocked(loadChart).mockReset().mockImplementation(async ({ chartId }) => ({
@@ -423,5 +437,23 @@ describe('SheetPage 시작 확인 창의 판정 여유', () => {
     await screen.findByRole('button', { name: '플레이' });
     expect(screen.queryByText(/판정 여유/)).toBeNull();
     useSettings.setState({ timing: { perfectMs: 25, goodMs: 60 } });
+  });
+
+  it('EASY 채보로 시작하면 코칭에 넓힌 GOOD 폭(90ms)을 넘긴다', async () => {
+    useSettings.setState({ timing: { perfectMs: 25, goodMs: 60 } });
+    show('/sheet?song=1&chart=11&start=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(coachOpts.length).toBeGreaterThan(0));
+    expect(coachOpts[0].goodMs).toBe(90);
+  });
+
+  it('그 밖의 난이도는 설정값(60ms) 그대로 넘긴다', async () => {
+    useSettings.setState({ timing: { perfectMs: 25, goodMs: 60 } });
+    show('/sheet?song=1&chart=12&start=1');
+    const dialog = await screen.findByRole('dialog', { name: '시험곡' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: '플레이' }));
+    await waitFor(() => expect(coachOpts.length).toBeGreaterThan(0));
+    expect(coachOpts[0].goodMs).toBe(60);
   });
 });

@@ -109,6 +109,7 @@ export function useAccompanimentSongs(deps: AccompanimentSongsDeps = {}): UseAcc
 
   // 검색어가 정해지면 두 섹션을 1페이지부터 다시 받는다. 정리 때 진행 중 요청을 취소한다
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- 검색어 변경 때 목록을 비우고 로딩 표시를 켜는 일이 요청 시작·이전 요청 취소(AbortController)와 한 묶음이라 effect에서 불러야 한다
     for (const key of KEYS) fetchSection(key, debounced, 0, false);
     const ctls = ctlRef.current;
     return () => {

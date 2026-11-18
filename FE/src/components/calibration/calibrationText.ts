@@ -7,13 +7,6 @@ import { josaEulReul, josaEunNeun } from '@/domain/kit/calibration/setupSteps';
 
 export const HAND_NAME = ['왼손', '오른손'] as const;
 
-/** 보정 안내: "스네어를 양손으로 2번씩 쳐 주세요" / "하이햇을 왼손으로 2번 쳐 주세요" */
-export function captureLine(target: PadId, hands: readonly StickId[]): string {
-  const label = PAD_META[target].label;
-  if (hands.length === 2) return `${label}${josaEulReul(label)} 양손으로 2번씩 쳐 주세요`;
-  return `${label}${josaEulReul(label)} ${HAND_NAME[hands[0] ?? 1]}으로 2번 쳐 주세요`;
-}
-
 /**
  * 킷 위 큰 안내(UX-64, PLAY-004 ①): 받을 손이 둘이면 "하이햇을 양손으로 2번씩 타격하세요", 하나면 "라이드를 오른손으로 2번 타격하세요".
  * hands는 세션 손이 아니라 현재 패드를 받을 손(CaptureSnapshot.targetHands)
@@ -28,16 +21,6 @@ export function captureHeadline(target: PadId, hands: readonly StickId[]): strin
 export function wrongHandText(pad: PadId, targetHand: StickId): string {
   const label = PAD_META[pad].label;
   return `${label}${josaEunNeun(label)} ${HAND_NAME[targetHand]}으로 쳐요`;
-}
-
-/** 정보 카드 진행 제목(D10): "하이햇 1/7". index는 0부터 */
-export function captureProgressText(target: PadId, index: number, total: number): string {
-  return `${PAD_META[target].label} ${index + 1}/${total}`;
-}
-
-/** 칩 줄 pill(UX-64): "보정 중 1 / 7". index는 0부터 */
-export function capturePillText(index: number, total: number): string {
-  return `보정 중 ${index + 1} / ${total}`;
 }
 
 /** 2타 퍼짐 경고 */
@@ -78,18 +61,6 @@ export function gapAdviceText(a: PadId, b: PadId): string {
   if (has('FLOOR_TOM', 'RIDE')) return '라이드는 더 높이, 플로어탐은 더 낮게 쳐 보세요';
   return '두 패드를 칠 때 스틱 방향을 더 다르게 해 주세요';
 }
-
-/** 진행 안내(개편 3절). 드럼 배치 카드 설명에 쓴다 */
-export const CAPTURE_GUIDE_TEXT = '불이 들어온 패드를 2번 쳐요. 다 치면 다음 드럼으로 넘어가요.';
-/** 결과 안내(개편 3절) */
-export const RESULT_GUIDE_TEXT = '드럼을 눌러 반경을 고치거나 다시 칠 수 있어요. 주황 테두리는 서로 너무 가까운 드럼이에요.';
-
-/** 결과 화면 한 줄: 「크래시와 10°」 */
-export function overlapLineText(other: PadId, deg: number): string {
-  const label = PAD_META[other].label;
-  return `${label}${josaWaGwa(label)} ${Math.round(deg)}°`;
-}
-
 /** 보정 팝업 결과 화면의 겹침 한 줄(SETUP-fixed-kit-noir D11): 「스네어와 스몰탐이 너무 가까워요(14°)」 */
 export function overlapPairText(a: PadId, b: PadId, deg: number): string {
   const la = PAD_META[a].label;

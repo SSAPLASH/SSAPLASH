@@ -57,7 +57,9 @@ import { useBestRecords } from './useBestRecords';
 import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import '@/components/lesson/lesson.css';
-import { isBeginnerChart, lessonOfChart, trimLessonTail, type Lesson } from '@/domain/play/lesson';
+import { isBeginnerChart, lessonOfChart, trimLessonTail } from '@/domain/play/lesson';
+import { ACCOMPANIMENT_OVERRIDE } from '@/config/accompaniment';
+import { GO_MS, NO_LESSONS, parseId } from '@/features/play/domain/playShared';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
 import { buildPlayLog, loadPlayLogs, savePlayLog } from '@/engine/playLog';
@@ -94,25 +96,11 @@ import { diagTap } from '@/engine/diagTap';
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = PlayStageName;
 
-/** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
-const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
-
-/** 카운트인이 끝난 직후 「시작!」을 보이는 시간 */
-const GO_MS = 400;
 /** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
 
-function parseId(raw: string | null): number | null {
-  if (raw === null || !/^-?\d+$/.test(raw)) return null;
-  const n = Number(raw);
-  return Number.isSafeInteger(n) ? n : null;
-}
-
 /** HUD 갱신 간격(ms) */
 const HUD_INTERVAL_MS = 250;
-
-/** 입문 코스 목록을 아직 못 읽었을 때 쓰는 빈 목록(구독 값 정체성 유지) */
-const NO_LESSONS: readonly Lesson[] = [];
 
 /** 반주 디코드 결과. loaded가 현재 URL 파라미터의 결과와 같을 때만 유효하다 */
 interface AccResult {
@@ -150,7 +138,6 @@ function SheetPageBody() {
   const [songMs, setSongMs] = useState(0);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
-  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);
@@ -582,7 +569,7 @@ function SheetPageBody() {
     const llmMode = st.liveCoach ? model.llm : null;
     let llm: LlmCoach | null = null;
     const coach = new LiveCoach({
-      goodMs: st.timing.goodMs,
+      goodMs: ss.windows.goodMs,
       enabled: st.liveCoach,
       setupHints: isStickSensor(st.sensorKind),
       noteGapMedianMs: chartCoachContext(ss.chart.notes).noteGapMedianMs,

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { LazyMotion, domMax } from 'motion/react';
 import { useSettings } from '@/store/settingsStore';
-import { HitFxPicker, nextFxTheme } from './HitFxPicker';
+import { HitFxPicker } from './HitFxPicker';
+import { nextFxTheme } from '@/features/settings/domain/carouselStep';
 
 afterEach(() => {
   cleanup();

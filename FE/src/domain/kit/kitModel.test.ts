@@ -1,6 +1,6 @@
 // 3D 드럼셋 모델 검증(PLAY-004 D4): 손별 기본 앵커가 손마다 다르고, 반경이 튜닝 범위 안이며, 기본 배치가 화면 안에 있다.
 import { describe, expect, it } from 'vitest';
-import { anchorsToLayout, anchorToPoint, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, moveAnchorsForPad, padPointOf, HAND_ORIGINS, PAD_POINTS } from './kitModel';
+import { anchorsToLayout, defaultHandAnchorSet, defaultHandAnchors, handPoseTo, moveAnchorsForPad, HAND_ORIGINS, PAD_POINTS } from './kitModel';
 import { DEFAULT_KIT_LAYOUT } from './kitLayout';
 import { poseToScreen } from './kitMapping';
 import { STICK_PADS } from './pads';
@@ -69,27 +69,6 @@ describe('defaultHandAnchors', () => {
   it('튜닝을 바꾸면 반경이 따라간다', () => {
     const a = defaultHandAnchorSet(0, { ...DEFAULT_SENSOR_TUNING, minRadiusDeg: 8, maxRadiusDeg: 9 });
     for (const x of Object.values(a)) expect(x!.radius).toBeLessThanOrEqual(9);
-  });
-});
-
-describe('anchorToPoint·padPointOf (UX-64 D8)', () => {
-  it('모델 방향을 그대로 넣으면 모델 패드 좌표(cm)가 나온다(거리는 모델 가정값)', () => {
-    const p = anchorToPoint(0, 'HIHAT', handPoseTo(0, 'HIHAT'))!;
-    expect(p.x).toBeCloseTo(PAD_POINTS.HIHAT[0] * 100, 5);
-    expect(p.y).toBeCloseTo(PAD_POINTS.HIHAT[1] * 100, 5);
-    expect(p.z).toBeCloseTo(PAD_POINTS.HIHAT[2] * 100, 5);
-    expect(anchorToPoint(0, 'KICK', { pitch: 0, yaw: 0 })).toBeNull();
-  });
-
-  it('padPointOf: 양손이면 평균, 한 손이면 그 손, 없으면 null', () => {
-    const l = handPoseTo(0, 'SNARE');
-    const r = handPoseTo(1, 'SNARE');
-    const both = padPointOf('SNARE', [l, r])!;
-    expect(both.x).toBeCloseTo(PAD_POINTS.SNARE[0] * 100, 5);
-    expect(both.y).toBeCloseTo(PAD_POINTS.SNARE[1] * 100, 5);
-    const left = padPointOf('SNARE', [l, undefined])!;
-    expect(left.x).toBeCloseTo(PAD_POINTS.SNARE[0] * 100, 5);
-    expect(padPointOf('SNARE', [undefined, undefined])).toBeNull();
   });
 });
 
