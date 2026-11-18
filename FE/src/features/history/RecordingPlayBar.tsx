@@ -7,7 +7,7 @@
 // 재생기는 모른다. 상태는 props로 받고 조작은 콜백으로만 알린다. 위치 자르기(0~길이)는 재생기가 한다.
 import { PlaybackTransport } from '@/components/song/PlaybackTransport';
 import { SeekBar } from '@/components/song/SeekBar';
-import { formatClock } from '@/domain/song/freeAccompaniment';
+import { formatClock } from '@/domain/time/formatTime';
 
 export type RecordingPlayPhase = 'idle' | 'loading' | 'playing' | 'paused';
 
