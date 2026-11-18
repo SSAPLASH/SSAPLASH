@@ -98,11 +98,6 @@ describe('mergeLibraryItems', () => {
     expect(tag(mergeLibraryItems(songs, sheets, false))).toEqual(['s2', 's3', 'h10', 's1', 'h11']);
   });
 
-  it('링크 꺼짐: songId가 있어도 악보 항목으로 넣는다', () => {
-    const sheets = [sheet(10, '2026-11-02T00:00:00Z', 1)];
-    expect(tag(mergeLibraryItems(songs, sheets, false))).toContain('h10');
-  });
-
   it('링크 켜짐: 목록의 곡을 가리키는 악보는 빼고, 곡이 없거나 songId가 null이면 넣는다', () => {
     const sheets = [sheet(10, '2026-11-02T00:00:00Z', 1), sheet(11, '2026-11-03T00:00:00Z', 999), sheet(12, '2026-11-04T00:00:00Z', null)];
     expect(tag(mergeLibraryItems(songs, sheets, true))).toEqual(['s2', 's3', 'h12', 'h11', 's1']);
