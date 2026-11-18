@@ -11,12 +11,9 @@ ROADMAP.md
 .venv-*/
 ext/
 data/*
-!data/README.md
-# MDB Drums 체크섬만 추적 (음원·주석은 CC BY-NC-SA, 미추적)
-!data/mdb_drums/
-data/mdb_drums/*
-!data/mdb_drums/CHECKSUMS.txt
+!data/.gitkeep
 mlruns/
+runs/
 
 # 파이썬 캐시
 __pycache__/

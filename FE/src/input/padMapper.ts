@@ -1,11 +1,11 @@
 // 매퍼 계층 (설계 D8). 소스는 "어느 스틱이 언제 얼마나 세게 어떤 자세로 쳤는가"만 내고,
 // 어느 패드인지는 여기서 정한다. 키 매퍼는 keyMap, 자세 매퍼는 캘리브레이션 프로필을 쓴다.
 // 센서가 오면 자세 매퍼에 프로필만 채우면 되고, 매퍼를 고르는 규칙은 바뀌지 않는다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import type { HitJudgedBy, InputSourceKind, StickHitEvent, StickId } from '@/domain/events';
-import type { KeyMap } from '@/domain/keyMap';
-import { poseDistance, resolvePad, type CalibrationProfile } from '@/domain/calibration';
-import { AMBIGUOUS_MARGIN_DEG, type OutsidePolicy } from '@/domain/tuning';
+import type { KeyMap } from '@/domain/kit/keyMap';
+import { poseDistance, resolvePad, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
+import { AMBIGUOUS_MARGIN_DEG, type OutsidePolicy } from '@/domain/kit/calibration/tuning';
 
 export type MapperKind = 'key' | 'pose';
 

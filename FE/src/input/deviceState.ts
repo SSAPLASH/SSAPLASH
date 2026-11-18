@@ -2,7 +2,7 @@
 // 시계 보정·SYNC 대기·연결·배터리 보류·"설정 전" 보류는 네 칸 모두 같은 규칙이다.
 // 패킷 해석과 이벤트 발행은 하지 않는다(소스가 한다).
 import type { DeviceRole } from '@/domain/events';
-import { ClockSync } from './InputSource';
+import { ClockSync } from './source/InputSource';
 
 export type { DeviceRole };
 

@@ -1,14 +1,9 @@
-"""채보 벤치마크 러너 (채보 설계 4-5절). 채보 모델 × 곡 반복 실행, 예외 격리, 결과 행 생성.
+"""채보 벤치마크 러너. 채보 모델 × 곡 반복 실행, 예외 격리, 결과 행 생성.
 
-흐름: 데이터셋에 타격 정답이 있는지 확인 → (separated면 분리 어댑터 준비) → 모델마다 어댑터 생성·
-load(loadSec)·워밍업 → 곡마다 입력 고르기(drums / mixture / separated) → transcribe(시간·메모리 측정)
-→ hit_f1로 5가지·(8패드)·라벨 무시 점수 → results.csv 1행 + hits_by_class.csv 여러 행 즉시 기록
-→ 선택 시 예측 MIDI 저장 → 어댑터 해제.
-입력 3가지는 실행 1회에 하나. separated는 run 폴더 `separated/<분리 모델>/<곡>/drums.wav`에 캐시하고
-있으면 분리를 건너뜀(분리 시간은 separateSec 열, 채보 RTF에는 안 들어감).
-이어하기 키는 (dataset, model, input, separator, songId). 열 구성이 다르면 중단(분리와 같음).
-external 어댑터처럼 측정을 어댑터 안에서 하는 경우 TranscriptionResult의 elapsed_sec·peak_vram_mb를 씀.
-CSV 열 이름은 설계 3-11절 camelCase 그대로.
+흐름: 모델마다 어댑터 생성·load·워밍업 → 곡마다 입력 고르기(drums / mixture / separated) → transcribe
+→ hit_f1 점수 → results.csv 1행 + hits_by_class.csv 여러 행 즉시 기록 → 어댑터 해제.
+separated는 run 폴더 `separated/<분리 모델>/<곡>/drums.wav`에 캐시하고 있으면 분리를 건너뜀.
+이어하기 키는 (dataset, model, input, separator, songId). 열 구성이 다르면 중단.
 """
 
 from __future__ import annotations
@@ -166,7 +161,7 @@ INPUTS_DIR = "inputs"
 
 @dataclass
 class TranscriptionRunOptions:
-    """run-transcription 명령 입력 (설계 3-13절)."""
+    """run-transcription 명령 입력."""
 
     model_configs: Sequence[Path]
     dataset_config: Path
@@ -294,7 +289,7 @@ def _scores_columns(prefix: str, s: HitScores | None) -> dict:
 
 
 def evaluation_columns(ev: HitEvaluation, result: TranscriptionResult, song: SongItem) -> dict:
-    """곡 하나의 지표를 3-11절 열 이름 dict로."""
+    """곡 하나의 지표를 CSV 열 이름 dict로."""
     main = ev.pads if ev.pads is not None else ev.five
     row = {
         "hitsTrue": int(len(song.hits_true)) if song.hits_true is not None else 0,
@@ -654,7 +649,7 @@ def build_input_source(
 
 
 def run_transcription(opts: TranscriptionRunOptions, log: Logger = print) -> TranscriptionRunResult:
-    """설계 4-5절 1~6단계 중 보고서·MLflow(6단계 뒷부분)를 뺀 전부. 그 둘은 cli가 이어서 함."""
+    """채보 벤치마크 실행. 보고서·MLflow 기록은 cli가 이어서 함."""
     run_id = opts.run_id or new_run_id()
     run_dir = Path(opts.out_dir) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

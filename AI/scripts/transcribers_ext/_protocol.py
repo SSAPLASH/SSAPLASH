@@ -1,4 +1,4 @@
-"""별도 환경 채보 스크립트 공용 틀 (채보 설계 3-10절 프로토콜). ssaplash_ai를 import하지 않음.
+"""별도 환경 채보 스크립트 공용 틀. ssaplash_ai를 import하지 않음.
 
 스크립트는 load(options, device) → (handle, checkpoint, n_params)와
 transcribe(handle, wav_path, device, options) → [[시각, 라벨, 세기|None], ...] 두 함수만 만들고

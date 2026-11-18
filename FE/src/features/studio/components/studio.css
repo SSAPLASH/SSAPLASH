@@ -1,0 +1,1048 @@
+/* 라이브러리(/studio) — Figma 207:2110(카드) · 225:4551(목록) · 225:5042(로딩) · 225:5368(오류) · 240:6949(태블릿) 및 Studio / * 컴포넌트.
+ * 토큰은 tokens.css의 새 이름만 쓴다. 간격은 4px 배수(Figma 6·10·14·18은 가까운 4 배수로 맞춘다). */
+
+/* ---- 화면 틀 ---- */
+.studio-page {
+  /* 본문 여백·최대 폭은 다른 화면과 같은 셸 .main(Figma 24와의 통일은 fixups S3 결정 대기) */
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--text-1);
+}
+/* 카드 보기는 제목 아래 간격이 24 */
+.studio-page.roomy {
+  gap: var(--space-l);
+}
+.studio-upload-btn {
+  flex: none;
+  width: 160px;
+}
+.studio-body {
+  display: block;
+}
+.studio-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.studio-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-height: 44px;
+}
+/* 정렬 안내는 없앴다(QA). 보기 전환은 오른쪽에 */
+.studio-toolbar > :last-child {
+  margin-left: auto;
+}
+
+/* MIDI 칩 (Studio / SongCard midi-chip 202:518) */
+.studio-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-s);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+/* ---- 활성 작업 카드 (Studio / ActiveJobCard 203:665) ---- */
+.studio-job {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: var(--space-m);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.studio-job-cover {
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+.studio-job-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.studio-job-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.studio-job-title {
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-job-steps {
+  display: flex;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-job-step {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.studio-job-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.studio-job-step.done .studio-job-bar {
+  background: var(--good);
+}
+.studio-job-step.active .studio-job-bar {
+  background: var(--brand);
+  animation: studio-pulse 1.2s var(--ease-in-out) infinite;
+}
+.studio-job-step-label {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.studio-job-step.done .studio-job-step-label,
+.studio-job-step.active .studio-job-step-label {
+  color: var(--text-1);
+}
+.studio-job-elapsed {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  white-space: nowrap;
+}
+.studio-job-elapsed-label {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.studio-job-elapsed-time {
+  font-size: 16px;
+  line-height: 1.45;
+}
+@keyframes studio-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-job-step.active .studio-job-bar,
+  .studio-skeleton-bar {
+    animation: none;
+  }
+}
+
+/* ---- 카드 그리드 · 카드 (Studio / SongCard 202:561) ---- */
+/* 최대 5열, 열 최소 200px — 폭이 줄면 4·3·2·1열 (설계 QA-363) */
+.studio-grid,
+.studio-skeleton-grid {
+  --studio-grid-cols: 5;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(200px, calc((100% - (var(--studio-grid-cols) - 1) * var(--space-l)) / var(--studio-grid-cols))), 1fr)
+  );
+  gap: var(--space-l);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+/* 마우스 올림·카드 안 포커스·플레이 메뉴 열림: 브랜드 테두리 + 두 겹 네온 번짐 (Figma 461:2293·461:2331, 설계 CHART-003 4-3).
+   플레이 메뉴는 body 끝(portal)에 그려져 :hover·:focus-within 밖이므로 열린 동안은 .is-menu-open이 같은 강조를 유지한다 */
+.studio-card:hover,
+.studio-card:focus-within,
+.studio-card.is-menu-open {
+  border-color: var(--brand);
+  background: var(--surface-2);
+  box-shadow:
+    0 0 18px var(--brand-glow),
+    0 0 64px var(--brand-glow-soft);
+}
+/* 새 곡 2초 강조 */
+.studio-card.just-done,
+.studio-row.just-done {
+  animation: studio-just-done 2s var(--ease-out);
+}
+@keyframes studio-just-done {
+  from {
+    border-color: var(--brand-sub);
+    background-color: color-mix(in srgb, var(--brand-sub) 16%, transparent);
+    box-shadow:
+      0 0 0 1px var(--brand-sub),
+      0 0 8px color-mix(in srgb, var(--brand-sub) 35%, transparent);
+  }
+}
+.studio-card-cover {
+  position: relative;
+}
+.studio-card.failed .song-cover {
+  opacity: 0.45;
+}
+.studio-card .studio-card-menu {
+  position: absolute;
+  top: var(--space-s);
+  right: var(--space-s);
+}
+.studio-card-title {
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-card-artist {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--space-s);
+}
+/* 생성 실패 사유: 배지 줄 안 오른쪽에 말줄임 한 줄 (Figma 463:2336) */
+.studio-card-reason {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--miss);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 정보 줄: 왼쪽 아티스트·배지 줄, 오른쪽 [▶ 플레이]. 아주 좁은 카드에서는 버튼이 오른쪽 정렬로 다음 줄에 내려가 겹치지 않는다 */
+.studio-card-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.studio-card-info-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-s);
+  /* 배지 하나(「완료」 약 66px)가 들어가는 폭. 이보다 좁아지면 [플레이]가 다음 줄 오른쪽으로 내려간다 */
+  min-width: 72px;
+}
+.studio-card-info > .studio-play-menu {
+  margin-left: auto;
+}
+/* 같은 줄 카드끼리 높이를 맞추고 동작은 아래로 붙인다 */
+.studio-card-actions {
+  display: flex;
+  margin-top: auto;
+}
+/* 완료 곡 ▶ (D4-2): 커버 오른쪽 아래 52. 마우스 기기는 카드 hover·focus 때, 터치 기기는 항상 보인다 */
+.song-card-play {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-on);
+  box-shadow: var(--shadow-dock);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity var(--motion-fade),
+    transform var(--motion-move),
+    background-color var(--motion-fast);
+}
+.song-card-play:hover {
+  background: var(--brand-text);
+}
+.studio-card:hover .song-card-play,
+.studio-card:focus-within .song-card-play {
+  opacity: 1;
+  transform: none;
+}
+@media (hover: none) {
+  .song-card-play {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- 목록 보기 (Studio / SongListRow 224:1144) ---- */
+.studio-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.studio-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  box-sizing: border-box;
+  height: 64px;
+  padding: var(--space-s) 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-1);
+}
+.studio-row:last-child {
+  border-bottom: 0;
+}
+.studio-row-cover {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+.studio-row.failed .song-cover {
+  opacity: 0.45;
+}
+.studio-row-info {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.studio-row-title,
+.studio-row-sub {
+  overflow: hidden;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-row-title {
+  font-size: 14px;
+}
+.studio-row-sub {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.studio-row.failed .studio-row-sub {
+  color: var(--miss);
+}
+.studio-row-date {
+  flex: none;
+  width: 80px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.studio-row-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-s);
+  width: 220px;
+}
+.studio-row-stage {
+  color: var(--brand-text);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.studio-row-more {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+/* ---- 로딩 스켈레톤 (225:5042) · 목록 오류 (225:5368) ---- */
+.studio-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.studio-skeleton-bar {
+  display: block;
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  animation: studio-pulse 1.2s var(--ease-in-out) infinite;
+}
+.studio-skeleton-bar.cover {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+.studio-skeleton-bar.title {
+  width: 160px;
+  height: 20px;
+}
+.studio-skeleton-bar.artist {
+  width: 100px;
+  height: 16px;
+}
+.studio-skeleton-bar.action {
+  width: 100%;
+  height: 32px;
+}
+/* 목록 실패 안내(ui/ErrorState) — 빈 목록 자리를 채우게 위아래 여백만 넓힌다 */
+.ui-error.studio-list-error {
+  padding-block: 80px;
+}
+
+/* ---- 음원 양식 아래 정책 안내 ---- */
+.studio-policy-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/* ---- 빈 안내 (설계 QA-studio-empty-state): 곡·악보가 없을 때 카드·목록 자리 ---- */
+.studio-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  box-sizing: border-box;
+  padding: var(--space-l) var(--space-m);
+  border-radius: var(--radius-panel);
+  text-align: center;
+}
+/* 카드 보기: 그리드 폭 점선 상자, 카드 한 장 정도 높이 */
+.studio-empty.card {
+  min-height: 240px;
+  border: 1.5px dashed var(--line-strong);
+}
+/* 목록 보기: 목록 틀(.studio-list)과 같은 테두리 안 한 칸 */
+.studio-empty.list {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+.studio-empty-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.studio-empty-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---- 업로드 양식 (Studio / UploadDialog 224:1069) ---- */
+.studio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.studio-tabs {
+  display: flex;
+  gap: var(--space-s);
+}
+.studio-tab {
+  justify-content: center;
+  width: 96px;
+}
+.studio-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.studio-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  padding: 28px var(--space-m);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--bg-base);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--motion-fast);
+}
+.studio-drop:hover,
+.studio-drop.over {
+  border-color: var(--brand);
+}
+.studio-drop.disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.studio-drop-icon {
+  display: flex;
+  color: var(--text-2);
+}
+.studio-drop-title {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.studio-drop-btn {
+  width: 160px;
+}
+.studio-drop-limits {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.studio-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.studio-form-footer,
+.studio-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-s);
+}
+.studio-footer-btn {
+  width: 160px;
+}
+/* 활성 작업이 있을 때 드롭존 자리의 안내 줄 */
+.studio-busy {
+  margin: 0;
+  padding: 12px var(--space-m);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+/* 실패 곡 다시 올리기 안내 줄 */
+.studio-reupload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--space-s) 12px;
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+}
+
+/* ---- 창 (Studio / UploadDialog 560 · SongInfoDialog 480 · CoverDialog 400 · DeleteDialog 420) ---- */
+.dialog.studio-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 32px);
+  padding: var(--space-l);
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-dock);
+}
+.dialog.studio-dialog-upload {
+  max-width: 560px;
+}
+.dialog.studio-dialog-info {
+  max-width: 480px;
+}
+.dialog.studio-dialog-cover {
+  max-width: 400px;
+}
+.dialog.studio-dialog-delete {
+  max-width: 420px;
+}
+.studio-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.studio-dialog-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.studio-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.studio-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.studio-delete-question {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.studio-delete-detail {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.studio-cover-preview {
+  display: flex;
+  justify-content: center;
+}
+.studio-cover-preview .song-cover {
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-panel);
+}
+.studio-cover-buttons {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-s);
+}
+.studio-cover-btn {
+  width: 160px;
+}
+.studio-cover-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* ---- 알림 위치 (삭제 완료 등) ---- */
+.studio-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-l);
+  z-index: 60;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+/* ---- 좁은 화면: 목록 행에서 날짜를 숨기고, 입력을 한 줄로 ---- */
+@media (max-width: 760px) {
+  .studio-row-date {
+    display: none;
+  }
+  .studio-row-actions {
+    width: auto;
+  }
+  .studio-job {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 560px) {
+  .studio-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- 악보 항목·악보 업로드 (설계 CHART-001 악보 보관) ---- */
+.studio-sheet-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+/* 악보만 카드의 곡 올리기 (D15): ▶ 자리·크기 그대로, 꽉 찬 ▶과 구분되게 브랜드색 외곽선·아이콘에 안쪽은 비운다 */
+.song-card-play.song-card-upload {
+  border: 1.5px solid var(--brand);
+  background: transparent;
+  color: var(--brand);
+  box-shadow: none;
+}
+.song-card-play.song-card-upload:hover {
+  background: transparent;
+  border-color: var(--brand-text);
+  color: var(--brand-text);
+}
+/* 악보만 행의 [⤒ 곡 올리기]: secondary 버튼 틀에 브랜드 외곽선 */
+.ui-btn.studio-upload-song {
+  border: 1.5px solid var(--brand);
+  background: transparent;
+  color: var(--brand-text);
+}
+.ui-btn.studio-upload-song:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--brand-text);
+}
+.studio-link-notice {
+  margin: 0;
+  color: var(--brand-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.studio-seg-row {
+  display: flex;
+}
+.studio-sheet-target {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.studio-sheet-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-sheet-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.studio-sheet-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  font-size: 14px;
+}
+.studio-sheet-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-sheet-loadfail {
+  margin: 0 0 var(--space-m);
+  font-size: 14px;
+}
+
+/* ---- 곡 재생바 (설계 CHART-003 라이브러리 재생바). 반주가 준비된 완료 곡에 항상 보인다.
+   모양: Figma 시안 「자유 연습 · 반주 바 — C · 애플 스타일」(971:50674)의 조작부(971:50687)·진행부(971:50701) ---- */
+.song-playbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  min-height: 34px;
+  color: var(--text-1);
+}
+.song-playbar-progress {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+/* 쉬는 상태·불러오는 중·오류의 빈 막대(누를 수 없다). 재생 중 막대와 같은 자리·두께 */
+.song-playbar-track {
+  display: block;
+  height: 3px;
+  margin: 6px 0;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+/* 불러오는 중: 막대 앞쪽에 옅은 채움 */
+.song-playbar-track.is-loading {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--text-1) 10%, transparent) 25%,
+    color-mix(in srgb, var(--text-1) 16%, transparent) 25%
+  );
+}
+.song-playbar-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+  min-height: 14px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+/* 오류 줄(ui/InlineError plain) — 문구가 길면 말줄임 */
+.song-playbar-text .ui-inline-error-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 목록 줄: 제목 칸 오른쪽에 자리 잡는다. 제목 칸 1 : 재생바 2 */
+.studio-row .song-playbar {
+  flex: 2 1 0;
+}
+/* 좁은 화면의 목록 줄: 760px 이하에서는 막대·10초 버튼을 숨겨 ▶만 남긴다(위치 이동은 카드 보기에서) */
+@media (max-width: 760px) {
+  .studio-row .song-playbar {
+    flex: none;
+  }
+  .studio-row .song-playbar-progress,
+  .studio-row .playback-skip,
+  .studio-row .playback-skip-gap {
+    display: none;
+  }
+}
+/* 제목 줄: 제목 + 재생 중 이퀄라이저 */
+.song-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.song-title-line > :first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* ---- [▶ 플레이] 버튼 + 모드 선택 메뉴 (Figma Studio / PlayModeMenu 1034:5280, 설계 CHART-003 4-2) ---- */
+.studio-play-menu {
+  flex: none;
+}
+.studio-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand);
+  color: var(--brand-on);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transition:
+    background-color var(--motion-fast),
+    transform var(--motion-press);
+}
+.studio-play-btn:hover {
+  background: var(--brand-text);
+}
+.studio-play-btn:active {
+  transform: scale(0.97);
+}
+.studio-play-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.studio-play-menu-list {
+  /* 위치는 Radix가 정한다(body 끝 portal, 아래가 모자라면 위로 뒤집힘). 셸·Dock보다 위에 둔다 */
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 264px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(11px);
+  backdrop-filter: blur(11px);
+  box-shadow: 0 12px 16px rgba(0, 0, 0, 0.45);
+}
+.studio-play-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--text-1);
+  text-decoration: none;
+  transition: background-color var(--motion-fast);
+}
+.studio-play-item:hover,
+.studio-play-item:focus-visible {
+  background: var(--brand-tint);
+}
+.studio-play-item:focus-visible {
+  outline: none;
+}
+.studio-play-item-icon {
+  display: flex;
+  flex: none;
+}
+.studio-play-item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.studio-play-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.studio-play-item-desc {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.studio-play-item-chev {
+  flex: none;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+/* ---- 커버 아래 재생 UI (Figma Studio / SongCard layout=play, 설계 CHART-003 4-4) ----
+   숨김일 때도 DOM에 두고(Tab 초점이 닿게) 카드 강조·재생 대상(.is-pinned)일 때 올라온다. 터치 기기는 항상 보인다 */
+.studio-cover-player {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 14px 12px;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  background: linear-gradient(to bottom, rgba(5, 6, 7, 0), rgba(5, 6, 7, 0.5) 45%, rgba(5, 6, 7, 0.86));
+  color: var(--text-1);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fade),
+    transform var(--motion-move);
+}
+.studio-card:hover .studio-cover-player,
+.studio-card:focus-within .studio-cover-player,
+.studio-card.is-menu-open .studio-cover-player,
+.studio-cover-player.is-pinned {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .studio-cover-player {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+.studio-cover-player > .free-seek,
+.studio-cover-player > .studio-cover-player-track {
+  align-self: stretch;
+}
+/* 버튼 틀 32 · 간격 18 */
+.studio-cover-player .studio-cover-player-controls {
+  gap: 18px;
+}
+.studio-cover-player-track {
+  display: block;
+  height: 3px;
+  margin: 6px 0;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-1) 20%, transparent);
+}
+.studio-cover-player-track.is-loading {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--text-1) 12%, transparent) 25%,
+    color-mix(in srgb, var(--text-1) 20%, transparent) 25%
+  );
+}
+.studio-cover-player-error {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--space-s);
+  min-width: 0;
+  margin: 0;
+  color: var(--miss);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.studio-cover-player-error > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-cover-player-retry {
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.studio-cover-player-retry:hover {
+  text-decoration: underline;
+}
+.studio-cover-player-retry:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-card,
+  .studio-cover-player,
+  .studio-play-item {
+    transition: none;
+  }
+}
+
+/* 반주 실패 배지는 기존 배지 크기와 색을 유지하는 재시도 버튼이다. */
+button.studio-badge-retry {
+  min-height: 0;
+  border: 0;
+  font-family: inherit;
+  font-weight: inherit;
+}
+button.studio-badge-retry:hover {
+  background: color-mix(in srgb, var(--badge-color) 16%, transparent);
+}

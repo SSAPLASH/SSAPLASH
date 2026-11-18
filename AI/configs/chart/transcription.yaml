@@ -1,39 +1,43 @@
-# 드럼 채보 추론 모듈 설정 (S15P31A307-169). 상대 경로는 AI/ 폴더 기준.
-# 환경 변수: SSAPLASH_CHART_DEVICE(장치), SSAPLASH_MODELS_DIR(가중치 폴더, 기본 data/models),
-# SSAPLASH_WORK_DIR(--out이 없을 때 출력 폴더의 부모), SSAPLASH_CHART_MODEL(채보 모델 이름, model 값보다 우선).
-# 탐 음높이 경계 같은 규칙 값은 모델 yaml의 rules에 있음
-#
-# 채보 모델 바꾸기: 아래 model 한 줄의 이름만 바꾸거나, 파일은 두고 SSAPLASH_CHART_MODEL=<이름>으로 워커를 띄움.
-# 워커는 띄울 때 설정을 읽으므로 바꾼 뒤 워커를 다시 띄움. 워커 로그 "채보 모델 선택:" 줄과 채보 JSON의
-# generatorVersion("<모델 yaml name>@…")으로 어느 모델이 도는지 확인
-model: original
+# 드럼 채보 추론 모듈 설정. 상대 경로는 AI/ 폴더 기준.
+# 환경 변수: SSAPLASH_CHART_DEVICE, SSAPLASH_MODELS_DIR, SSAPLASH_WORK_DIR, SSAPLASH_CHART_MODEL(model 값보다 우선).
+# 채보 모델을 바꾸려면 model 이름이나 SSAPLASH_CHART_MODEL을 바꾸고 워커를 다시 띄움.
+# 워커 로그 "채보 모델 선택:" 줄과 채보 JSON의 generatorVersion으로 어느 모델이 도는지 확인
+model: strum
 models:
-  # 원래 ADTOF + 드럼 킷 분리. 서비스 기본. 실제 발매곡 PDO 무료 5곡 노트 단위 F1 0.647
-  original: configs/bench/transcribers/adtof_drumsep/adtof_drumsep.yaml
-  # 패드별 가중치 조합 (S15P31A307-243). MDB·ENST는 올랐으나 PDO 5곡 0.608로 떨어져 2026-11-03 기본에서 내림.
-  # SSAPLASH_MODELS_DIR/adtof_ft/ 아래 tom_6cls_real_full/best.pth, tom_7cls_real_full/best.pth 필요
+  # 원래 ADTOF + 드럼 킷 분리. 되돌리기용
+  original: configs/bench/transcribers/adtof_drumsep/adtof_drumsep_ds_ov2.yaml
+  # 패드별 가중치 조합. 실험용. SSAPLASH_MODELS_DIR/adtof_ft/ 아래 가중치 두 개 필요
   combo: configs/bench/transcribers/adtof_drumsep/adtof_drumsep_realrec.yaml
+  # 원래 ADTOF와 실제 곡 학습 가중치의 점수 평균. 되돌리기용. SSAPLASH_MODELS_DIR/songsterr_ft/ 아래 가중치 두 개 필요
+  songsterr_avg: configs/bench/transcribers/adtof_drumsep/adtof_drumsep_songsterr_avg.yaml
+  # 서비스 기본. STRUM 8종 온셋 CRNN 학습 가중치 + 킥 규칙. SSAPLASH_MODELS_DIR/strum_ft/songsterr_egmd/best.pt 필요
+  strum: configs/bench/transcribers/strum/strum_crnn_songsterr_egmd.yaml
 # cuda가 없으면 cpu로 내려감
 device: cuda
 # 채보 JSON schemaVersion. BE가 1만 받음
 schema_version: 1
 tempo:
-  # 드럼 트랙에서 bpm 추정. beat_this(Beat This!, GMD 45곡 중 45곡 맞음) 또는 librosa(25곡, torch 불필요).
-  # Beat This! 가중치는 SSAPLASH_MODELS_DIR/beat_this/에 받고 md5로 확인
+  # beat_this 또는 librosa(torch 불필요, mock용). 박은 원곡에서 찾고 원곡이 없으면 드럼 트랙에서 찾음
   method: beat_this
   # 추정값이 이 범위 밖이면 2배·절반으로 접음. max_bpm은 min_bpm의 2배 이상
   min_bpm: 60
   max_bpm: 200
   # 박자 추정은 안 함. 고정값
   time_signature: 4/4
-  # offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 격자 박에서 60ms 안의 킥·스네어 노트
-  # 중앙값만큼 박 안 위치를 옮김. Beat This! 박이 드럼보다 늦게 잡혀 메트로놈 클릭이 킥보다 늦게 울리던 것을 줄임
+  # offsetMs 원점 방식. downbeat: 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
   origin: notes
+  # Beat This! 후처리. dbn은 madmom 필요
+  postprocess: dbn
+  # 찾은 박을 따라가는 빠르기 구간(tempoMap)을 냄. 마디 경계가 이 ms 안으로 맞는 가장 긴 구간으로 묶음
+  tempo_map: true
+  tempo_map_tolerance_ms: 20
+  # 채보 노트로 bpm·offsetMs 다시 맞추기. 밴드 녹음 곡에서 마디선이 덜 맞아 꺼 둠
+  refine: false
 # 이보다 긴 드럼 트랙은 입력 오류
 max_duration_sec: 600
-# 채보 가능 검사 (S15P31A307-246). 걸리면 실패 사유 NOT_TRANSCRIBABLE로 보고함
+# 채보 가능 검사. 걸리면 실패 사유 NOT_TRANSCRIBABLE로 보고함
 drum_check:
-  # 곡 1분당 노트 수가 이보다 적으면 실패. 비워 두면 검사 안 함. 실제 곡 분포를 측정한 뒤 정함
-  min_notes_per_minute:
+  # 곡 1분당 노트 수가 이보다 적으면 실패. 비워 두면 검사 안 함. 92는 정상 곡 1만 곡 중 1곡이 걸리는 값
+  min_notes_per_minute: 92
   # 박 추적 실패(bpm 기본값 120)를 실패로 볼지. 틀린 bpm으로 메트로놈이 나가지 않게 함
   fail_on_unknown_tempo: true

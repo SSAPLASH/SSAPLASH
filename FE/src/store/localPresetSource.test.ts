@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LocalPresetSource } from './localPresetSource';
 import { useSettings } from './settingsStore';
-import { DEFAULT_KIT_LAYOUT, KIT_LAYOUT_PRESETS } from '@/domain/kitLayout';
-import { MAX_PRESETS, type PresetDraft } from '@/domain/preset';
+import { DEFAULT_KIT_LAYOUT } from '@/domain/kit/kitLayout';
+import { WIDE_LAYOUT } from '@/test/layoutFixtures';
+import { MAX_PRESETS, type PresetDraft } from '@/domain/kit/preset';
 
 const src = new LocalPresetSource();
 const draft = (name: string, over: Partial<PresetDraft> = {}): PresetDraft => ({
@@ -47,8 +48,8 @@ describe('LocalPresetSource', () => {
   it('update: 내용·updatedAt 갱신, isDefault 유지, 자기 이름은 중복 아님', async () => {
     const a = await src.create(draft('a'));
     await tick();
-    const next = await src.update(a.id, draft('a', { layout: KIT_LAYOUT_PRESETS.wide, soundSetId: 'synth' }));
-    expect(next.layout).toEqual(KIT_LAYOUT_PRESETS.wide);
+    const next = await src.update(a.id, draft('a', { layout: WIDE_LAYOUT, soundSetId: 'synth' }));
+    expect(next.layout).toEqual(WIDE_LAYOUT);
     expect(next.isDefault).toBe(true);
     expect(next.createdAt).toBe(a.createdAt);
     expect(next.updatedAt > a.updatedAt).toBe(true);

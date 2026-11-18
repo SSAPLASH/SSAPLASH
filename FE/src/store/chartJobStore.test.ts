@@ -1,12 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTest } from '@/api/auth';
-import { ACTIVE_JOB_KEY, type UploadDraft } from '@/domain/chartJob';
+import { resetForTest } from '@/api/account/auth';
+import { ACTIVE_JOB_KEY, type UploadDraft } from '@/domain/song/chartJob';
 import { useChartJob } from './chartJobStore';
 
 type Handler = (url: string, init: RequestInit | undefined) => Response | Promise<Response>;
 
 function mockFetch(handler: Handler) {
-  const fn = vi.fn(async (url: string, init?: RequestInit) => handler(url, init));
+  let revision = 0;
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const response = await handler(url, init);
+    // 기존 곡 상태 fixture를 작업 스냅샷으로 바꾼다. 별도 스냅샷 fixture는 그대로 둔다.
+    if (isJobGet(url) && response.ok) {
+      const body = await response.clone().json() as Record<string, unknown>;
+      if ('id' in body && !('jobId' in body)) {
+        const status = body.status === 'READY' ? 'DONE' : body.status === 'PROCESSING' ? 'SEPARATING' : body.status;
+        return json(200, { jobId: Number(url.split('/').at(-1)), songId: body.id, status, progress: status === 'DONE' ? 100 : 10, revision: ++revision, error: null });
+      }
+    }
+    return response;
+  });
   vi.stubGlobal('fetch', fn);
   return fn;
 }
@@ -21,7 +33,7 @@ const songBody = (id: number, status: string, extra: Record<string, unknown> = {
   json(200, { id, title: '곡', artist: '', source: 'USER', status, ...extra });
 
 const isUpload = (url: string, init?: RequestInit) => url === '/api/v1/songs/audio' && init?.method === 'POST';
-const isSongGet = (url: string) => /^\/api\/v1\/songs\/\d+$/.test(url);
+const isJobGet = (url: string) => /^\/api\/v1\/jobs\/\d+$/.test(url);
 const keyOf = (init: RequestInit | undefined) => new Headers(init?.headers).get('Idempotency-Key');
 
 function draft(over: Partial<UploadDraft> = {}): UploadDraft {
@@ -65,7 +77,7 @@ describe('chartJobStore', () => {
     await vi.advanceTimersByTimeAsync(3000);
     s = useChartJob.getState();
     expect(s.phase).toBe('polling');
-    expect(s.progress).toMatchObject({ stage: 'SEPARATING', stageKnown: false });
+    expect(s.progress).toMatchObject({ stage: 'SEPARATING', stageKnown: true, percent: 10 });
 
     status = 'READY';
     await vi.advanceTimersByTimeAsync(3000);
@@ -123,6 +135,69 @@ describe('chartJobStore', () => {
     const s = useChartJob.getState();
     expect(s.phase).toBe('failed');
     expect(s.error).toEqual({ code: 'JOB_FAILED', detail: '채보를 만들지 못했습니다.', retryable: false });
+  });
+
+  it('작업 단계·revision을 반영하고 같은 revision과 잘못된 ID·알 수 없는 상태를 무시한다', async () => {
+    let snapshot = { jobId: 11, songId: 22, status: 'SEPARATING', progress: 0, revision: 1, error: null };
+    mockFetch((url, init) => isUpload(url, init) ? accepted() : json(200, snapshot));
+    await useChartJob.getState().upload(draft());
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().progress).toMatchObject({ stage: 'SEPARATING', percent: 0, stageKnown: true });
+    snapshot = { ...snapshot, status: 'DONE', progress: 100 };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().phase).toBe('polling');
+    snapshot = { ...snapshot, revision: 2, songId: 99 };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().phase).toBe('polling');
+    snapshot = { ...snapshot, songId: 22, status: 'UNKNOWN' };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().phase).toBe('polling');
+    snapshot = { ...snapshot, status: 'TRANSCRIBING', progress: 55 };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().progress).toMatchObject({ stage: 'TRANSCRIBING', percent: 55 });
+    snapshot = { ...snapshot, status: 'SEPARATING', progress: 10, revision: 3 };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState().progress).toMatchObject({ stage: 'SEPARATING', percent: 10 });
+    snapshot = { ...snapshot, status: 'DONE', progress: 100, revision: 4 };
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'done', progress: { percent: 100 } });
+  });
+
+  it('작업 실패 error를 보존하고 종료한다', async () => {
+    mockFetch((url, init) => isUpload(url, init) ? accepted() : json(200, { jobId: 11, songId: 22, status: 'FAILED', progress: 42, revision: 1, error: { code: 'ERR', message: '변환 실패' } }));
+    await useChartJob.getState().upload(draft());
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'failed', error: { code: 'JOB_FAILED', detail: '변환 실패' }, progress: { failReason: '변환 실패' } });
+  });
+
+  it('작업 ID 없는 복원은 곡 상태로 조회한다', async () => {
+    storage.set(ACTIVE_JOB_KEY, JSON.stringify({ jobId: null, songId: 9, title: '곡', idempotencyKey: 'k', startedAt: new Date().toISOString() }));
+    const fetch = mockFetch(() => songBody(9, 'PROCESSING'));
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch.mock.calls[0][0]).toBe('/api/v1/songs/9');
+    expect(useChartJob.getState().progress).toMatchObject({ stageKnown: false, percent: null });
+  });
+
+  it('403에서는 폴링을 중단하고 안내한다', async () => {
+    const fetch = mockFetch((url, init) => isUpload(url, init) ? accepted() : problem(403, 'FORBIDDEN'));
+    await useChartJob.getState().upload(draft());
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'failed', error: { code: 'JOB_AUTH' } });
+    const calls = fetch.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(fetch).toHaveBeenCalledTimes(calls);
+  });
+
+  it('이탈한 이전 작업의 늦은 응답은 현재 작업을 덮지 않는다', async () => {
+    let resolve!: (value: Response) => void;
+    mockFetch((url, init) => isUpload(url, init) ? accepted() : new Promise<Response>((r) => { resolve = r; }));
+    await useChartJob.getState().upload(draft());
+    await vi.advanceTimersByTimeAsync(3000);
+    useChartJob.getState().clear();
+    resolve(json(200, { jobId: 11, songId: 22, status: 'DONE', progress: 100, revision: 1, error: null }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useChartJob.getState()).toMatchObject({ phase: 'idle', progress: null });
   });
 
   it('네트워크 실패 후 retry는 같은 Idempotency-Key로 보낸다', async () => {
@@ -186,6 +261,26 @@ describe('chartJobStore', () => {
     expect(JSON.parse(storage.get(ACTIVE_JOB_KEY)!)).toMatchObject({ songId: 7, jobId: null });
   });
 
+  it('429 BUSY + PROCESSING 곡이 내 곡 두 번째 페이지에 있어도 찾는다 (Jira 363)', async () => {
+    mockFetch((url, init) => {
+      if (isUpload(url, init)) return problem(429, 'AUDIO_BUSY');
+      if (url.startsWith('/api/v1/songs?')) {
+        const page = Number(new URL(url, 'http://x').searchParams.get('page'));
+        if (page === 0) {
+          return json(200, {
+            items: Array.from({ length: 100 }, (_, i) => ({ id: i + 1, title: `곡${i + 1}`, status: 'READY', createdAt: '2026-10-01T00:00:00Z' })),
+            hasNext: true,
+          });
+        }
+        return json(200, { items: [{ id: 301, title: '뒤쪽 진행 곡', status: 'PROCESSING', createdAt: '2026-11-09T00:00:00Z' }], hasNext: false });
+      }
+      return songBody(301, 'PROCESSING');
+    });
+    await useChartJob.getState().upload(draft());
+    expect(useChartJob.getState().phase).toBe('polling');
+    expect(useChartJob.getState().active).toMatchObject({ songId: 301, title: '뒤쪽 진행 곡' });
+  });
+
   it('429 BUSY인데 PROCESSING 곡이 없으면 AUDIO_BUSY 오류', async () => {
     mockFetch((url, init) => (isUpload(url, init) ? problem(429, 'AUDIO_BUSY') : json(200, { items: [], hasNext: false })));
     await useChartJob.getState().upload(draft());
@@ -201,7 +296,7 @@ describe('chartJobStore', () => {
     expect(useChartJob.getState()).toMatchObject({ phase: 'polling', active: job });
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(fetch.mock.calls[0][0]).toBe('/api/v1/songs/9');
+    expect(fetch.mock.calls[0][0]).toBe('/api/v1/jobs/1');
     expect(useChartJob.getState().phase).toBe('done');
   });
 
@@ -212,6 +307,26 @@ describe('chartJobStore', () => {
     expect(useChartJob.getState().phase).toBe('idle');
     expect(storage.has(ACTIVE_JOB_KEY)).toBe(false);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('새 업로드 실패 뒤 이전 작업 저장 기록이 되살아나지 않는다', async () => {
+    storage.set(ACTIVE_JOB_KEY, JSON.stringify({ jobId: 1, songId: 9, title: '이전', idempotencyKey: 'k', startedAt: new Date().toISOString() }));
+    const fetch = mockFetch(() => { throw new TypeError('network'); });
+    await useChartJob.getState().upload(draft());
+    expect(useChartJob.getState().phase).toBe('failed');
+    expect(storage.has(ACTIVE_JOB_KEY)).toBe(false);
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('진행 중 새 업로드 요청은 기존 작업을 보존한다', async () => {
+    const fetch = mockFetch((url, init) => isUpload(url, init) ? accepted() : songBody(22, 'PROCESSING'));
+    await useChartJob.getState().upload(draft());
+    await useChartJob.getState().upload(draft({ title: '다른 곡' }));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(useChartJob.getState().active?.title).toBe('곡');
+    expect(storage.has(ACTIVE_JOB_KEY)).toBe(true);
   });
 
   it('사전 검사 실패는 fetch를 부르지 않는다', async () => {
@@ -234,12 +349,17 @@ describe('chartJobStore', () => {
     mode = '404';
     await vi.advanceTimersByTimeAsync(3000);
     expect(useChartJob.getState()).toMatchObject({ phase: 'failed', error: { code: 'AUDIO_NOT_FOUND' } });
+    expect(storage.has(ACTIVE_JOB_KEY)).toBe(false);
+    const before = vi.mocked(fetch).mock.calls.length;
+    useChartJob.getState().resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.mocked(fetch).mock.calls.length).toBe(before);
   });
 
   it('폴링 간격: 시작 후 30초까지 3초, 그 뒤 5초', async () => {
     const fetch = mockFetch((url, init) => (isUpload(url, init) ? accepted() : songBody(22, 'PROCESSING')));
     await useChartJob.getState().upload(draft());
-    const polls = () => fetch.mock.calls.filter(([u]) => isSongGet(u)).length;
+    const polls = () => fetch.mock.calls.filter(([u]) => isJobGet(u)).length;
     await vi.advanceTimersByTimeAsync(30_000);
     expect(polls()).toBe(10);
     await vi.advanceTimersByTimeAsync(5000);
@@ -255,7 +375,7 @@ describe('chartJobStore', () => {
     };
     vi.stubGlobal('document', doc);
     const fetch = mockFetch((url, init) => (isUpload(url, init) ? accepted() : songBody(22, 'PROCESSING')));
-    const polls = () => fetch.mock.calls.filter(([u]) => isSongGet(u)).length;
+    const polls = () => fetch.mock.calls.filter(([u]) => isJobGet(u)).length;
 
     await useChartJob.getState().upload(draft());
     expect(listeners.size).toBe(1);

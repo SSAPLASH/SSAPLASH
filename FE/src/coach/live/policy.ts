@@ -1,7 +1,7 @@
-// 규칙 평가 결과 중 무엇을 지금 띄울지 정한다. 시작 억제, 전역 간격, 키별 쿨다운, 우선순위, 칭찬.
+// 규칙 평가 결과 중 무엇을 지금 띄울지 정한다. 판정 단계, 전역 간격, 키별 쿨다운, 우선순위, 칭찬.
 // 시각은 입력으로 받는다(곡 시각 ms). 시계를 직접 읽지 않는다.
-import { LIVE_COACH_CONFIG } from './config';
-import { RECOVERED_PRAISE, type RuleEvaluation } from './rules';
+import { coachStage, LIVE_COACH_CONFIG, STAGE1_TAGS, type CoachStage } from './config';
+import { RECOVERED_PRAISE, type CoachTarget, type LiveTag, type RuleEvaluation } from './rules';
 
 interface KeyState {
   /** 띄운 뒤 아직 거두는 조건을 만족하지 않았다 */
@@ -15,6 +15,12 @@ export interface PolicyContext {
   judged: number;
 }
 
+/** 해소된 지적. 경향 해소 칭찬이 무엇이 고쳐졌는지 말하는 데 쓴다 */
+export interface RecoveredFrom {
+  tag: LiveTag;
+  target: CoachTarget | null;
+}
+
 export interface PolicyDecision {
   /** 지금 띄울 규칙. 없으면 null */
   show: RuleEvaluation | null;
@@ -22,6 +28,10 @@ export interface PolicyDecision {
   recovered: RuleEvaluation[];
   /** show와 같은 태그가 이 플레이에서 앞서 뜬 횟수 */
   repeat: number;
+  /** show가 경향 해소 칭찬일 때만: 해소된 지적 중 가장 최근에 띄웠던 것. 그 외에는 null */
+  recoveredFrom: RecoveredFrom | null;
+  /** 이번 판정의 판정 단계 */
+  stage: CoachStage;
 }
 
 export class CoachPolicy {
@@ -34,6 +44,8 @@ export class CoachPolicy {
   private shown = 0;
   /** 경향이 사라졌는데 아직 칭찬하지 못했다(간격이 남았거나, 연주가 아직 안정되지 않았다) */
   private recoveredPending = false;
+  /** 칭찬을 기다리는 해소 중 가장 최근에 띄웠던 지적(띄운 시각과 함께) */
+  private recoveredLatest: { shownMs: number; from: RecoveredFrom } | null = null;
 
   reset(): void {
     this.states.clear();
@@ -42,6 +54,17 @@ export class CoachPolicy {
     this.lastCorrectionMs = null;
     this.shown = 0;
     this.recoveredPending = false;
+    this.recoveredLatest = null;
+  }
+
+  /** 마지막 지적 시각. LLM 구간 문구가 규칙 지적에 끼어들지 않게 쓴다 */
+  get lastCorrectionAt(): number | null {
+    return this.lastCorrectionMs;
+  }
+
+  /** 정책 밖에서 문구를 띄웠다(LLM 구간 문구). 칭찬 간격의 기준만 옮기고 지적 간격은 건드리지 않는다 */
+  noteExternalShown(songTimeMs: number): void {
+    this.lastShownMs = songTimeMs;
   }
 
   get shownCount(): number {
@@ -59,21 +82,27 @@ export class CoachPolicy {
       if (st?.active && e.release) {
         st.active = false;
         recovered.push(e);
+        if (this.recoveredLatest === null || st.lastShownMs >= this.recoveredLatest.shownMs) {
+          this.recoveredLatest = { shownMs: st.lastShownMs, from: { tag: e.tag, target: e.target } };
+        }
       }
     }
     if (recovered.length > 0) this.recoveredPending = true;
 
-    // 2. 시작 억제
-    if (ctx.judged < cfg.warmupJudgements) return { show: null, recovered, repeat: 0 };
+    // 2. 판정 단계. 0단계는 아무것도 띄우지 않는다
+    const stage = coachStage(ctx.judged);
+    if (stage === 0) return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
 
     // 3. 지적과 지적 사이 간격. 칭찬이 떠 있어도 지적은 바로 그 자리를 차지한다
     if (this.lastCorrectionMs !== null && ctx.songTimeMs - this.lastCorrectionMs < cfg.policy.minGapMs) {
-      return { show: null, recovered, repeat: 0 };
+      return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
     }
 
     // 4. 띄울 수 있는 후보. 거둔 키는 쿨다운 없이, 아직 활성인 키는 쿨다운이 지나야 다시 띄운다
+    // 1단계는 연속 놓침만 띄운다
     const candidates = evals.filter((e) => {
       if (!e.trigger) return false;
+      if (stage === 1 && !STAGE1_TAGS.includes(e.tag)) return false;
       const st = this.states.get(e.key);
       if (!st || !st.active) return true;
       return ctx.songTimeMs - st.lastShownMs >= cfg.policy.tagCooldownMs;
@@ -86,12 +115,16 @@ export class CoachPolicy {
       this.states.set(pick.key, { active: true, lastShownMs: ctx.songTimeMs });
       this.lastCorrectionMs = ctx.songTimeMs;
       this.recoveredPending = false;
-      return { show: pick, recovered, repeat: this.markShown(pick, ctx.songTimeMs) };
+      this.recoveredLatest = null;
+      return { show: pick, recovered, repeat: this.markShown(pick, ctx.songTimeMs), recoveredFrom: null, stage };
     }
 
-    // 6. 지적할 것이 없으면 칭찬
+    // 6. 지적할 것이 없으면 칭찬. 1단계는 칭찬하지 않는다(근거가 적다)
+    if (stage === 1) return { show: null, recovered, repeat: 0, recoveredFrom: null, stage };
+    const recoveredFrom = this.recoveredLatest?.from ?? null;
     const pick = this.pickPraise(evals, ctx.songTimeMs, praise);
-    return { show: pick, recovered, repeat: pick ? this.markShown(pick, ctx.songTimeMs) : 0 };
+    if (pick === RECOVERED_PRAISE) this.recoveredLatest = null;
+    return { show: pick, recovered, repeat: pick ? this.markShown(pick, ctx.songTimeMs) : 0, recoveredFrom: pick === RECOVERED_PRAISE ? recoveredFrom : null, stage };
   }
 
   private pickPraise(evals: readonly RuleEvaluation[], songTimeMs: number, praise: RuleEvaluation | null): RuleEvaluation | null {
@@ -102,7 +135,9 @@ export class CoachPolicy {
       this.recoveredPending = false;
       return RECOVERED_PRAISE;
     }
-    return sinceLast >= LIVE_COACH_CONFIG.praise.minGapMs ? praise : null;
+    // 일반 칭찬은 더 드물게. 안정 칭찬은 기존 간격 그대로다
+    const gap = praise.tag === 'LIVE_GOOD_KEEP' ? LIVE_COACH_CONFIG.praise.keepMinGapMs : LIVE_COACH_CONFIG.praise.minGapMs;
+    return sinceLast >= gap ? praise : null;
   }
 
   /**

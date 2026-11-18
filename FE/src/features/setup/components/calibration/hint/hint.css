@@ -1,0 +1,438 @@
+/* 보정 중 실수 안내(PLAY-004 v0.4 D15~D20): ① 같은 지점 · ② 멀어질 방향(드럼 그림 위 .cal-hint) · ③ 방향 그림(그림 영역 모서리 .cal-aim).
+   진하기는 「또렷하게」(0.95). 움직임은 애플풍: 살짝 넘쳤다 가라앉는 스프링, 흐림에서 또렷해지는 등장, 사라졌다 다시 시작하는 반복.
+   움직임 줄이기에서는 합쳐진 점·밀려난 윤곽·목표 방향의 스틱을 정지 그림으로 보인다. */
+.cal-hint,
+.cal-aim {
+  --cal-hint-alpha: 0.95;
+  --cal-spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001);
+  --cal-ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --cal-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+/* ---- 드럼 그림 위 층: 킷 상자(.drum-kit-fx)를 그대로 덮는다 ---- */
+.cal-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.cal-hint-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: var(--cal-hint-alpha);
+}
+.cal-hint-svg * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* 글자: 패드 위(또는 아래)에 흐림에서 또렷하게 올라와 머문다 */
+.cal-hint-label {
+  position: absolute;
+  color: var(--brand-text);
+  font-size: clamp(15px, 1.7vw, 20px);
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: var(--cal-hint-alpha);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--brand) 55%, transparent));
+  transform: translate(-50%, calc(-100% - 14px));
+  animation: cal-hint-label-in 0.9s var(--cal-ease-out) 0.35s both;
+}
+.cal-hint-label.below {
+  transform: translate(-50%, 14px);
+  animation-name: cal-hint-label-in-below;
+}
+@keyframes cal-hint-label-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translate(-50%, calc(-100% - 6px));
+  }
+}
+@keyframes cal-hint-label-in-below {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translate(-50%, 22px);
+  }
+}
+
+/* ① 같은 지점: 빛 알갱이 둘이 끌려와 하나로 합쳐지고, 물결이 두 번 번진다 */
+.cal-hint-orb,
+.cal-hint-core {
+  fill: url(#cal-hint-orb);
+  opacity: 0;
+}
+.cal-hint-orb {
+  animation: cal-hint-orb 4.2s infinite;
+}
+.cal-hint-core {
+  animation: cal-hint-core 4.2s infinite;
+}
+.cal-hint-ripple {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 1.5;
+  opacity: 0;
+  animation: cal-hint-ripple 4.2s var(--cal-ease-out) infinite;
+}
+.cal-hint-ripple.late {
+  animation-delay: 0.22s;
+}
+@keyframes cal-hint-orb {
+  0% {
+    opacity: 0;
+    transform: translate(var(--ox), var(--oy)) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(var(--ox), var(--oy)) scale(1);
+    animation-timing-function: var(--cal-spring);
+  }
+  46% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  52%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.7);
+  }
+}
+@keyframes cal-hint-core {
+  0%,
+  44% {
+    opacity: 0;
+    transform: scale(0.5);
+    animation-timing-function: var(--cal-spring);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  86% {
+    opacity: 1;
+    transform: scale(1);
+    animation-timing-function: var(--cal-ease-ios);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+@keyframes cal-hint-ripple {
+  0%,
+  46% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  49% {
+    opacity: 0.8;
+  }
+  84%,
+  100% {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+
+/* ② 멀어질 방향: 이웃 패드가 한 번 빛나고, 칠 자리 윤곽이 이웃 반대쪽으로 미끄러져 나간다 */
+.cal-hint-halo {
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 2.5;
+  opacity: 0;
+  animation: cal-hint-halo 4.2s var(--cal-ease-out) infinite;
+}
+.cal-hint-tether {
+  stroke: url(#cal-hint-tether);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: cal-hint-tether 4.2s ease-in-out infinite;
+}
+.cal-hint-nudge {
+  opacity: 0;
+  transform-box: view-box;
+  animation: cal-hint-nudge 4.2s infinite;
+}
+.cal-hint-ring {
+  fill: color-mix(in srgb, var(--brand) 8%, transparent);
+  stroke: var(--brand-text);
+  stroke-width: 2.5;
+}
+.cal-hint-head {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px var(--brand));
+  /* 자리와 방향은 transform 속성으로 준다(상자 기준 변환을 쓰지 않는다) */
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+@keyframes cal-hint-halo {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  8% {
+    opacity: 0.95;
+  }
+  34%,
+  100% {
+    opacity: 0;
+    transform: scale(1.14);
+  }
+}
+@keyframes cal-hint-tether {
+  0%,
+  4% {
+    opacity: 0;
+  }
+  16% {
+    opacity: 0.95;
+  }
+  44%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cal-hint-nudge {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(0, 0);
+    animation-timing-function: var(--cal-spring);
+  }
+  66% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy));
+  }
+  86% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy));
+    animation-timing-function: var(--cal-ease-ios);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+
+/* ③ 방향 그림: 유리판 카드가 흐림에서 떠오르고, 스틱이 그 패드 쪽으로 가서 한 번 톡 친다 */
+.cal-aim {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  width: clamp(210px, 26%, 290px);
+  padding: 8px 10px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-base) 55%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  opacity: var(--cal-hint-alpha);
+  animation: cal-aim-in 0.7s var(--cal-ease-ios) both;
+}
+.cal-aim[data-side='left'] {
+  left: 0;
+}
+.cal-aim[data-side='right'] {
+  right: 0;
+}
+.cal-aim[data-hand='0'] {
+  color: var(--left);
+}
+.cal-aim[data-hand='1'] {
+  color: var(--brand-text);
+}
+.cal-aim figure {
+  flex: 1;
+  margin: 0;
+}
+.cal-aim figcaption {
+  color: var(--text-2);
+  font-size: 11px;
+  text-align: center;
+}
+.cal-aim svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.cal-aim-body {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text-1) 45%, transparent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cal-aim-fill {
+  fill: color-mix(in srgb, var(--text-1) 45%, transparent);
+}
+.cal-aim-arc {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-opacity: 0.6;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation:
+    cal-aim-arc 4.2s infinite,
+    cal-aim-fade 4.2s ease-in-out infinite;
+}
+.cal-aim-stick {
+  fill: currentColor;
+  filter: drop-shadow(0 0 6px currentColor);
+  transform-box: view-box;
+  animation:
+    cal-aim-swing 4.2s infinite,
+    cal-aim-fade 4.2s ease-in-out infinite;
+}
+.cal-aim-tipdot,
+.cal-aim-tipring {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+.cal-aim-tipdot {
+  fill: currentColor;
+  animation: cal-aim-tipdot 4.2s ease-in-out infinite;
+}
+.cal-aim-tipring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  animation: cal-aim-tipring 4.2s var(--cal-ease-out) infinite;
+}
+@keyframes cal-aim-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(8px) scale(0.94);
+  }
+}
+@keyframes cal-aim-swing {
+  0%,
+  12% {
+    transform: rotate(0deg);
+    animation-timing-function: var(--cal-spring);
+  }
+  50%,
+  56% {
+    transform: rotate(var(--to));
+    animation-timing-function: cubic-bezier(0.5, 0, 1, 1);
+  }
+  60% {
+    transform: rotate(calc(var(--to) + var(--tap)));
+    animation-timing-function: var(--cal-spring);
+  }
+  74%,
+  100% {
+    transform: rotate(var(--to));
+  }
+}
+@keyframes cal-aim-arc {
+  0%,
+  12% {
+    stroke-dashoffset: 1;
+    animation-timing-function: var(--cal-spring);
+  }
+  50%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes cal-aim-fade {
+  0% {
+    opacity: 0;
+  }
+  8%,
+  88% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cal-aim-tipdot {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  62%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+@keyframes cal-aim-tipring {
+  0%,
+  59% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  62% {
+    opacity: 0.9;
+  }
+  90%,
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-hint-label,
+  .cal-hint-orb,
+  .cal-hint-core,
+  .cal-hint-ripple,
+  .cal-hint-halo,
+  .cal-hint-tether,
+  .cal-hint-nudge,
+  .cal-aim,
+  .cal-aim-arc,
+  .cal-aim-stick,
+  .cal-aim-tipdot,
+  .cal-aim-tipring {
+    animation: none;
+  }
+  .cal-hint-core,
+  .cal-aim-tipdot {
+    opacity: 1;
+  }
+  .cal-hint-halo {
+    opacity: 0.8;
+  }
+  .cal-hint-nudge {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy));
+  }
+  .cal-aim-stick {
+    transform: rotate(var(--to));
+  }
+  .cal-aim-arc {
+    stroke-dashoffset: 0;
+  }
+}

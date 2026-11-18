@@ -1,11 +1,8 @@
-"""BE 워커 API 호출부 (설계 3-2절 호출 표, 3-6절 응답 처리).
+"""BE 워커 API 호출부. `WorkerApi`가 BE `WorkerController`의 6개 경로를 부름.
 
-`WorkerApi`가 BE `WorkerController`의 6개 경로를 부름. 모든 요청은 `Authorization: Bearer <토큰>`,
-`Content-Type: application/json`, 본문은 payload.encode의 정규 JSON 바이트.
-
-응답 처리: 2xx는 자료형으로, 204는 None. 503·연결 오류·시간 초과는 같은 요청을 2·5·15초 간격으로 다시 보냄
-(heartbeat는 제외, 자기 주기에 다시 보냄). 그 밖의 4xx·5xx는 ApiError(status·code)로 올리고 호출하는 쪽이
-3-6절 표대로 처리함. 토큰·서명 URL은 로그에 남기지 않음.
+요청 본문은 payload.encode의 정규 JSON 바이트. 2xx는 자료형으로, 204는 None.
+503·연결 오류·시간 초과는 2·5·15초 간격으로 다시 보냄(heartbeat 제외). 그 밖의 4xx·5xx는 ApiError.
+토큰·서명 URL은 로그에 남기지 않음.
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ from ssaplash_ai.worker.payload import Envelope, encode
 
 logger = logging.getLogger("ssaplash_ai.worker.api")
 
-# 503·연결 오류 재시도 간격(초). 소진하면 전송 계층 실패 (설계 3-6절)
+# 503·연결 오류 재시도 간격(초). 소진하면 전송 계층 실패
 RETRY_DELAYS_SEC = (2.0, 5.0, 15.0)
 STAGE_SEPARATING = "SEPARATING"
 STAGE_TRANSCRIBING = "TRANSCRIBING"
@@ -58,7 +55,7 @@ class ApiError(Exception):
 
 @dataclass(frozen=True)
 class AssignmentInput:
-    """claim 응답 `input`. durationMs는 BE에 저장된 원곡 길이(회신 2)."""
+    """claim 응답 `input`. durationMs는 BE에 저장된 원곡 길이."""
 
     role: str
     file_id: str
@@ -223,10 +220,7 @@ class WorkerApi:
         summary: str,
         reason: str | None = None,
     ) -> FailureOutcome:
-        """`POST /{jobId}/failure`. summary는 한 줄 200자로 자름.
-
-        reason은 설정 send_reason이 참일 때만 본문에 넣음(S15P31A307-246, 기본 꺼짐).
-        """
+        """`POST /{jobId}/failure`. summary는 한 줄 200자로 자름. reason은 설정 send_reason이 참일 때만 넣음."""
         body = {
             "attemptId": attempt_id,
             "eventSeq": event_seq,

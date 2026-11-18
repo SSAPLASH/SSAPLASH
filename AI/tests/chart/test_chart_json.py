@@ -16,10 +16,11 @@ from ssaplash_ai.chart.chart_json import (
     build_notes,
     grid_origin_ms,
     notes_by_pad,
+    tempo_map_timing,
     validate_chart,
 )
 from ssaplash_ai.chart.errors import ChartOutputError
-from ssaplash_ai.chart.tempo import TempoEstimate
+from ssaplash_ai.chart.tempo import TempoEstimate, TempoMapPoint
 
 TEMPO = TempoEstimate(
     bpm=118.5,
@@ -73,6 +74,14 @@ def test_offsetMs는_마디_첫_박을_한_마디씩_당긴_가장_이른_마디
     validate_chart(chart, 60_000)
 
 
+def test_offsetMs는_다수결_위치가_있으면_그_값():
+    # 첫 마디 첫 박(1300ms → 한 마디 당기면 1300)보다 다수결 위치(300ms)를 씀
+    tempo = replace(TEMPO, bpm=120.0, first_downbeat_ms=1300, downbeat_phase_ms=300)
+    assert grid_origin_ms(tempo) == 300
+    failed = replace(tempo, estimated=False)
+    assert grid_origin_ms(failed) == 0
+
+
 def test_offsetMs는_마디_첫_박이_없으면_첫_박():
     assert grid_origin_ms(replace(TEMPO, first_beat_ms=730, first_downbeat_ms=None)) == 730
 
@@ -85,7 +94,7 @@ def test_offsetMs는_bpm_추정_실패나_박이_없으면_0():
     assert grid_origin_ms(hinted) == 0
 
 
-# ---- 원점을 킥·스네어 노트에 맞추기 (설계 v0.5, 인수 조건 22) ----
+# ---- 원점을 킥·스네어 노트에 맞추기 ----
 
 TEMPO_120 = replace(TEMPO, bpm=120.0, first_beat_ms=1880, first_downbeat_ms=1880)
 
@@ -283,3 +292,47 @@ def test_빠르기_변화_목록이_있어도_통과():
         timeSignatureMap=[{"tick": 0, "numerator": 4, "denominator": 4}],
     )
     validate_chart(chart, 3000)
+
+
+# ---- 빠르기 구간 ----
+
+# 120bpm 마디 첫 박 4500ms에서 시작, 16박 뒤(12500ms) 100bpm
+TEMPO_MAP = replace(
+    TEMPO,
+    bpm=110.0,
+    tempo_map=[
+        TempoMapPoint(time_ms=4500.0, beat=0, bpm=120.0),
+        TempoMapPoint(time_ms=12500.0, beat=16, bpm=100.0),
+    ],
+)
+
+
+def test_빠르기_구간이_있으면_tempoMap을_냄():
+    chart = build_chart(_hits([(5.0, "KICK", -1)]), 60_000, TEMPO_MAP, "v@0123456789ab", 0)
+    timing = chart["charts"][0]["timing"]
+    # 첫 구간 시작 4500ms에서 한 마디(2000ms)씩 두 번 당긴 500ms가 틱 0. 두 번째 구간은 (16 + 8)박
+    assert timing == {
+        "bpm": 120.0,
+        "offsetMs": 500,
+        "timeSignature": "4/4",
+        "ppq": 480,
+        "tempoMap": [{"tick": 0, "bpm": 120.0}, {"tick": 24 * 480, "bpm": 100.0}],
+        "timeSignatureMap": [{"tick": 0, "numerator": 4, "denominator": 4}],
+    }
+    validate_chart(chart, 60_000)
+
+
+def test_빠르기_구간도_킥_스네어_노트로_옮김():
+    # 모든 박에서 20ms 일찍 친 킥 32개 (앞 16박은 500ms 간격, 뒤 16박은 600ms 간격)
+    times = [4500 + i * 500 - 20 for i in range(16)] + [12500 + i * 600 - 20 for i in range(16)]
+    notes = [{"timeMs": t, "pad": "KICK"} for t in times]
+    timing = tempo_map_timing(TEMPO_MAP, notes, "notes")
+    assert timing["offsetMs"] == 480
+    assert tempo_map_timing(TEMPO_MAP, notes, "downbeat")["offsetMs"] == 500
+
+
+def test_빠르기_구간이_하나면_고정_bpm():
+    one = replace(TEMPO_MAP, tempo_map=[TempoMapPoint(time_ms=4500.0, beat=0, bpm=120.0)])
+    assert tempo_map_timing(one, [], "notes") is None
+    chart = build_chart(_hits([(5.0, "KICK", -1)]), 60_000, one, "v@0123456789ab", 0)
+    assert "tempoMap" not in chart["charts"][0]["timing"]

@@ -1,0 +1,306 @@
+{
+  "persp": {
+    "source": "source/persp.png",
+    "scale": 0.7,
+    "content": [
+      72,
+      92,
+      3005,
+      1971
+    ],
+    "pieces": [
+      {
+        "name": "crash",
+        "pad": "CRASH",
+        "shape": "cymbal",
+        "seed": [
+          396,
+          290
+        ],
+        "minus": [
+          "crash-top"
+        ],
+        "head": "gold"
+      },
+      {
+        "name": "crash-top",
+        "pad": "CRASH",
+        "partOf": "crash",
+        "disc": true,
+        "top": true
+      },
+      {
+        "name": "ride",
+        "pad": "RIDE",
+        "shape": "cymbal",
+        "seed": [
+          2690,
+          325
+        ],
+        "minus": [
+          "ride-top"
+        ],
+        "head": "gold"
+      },
+      {
+        "name": "ride-top",
+        "pad": "RIDE",
+        "partOf": "ride",
+        "disc": true,
+        "top": true
+      },
+      {
+        "name": "small-tom",
+        "pad": "SMALL_TOM",
+        "shape": "drum",
+        "seed": [
+          915,
+          471
+        ],
+        "head": "white"
+      },
+      {
+        "name": "mid-tom",
+        "pad": "MID_TOM",
+        "shape": "drum",
+        "seed": [
+          2130,
+          471
+        ],
+        "head": "white"
+      },
+      {
+        "name": "kick",
+        "pad": "KICK",
+        "shape": "kick",
+        "seed": [
+          1539,
+          1035
+        ],
+        "head": "hoop"
+      },
+      {
+        "name": "hihat-base",
+        "pad": "HIHAT",
+        "shape": "cymbal",
+        "seed": [
+          330,
+          1100
+        ],
+        "minus": [
+          "hihat-top",
+          "hihat-pedal"
+        ],
+        "head": [
+          330,
+          1064,
+          186,
+          106
+        ]
+      },
+      {
+        "name": "hihat-top",
+        "pad": "HIHAT",
+        "partOf": "hihat-base",
+        "ellipse": [
+          330,
+          1064,
+          188,
+          108
+        ],
+        "rect": [
+          314,
+          866,
+          346,
+          1064
+        ],
+        "top": true,
+        "closeDy": 28
+      },
+      {
+        "name": "snare",
+        "pad": "SNARE",
+        "shape": "drum",
+        "seed": [
+          858,
+          1311
+        ],
+        "head": "white"
+      },
+      {
+        "name": "floor-tom",
+        "pad": "FLOOR_TOM",
+        "shape": "drum",
+        "seed": [
+          2385,
+          1275
+        ],
+        "head": "white"
+      },
+      {
+        "name": "hihat-pedal",
+        "pad": "HIHAT_PEDAL",
+        "shape": "pedal",
+        "partOf": "hihat-base",
+        "polygon": [
+          [
+            296,
+            1556
+          ],
+          [
+            376,
+            1556
+          ],
+          [
+            396,
+            1880
+          ],
+          [
+            286,
+            1880
+          ]
+        ]
+      }
+    ]
+  },
+  "top": {
+    "source": "source/top.png",
+    "background": "texture",
+    "scale": 0.5,
+    "content": [
+      16,
+      90,
+      1254,
+      1150
+    ],
+    "drumGrow": 34,
+    "pieces": [
+      {
+        "name": "kick",
+        "pad": "KICK",
+        "shape": "kick",
+        "rects": [
+          [
+            440,
+            105,
+            812,
+            398
+          ],
+          [
+            588,
+            398,
+            662,
+            692
+          ]
+        ],
+        "head": [
+          626,
+          250,
+          172,
+          128
+        ]
+      },
+      {
+        "name": "small-tom",
+        "pad": "SMALL_TOM",
+        "shape": "drum",
+        "seed": [
+          468,
+          520
+        ],
+        "head": "white"
+      },
+      {
+        "name": "mid-tom",
+        "pad": "MID_TOM",
+        "shape": "drum",
+        "seed": [
+          775,
+          525
+        ],
+        "head": "white"
+      },
+      {
+        "name": "snare",
+        "pad": "SNARE",
+        "shape": "drum",
+        "seed": [
+          468,
+          815
+        ],
+        "head": "white"
+      },
+      {
+        "name": "floor-tom",
+        "pad": "FLOOR_TOM",
+        "shape": "drum",
+        "seed": [
+          985,
+          835
+        ],
+        "head": "white"
+      },
+      {
+        "name": "hihat-base",
+        "pad": "HIHAT",
+        "shape": "cymbal",
+        "seed": [
+          140,
+          780
+        ],
+        "head": "gold"
+      },
+      {
+        "name": "hihat-top",
+        "pad": "HIHAT",
+        "partOf": "hihat-base",
+        "top": true
+      },
+      {
+        "name": "crash",
+        "pad": "CRASH",
+        "shape": "cymbal",
+        "seed": [
+          213,
+          335
+        ],
+        "head": "gold"
+      },
+      {
+        "name": "crash-top",
+        "pad": "CRASH",
+        "partOf": "crash",
+        "top": true
+      },
+      {
+        "name": "ride",
+        "pad": "RIDE",
+        "shape": "cymbal",
+        "seed": [
+          1040,
+          355
+        ],
+        "head": "gold"
+      },
+      {
+        "name": "ride-top",
+        "pad": "RIDE",
+        "partOf": "ride",
+        "top": true
+      },
+      {
+        "name": "hihat-pedal",
+        "pad": "HIHAT_PEDAL",
+        "shape": "pedal",
+        "rects": [
+          [
+            148,
+            915,
+            242,
+            1140
+          ]
+        ]
+      }
+    ]
+  }
+}

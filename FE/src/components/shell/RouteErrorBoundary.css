@@ -1,0 +1,12 @@
+/* 오류 경계 안내(본문 자리·전체 화면) — 모양은 ui-empty를 따른다 */
+.route-error {
+  margin: var(--space-xl) auto;
+  max-width: 480px;
+}
+.route-error-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-l);
+}

@@ -1,0 +1,175 @@
+/* 일시정지 다이얼로그: 글래스 스크림 + 440 패널 (Figma PauseDialog 126:3852·112:592, 설계 QA-pause-dialog-glass) */
+.play-pause-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-m);
+  background: var(--overlay-scrim);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+/* 배경 흐림을 못 쓰는 브라우저는 뒤 화면이 또렷해 글자가 겹쳐 보이므로 스크림을 진하게 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .play-pause-scrim {
+    background: color-mix(in srgb, var(--bg-canvas) 70%, transparent);
+  }
+}
+.play-pause-wrap {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+}
+.play-pause {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 440px;
+  max-width: 100%;
+  /* Figma는 테두리가 안쪽(stroke inside)이라 바깥에서 28·24. CSS 테두리 1px만큼 뺀다 → 안쪽 폭 392 */
+  padding: 27px 23px;
+  box-sizing: border-box;
+  container-type: inline-size; /* 좁은 폭에서 버튼 줄을 세로로 되돌리는 컨테이너 쿼리용 */
+  border: 1px solid var(--line);
+  border-radius: 32px;
+  background: var(--surface-1);
+  /* glass-dock.css와 같은 방식: 바깥 그림자 + 안쪽 윗변 림 */
+  box-shadow:
+    var(--shadow-dock),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  text-align: center;
+  font-family: var(--font);
+}
+.play-pause-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.play-pause-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.play-pause-sub {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 20px;
+}
+/* 소리 묶음: 박스 없이 왼쪽 정렬. 제목 → 줄 → 구분선 → 줄 간격 12 */
+.play-pause-sound {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.play-pause-sound-title {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+}
+.play-pause-sound-divider {
+  height: 1px;
+  background: var(--line);
+}
+.play-pause-sound-note {
+  /* Figma: 노래 줄 트랙에서 10 아래(묶음 간격 12에서 2를 당긴다) */
+  margin: -2px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 17px;
+}
+/* 음량 줄: 윗줄 [라벨 ··· 값], 아랫줄 [아이콘 · 트랙 · 아이콘]. 공용 Slider 마크업을 이 안에서만 다시 배치한다 */
+.play-pause-sound .ui-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 10px;
+  align-items: center;
+}
+.play-pause-sound .ui-slider-label {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  line-height: 20px;
+}
+.play-pause-sound .ui-slider-value {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500; /* Figma Number/14 */
+  line-height: 20px;
+  text-align: right;
+}
+.play-pause-sound .ui-slider-track-row {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  color: var(--text-2); /* SoundIcon은 currentColor */
+}
+.play-pause-sound .ui-slider-track-row svg {
+  flex: none;
+}
+/* 손잡이는 흰색 + 작은 그림자(이 팝업 안에서만) */
+.play-pause-sound .ui-slider-input::-webkit-slider-thumb {
+  background: var(--text-1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.play-pause-sound .ui-slider-input::-moz-range-thumb {
+  background: var(--text-1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+/* 반주 없는 곡: 값·트랙 줄(아이콘 포함)을 한꺼번에 흐리게. 라벨은 그대로.
+   Slider 기본 disabled opacity(0.4)가 겹쳐 0.16이 되지 않게 입력 쪽은 되돌린다 */
+.play-pause-sound .ui-slider-input:disabled {
+  opacity: 1;
+}
+.play-pause-sound-off .ui-slider-value,
+.play-pause-sound-off .ui-slider-track-row {
+  opacity: 0.4;
+}
+/* 재개 불가 안내. 글자 색은 ReadinessNotice 기본 스타일을 따르고 틀만 새 토큰으로 */
+.play-pause-warn {
+  padding: 12px 14px;
+  border: 1px solid var(--brand-sub);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--brand-sub);
+  text-align: left;
+}
+.play-pause-warn .notice.readiness {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+/* 버튼 줄: 가로 3열 같은 폭 캡슐 */
+.play-pause-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.play-pause-actions .ui-btn {
+  height: 50px;
+  min-width: 0;
+  padding: 0 var(--space-s);
+  border-radius: 25px;
+}
+/* 다시 시작: 브랜드 틴트. hover는 secondary 규칙을 따르되 배경·테두리는 틴트 유지 */
+.play-pause-actions .play-pause-restart,
+.play-pause-actions .play-pause-restart:hover:not(:disabled) {
+  background: var(--brand-tint);
+  border-color: var(--brand-tint-line);
+  color: var(--brand-text);
+}
+/* 패널 안쪽 폭이 312 미만(패널 360 미만 = 테두리 2 + 패딩 46, 뷰포트 약 392 미만)이면 세로 3단. 순서는 그대로 */
+@container (max-width: 311px) {
+  .play-pause-actions {
+    grid-template-columns: 1fr;
+  }
+}

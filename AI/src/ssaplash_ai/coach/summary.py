@@ -29,13 +29,13 @@ _HIGH = "HIGH"
 _OPENING = {
     "GOOD": "정말 잘 쳤어요. 박자와 판정이 안정적이에요.",
     "FAIR": "기본기는 잘 잡혀 있어요. 조금만 다듬으면 훨씬 좋아질 거예요.",
-    "NEEDS_WORK": "놓친 부분이 아직 있지만 연습하면 금방 좋아져요.",
+    "NEEDS_WORK": "놓친 부분이 아직 있지만 연습하면 점점 좋아져요.",
 }
 
 _NO_WEAKNESS_TAIL = {
     "GOOD": "눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요.",
     "FAIR": "눈에 띄는 약점은 없었어요. 같은 곡을 한 번 더 쳐 보며 감을 굳혀 보세요.",
-    "NEEDS_WORK": "놓친 노트가 한 곳에 몰려 있지는 않아요. 곡 전체를 느린 템포로 천천히 익혀 보세요.",
+    "NEEDS_WORK": "놓친 노트가 한 곳에 몰려 있지는 않아요. 쉬운 연습 단계부터 곡을 차근차근 익혀 보세요.",
 }
 
 
@@ -83,9 +83,9 @@ def _focus_phrase(segment: WeakSegment) -> str:
     pads = segment.pads
     pattern = segment.pattern
     if pattern == "TIMING_LATE":
-        return "박 소리를 듣고 제때 치는 것"
+        return "박에 맞춰 제때 치는 것"
     if pattern == "TIMING_EARLY":
-        return "박 소리를 기다렸다 치는 것"
+        return "박을 기다렸다 치는 것"
     if pattern in ("PAD_LATE", "PAD_EARLY"):
         return f"{_label(pads, 0, '그 패드')} 박자 맞추기"
     if pattern in ("TRANSITION_LATE", "TRANSITION_MISS"):

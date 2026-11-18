@@ -1,12 +1,12 @@
-# MusicXML 드럼 악보 → 채보 설정 (S15P31A307-292, 설계 CHART-003-sheet-to-chart)
+# MusicXML 드럼 악보 → 채보 설정
 # 채보 JSON generatorVersion. BE generator는 ADT_MODEL만 받아서 악보에서 온 채보는 이 값으로 구분
 generator_version: sheet-musicxml-3
 # 악보에 템포 표기가 없을 때 쓰는 bpm
 default_bpm: 120
 # 반복을 펼친 곡 길이 상한(초). BE MIDI 업로드와 같은 30분
 max_duration_sec: 1800
-# 하이햇 페달(GM 44)을 HIHAT_PEDAL 노트로 낼지. false면 HIHAT으로 합침. BE 결과 검증은 HIHAT_PEDAL을 받음
-# (S15P31A307-266). 켜면서 generator_version을 sheet-musicxml-2로 올림
+# 하이햇 페달(GM 44)을 HIHAT_PEDAL 노트로 낼지. false면 HIHAT으로 합침. BE 결과 검증은 HIHAT_PEDAL을 받음.
+# 켜면서 generator_version을 sheet-musicxml-2로 올림
 emit_hihat_pedal: true
 # 열린 하이햇 노트에 hihatOpen: true를 붙일지. FE는 판정에 안 쓰고 악보 표시·연습 가이드에만 씀. BE는 노트 JSON을
 # 그대로 저장해서 조회 응답 반영 전에도 필드가 남음. 켜면서 generator_version을 sheet-musicxml-3으로 올림

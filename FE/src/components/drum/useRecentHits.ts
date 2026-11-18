@@ -2,7 +2,7 @@
 // 자유 연습 정보 띠도 같은 훅을 쓸 수 있다.
 import { useEffect, useState } from 'react';
 import { useLive } from '@/store/liveStore';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { isSensorSource } from '@/domain/events';
 
 export interface RecentHit {

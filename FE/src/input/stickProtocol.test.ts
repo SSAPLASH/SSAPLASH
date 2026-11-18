@@ -15,6 +15,7 @@ import {
   PAD_NONE,
   decodePacket,
   encodeHaptic,
+  encodeHapticWave,
   encodeResetPose,
   encodeSetMode,
   encodeSync,
@@ -25,7 +26,7 @@ import {
   footOf,
   handOf,
 } from './stickProtocol';
-import { buildHit, buildPedal, buildPose, buildStatus } from '@/monitor/mockStick';
+import { buildHit, buildPedal, buildPose, buildStatus } from '@/features/monitor/core/mockStick';
 
 /** HIT 20바이트 만들기 */
 function hitBytes(o: { flags?: number; pad?: number } = {}): Uint8Array {
@@ -547,5 +548,22 @@ describe('parsePacket 페달(PLAY-002)', () => {
     for (const n of [2, 6]) {
       expect(decodePacket(buildPedal(2, 1, ts).slice(0, n), 0)).toMatchObject({ kind: 'error', reason: 'short', type: 0x08 });
     }
+  });
+});
+
+describe('encodeHapticWave', () => {
+  it('[0x12, 파형, 0] — 세 번째 바이트 0은 라이브러리 파형 1회', () => {
+    expect([...encodeHapticWave(4)]).toEqual([0x12, 4, 0]);
+  });
+
+  it('파형 번호는 1~123으로 자른다', () => {
+    expect([...encodeHapticWave(0)]).toEqual([0x12, 1, 0]);
+    expect([...encodeHapticWave(-5)]).toEqual([0x12, 1, 0]);
+    expect([...encodeHapticWave(200)]).toEqual([0x12, 123, 0]);
+    expect([...encodeHapticWave(123)]).toEqual([0x12, 123, 0]);
+  });
+
+  it('ROUTE로 감싸면 그 손 마스크가 앞에 붙는다', () => {
+    expect([...encodeRoute(1, encodeHapticWave(1))]).toEqual([0x70, 0b10, 0x12, 1, 0]);
   });
 });

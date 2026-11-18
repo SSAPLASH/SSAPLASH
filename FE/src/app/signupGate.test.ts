@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindSignupIncomplete } from './signupGate';
-import { resetForTest } from '@/api/auth';
+import { resetForTest } from '@/api/account/auth';
 import { apiFetch, resetSignupIncompleteForTest } from '@/api/http';
-import type { UserMe } from '@/domain/auth';
-import { termVersion } from '@/domain/signupTerms';
+import type { UserMe } from '@/domain/account/auth';
+import { termVersion } from '@/domain/account/signupTerms';
 import { resetAuthStoreForTest, useAuth } from '@/store/authStore';
 
 const NOW = '2026-11-02T01:00:00Z';

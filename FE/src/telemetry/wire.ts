@@ -1,8 +1,8 @@
 // 텔레메트리 wire 형식과 변환(순수 함수). 설계 3-1~3-3, 합의 문서(MONITOR-001 FE 계약확인).
 // 시각 측정·전송·큐는 모르고, 받은 값을 BE 계약에 맞게 다듬을 뿐이다.
 import type { ResolvedHit, StickId } from '@/domain/events';
-import type { Judgement } from '@/domain/judgement';
-import { PAD_META, type PadId } from '@/domain/pads';
+import type { Judgement } from '@/domain/play/judgement';
+import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { isSensorSource } from '@/domain/events';
 
 export const SCHEMA_VERSION = 1;

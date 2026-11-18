@@ -1,8 +1,8 @@
-"""채보 모델 어댑터 공통 인터페이스 (채보 설계 3-8절, 3-9절).
+"""채보 모델 어댑터 공통 인터페이스.
 
 어댑터는 "드럼(또는 원곡) 배열을 받아 타격 목록을 돌려주는" 같은 모양의 클래스. 하위 클래스는
 모델 원래 라벨 그대로의 (시각, 라벨, 세기) 목록만 돌려주고, 라벨 → 패드 변환은 이 공통 틀이
-yaml 대응표(labels)로 함. 대응표 값은 패드 8종 / 거친 라벨 tom·cymbal / __drop__(제외).
+yaml 대응표(labels)로 함. 대응표 값은 패드 9종 / 거친 라벨 tom·cymbal / __drop__(제외).
 대응표에 tom·cymbal이 있으면 eight_pad가 거짓이 되어 8패드 점수는 매기지 않음.
 
 흐름: TranscriberConfig.from_yaml → create_transcriber → load() → transcribe() 반복 → close().
@@ -72,6 +72,10 @@ class TranscriberConfig:
     # 탐·심벌만 다른 ADTOF 가중치로 고를 때. "default"면 패키지 기본 가중치. 없으면 checkpoint_path 하나로 전부
     tom_checkpoint_path: str | None = None
     cymbal_checkpoint_path: str | None = None
+    # 심벌 전용 가중치 결과를 쓰는 방식. take: 크래시·라이드 타격을 통째로, name: 이름만
+    cymbal_mode: str = "take"
+    # 점수를 같이 평균할 ADTOF 5종 가중치. [{path, columns}], columns는 ksthc 중 평균에 넣을 열 글자
+    average_checkpoints: list[dict] = field(default_factory=list)
     # mock
     mock_mode: str = "truth"
     truth_dir: str | None = None
@@ -111,7 +115,7 @@ class TranscriberConfig:
         return cfg
 
     def validate_labels(self) -> None:
-        """대응표 값이 패드 8종·tom·cymbal·__drop__ 안에 있는지. 비어 있으면 오류."""
+        """대응표 값이 패드 9종·tom·cymbal·__drop__ 안에 있는지. 비어 있으면 오류."""
         if not self.labels:
             raise ValueError(f"{self.name}: labels(대응표)가 비어 있음")
         bad = sorted({str(v) for v in self.labels.values()} - set(PRED_LABELS) - {DROP})
@@ -122,7 +126,7 @@ class TranscriberConfig:
 
     @property
     def eight_pad(self) -> bool:
-        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참 (설계 1-1절 결정). HIHAT_PEDAL은 없어도 됨."""
+        """거친 라벨이 없고 8패드가 전부 대응표에 나오면 참. HIHAT_PEDAL은 없어도 됨."""
         values = set(self.labels.values())
         return not (values & set(COARSE)) and set(SCORED_PADS) <= values
 
@@ -150,7 +154,7 @@ def map_label(labels: dict, label: object) -> str | None:
 
 @dataclass
 class TranscriberInfo:
-    """3-8절 info. 보고서 라이선스 열과 CSV 열에 사용."""
+    """모델 정보. 보고서 라이선스 열과 CSV 열에 사용."""
 
     name: str
     adapter: str

@@ -1,6 +1,8 @@
-"""실행 루프 (설계 4-1절 시작, 4-5절 종료).
+"""실행 루프.
 
 WorkerLoop: 설정 yaml 읽기 → 분리·채보 모델 올리기(claim 전에 한 번) → claim 폴링 → JobRunner → 반복.
+채보 작업이 없으면 LLM 총평 작업 하나를 처리함(켜져 있을 때).
+분리 전 음악 여부 검사 모델도 claim 전에 올림. 못 올리면 오류 로그를 남기고 검사 없이 계속함(채보는 막지 않음).
 SIGINT·SIGTERM 첫 번째는 처리 중인 작업을 끝내고 종료, 두 번째는 바로 종료(임대 만료로 BE가 재배정).
 종료 코드: 0 정상, 1 설정·모델 오류, 2 인증 실패(401).
 """
@@ -16,8 +18,9 @@ from collections.abc import Callable
 
 import requests
 
-from ssaplash_ai.chart.config import SeparationConfig, TranscriptionConfig
+from ssaplash_ai.chart.config import MusicCheckConfig, SeparationConfig, TranscriptionConfig
 from ssaplash_ai.chart.errors import ChartModelError
+from ssaplash_ai.chart.music_check import MusicCheckModule
 from ssaplash_ai.chart.separation import SeparationModule
 from ssaplash_ai.chart.transcription import TranscriptionModule
 from ssaplash_ai.worker.api import ApiError, WorkerApi
@@ -54,6 +57,9 @@ class WorkerLoop:
         self.api = api or WorkerApi(settings, session=self.session)
         self.separation: SeparationModule | None = None
         self.transcription: TranscriptionModule | None = None
+        self.music_check: MusicCheckModule | None = None
+        # 음악 여부 검사 모델을 못 올렸을 때의 사유. 검사가 꺼져 있거나 정상으로 올렸으면 None
+        self.music_check_error: str | None = None
         self.runner: JobRunner | None = None
         self._stop = threading.Event()
         self._signals = 0
@@ -63,9 +69,12 @@ class WorkerLoop:
     # ---- 준비 ----
 
     def load_models(self) -> tuple[float, float]:
-        """설정 yaml 읽기와 모델 두 개 올리기. (분리 올린 초, 채보 올린 초). 실패는 ValueError·ChartModelError."""
+        """설정 yaml 읽기, 분리·채보·음악 여부 검사 모델 올리기. (분리 올린 초, 채보 올린 초)를 돌려줌."""
         sep_config = SeparationConfig.from_yaml(self.settings.separation_config)
         tr_config = TranscriptionConfig.from_yaml(self.settings.transcription_config)
+        mc_config = None
+        if self.settings.music_check_config is not None:
+            mc_config = MusicCheckConfig.from_yaml(self.settings.music_check_config)
         if sep_config.output.format != REQUIRED_OUTPUT_FORMAT:
             raise ValueError(
                 f"BE 계약상 분리 출력 형식은 {REQUIRED_OUTPUT_FORMAT}: {sep_config.output.format}"
@@ -102,12 +111,53 @@ class WorkerLoop:
             transcription.model_version,
         )
         self.separation, self.transcription = separation, transcription
+        self.music_check = self._load_music_check(mc_config)
         self.runner = JobRunner(
-            self.settings, self.api, separation, transcription, session=self.session
+            self.settings,
+            self.api,
+            separation,
+            transcription,
+            session=self.session,
+            music_check=self.music_check,
+            music_check_error=self.music_check_error,
         )
         return sep_sec, tr_sec
 
+    def _load_music_check(self, config: MusicCheckConfig | None) -> MusicCheckModule | None:
+        """분리 전 음악 여부 검사 모델 올리기. 설정이 없거나 기준값이 비어 있으면 None.
+
+        모델을 못 올려도(패키지 없음·가중치 내려받기 실패) 워커는 검사 없이 계속 돎. 이때 사유를
+        music_check_error에 남겨 작업마다 경고 로그가 나가고 `ssaplash-worker check`에도 보이게 함.
+        """
+        self.music_check_error = None
+        if config is None or not config.enabled:
+            logger.info("분리 전 음악 여부 검사: 꺼짐")
+            return None
+        module = MusicCheckModule(config)
+        try:
+            sec = module.load()
+        except ChartModelError as e:
+            self.music_check_error = e.message
+            logger.error(
+                "분리 전 음악 여부 검사 모델을 올리지 못해 검사 없이 계속함: %s. "
+                "음악이 아닌 파일도 분리·채보까지 돎. 패키지(uv sync --extra music-check)와 "
+                "가중치 내려받기를 확인한 뒤 워커를 다시 띄울 것",
+                e.message,
+            )
+            return None
+        logger.info(
+            "분리 전 음악 여부 검사 모델 올림 %.1f초 (%s, 장치 %s, 음악 확률 기준 %s, 말소리 확률 기준 %s)",
+            sec,
+            config.model,
+            config.device,
+            config.min_music_prob,
+            config.max_speech_prob,
+        )
+        return module
+
     def close(self) -> None:
+        if self.music_check is not None:
+            self.music_check.close()
         if self.separation is not None:
             self.separation.close()
         if self.transcription is not None:
@@ -142,7 +192,7 @@ class WorkerLoop:
                         logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
                         return EXIT_AUTH
                     if e.status == 403:
-                        # 인프라 회신(10/30): Nginx가 GPU 서버 공인 IP만 허용. IP가 바뀌면 403
+                        # Nginx가 GPU 서버 공인 IP만 허용. IP가 바뀌면 403
                         logger.error(
                             "Nginx IP 허용에 막힘(403). 토큰 문제가 아님. GPU 서버 공인 IP가 바뀌었는지 "
                             "`curl -s https://api.ipify.org`로 확인하고 인프라에 알림. %.0f초 뒤 다시 시도",

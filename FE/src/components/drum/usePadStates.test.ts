@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPadStateMachine } from './padStateMachine';
-import { HIT_MS, JUDGE_MS, visualPadOf, type PadVisualState } from '@/domain/drumKit';
-import type { PadId } from '@/domain/pads';
+import { HIT_MS, JUDGE_MS, visualPadOf, type PadVisualState } from '@/domain/kit/drumKit';
+import type { PadId } from '@/domain/kit/pads';
 
 // 훅의 타이머·상태 규칙은 순수 모듈 padStateMachine에 있으므로 fake timers로 검증한다
 function setup() {

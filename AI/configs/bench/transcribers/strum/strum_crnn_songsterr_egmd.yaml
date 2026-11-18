@@ -1,0 +1,74 @@
+# STRUM 8종 온셋 CRNN(drums_phase3, 42M)을 실제 곡과 E-GMD로 이어 학습한 가중치 + 킥 규칙 (S15P31A307-326, 2026-11-11)
+# 드럼 트랙 하나로 8패드를 바로 냄. 드럼 킷 분리(MDX23C DrumSep)는 돌리지 않음.
+# 학습: Songsterr 인기곡 457곡(탭 정답, 서비스 분리 드럼) + E-GMD 어쿠스틱 킷 학습 분할. 검증 10곡으로 문턱값을 고름
+# 8패드 F1 songsterr_avg 대비(95% 구간): 시험 31곡 0.809(+0.018, +0.007 ~ +0.031), 처음 보는 38곡 0.840(+0.012, +0.002 ~ +0.022),
+# MDB 0.904(+0.028), ENST 드럼 단독 0.861(+0.025), ENST 원곡 분리 0.818(+0.020). 평가 곡은 학습·검증 곡과 겹치지 않음
+# SSAPLASH_MODELS_DIR/strum_ft/songsterr_egmd/best.pt(169MB)가 있어야 함. 자동으로 받지 않음
+name: strum_crnn_songsterr_egmd
+adapter: strum_crnn
+velocity: false
+input_sample_rate: 44100
+checkpoint_path: data/models/strum_ft/songsterr_egmd/best.pt
+options:
+  # 가중치 파일 sha256. load 때 대조하고 다르면 모델 오류
+  sha256: 8b40efb11ef56cc93f280058abbd6d45044281402bb2307873de9fa686bd2845
+  # STRUM drums_phase3 공개 가중치의 구조 값
+  model:
+    n_mels: 128
+    conv_channels: [64, 128, 256, 512]
+    freq_subbands: [32, 64, 96, 128]
+    subband_proj_dim: 256
+    lstm_hidden: 640
+    lstm_layers: 3
+    attention_heads: 10
+    attention_type: flash
+    attention_window: 512
+    onset_detector_hidden: 320
+    classifier_hidden: 640
+    num_classes: 8
+    predict_velocity: false
+  # 프레임 간격 512 / 44100 = 11.6ms
+  mel:
+    n_fft: 2048
+    hop_length: 512
+  # 10초 구간을 5초씩 밀어 가며 8개씩 넣고 겹친 곳은 평균
+  segment_sec: 10
+  batch: 8
+rules:
+  # 이 점수 미만 피크는 버림. 같은 패드 피크 최소 간격 30ms(3프레임)
+  peak_floor: 0.1
+  peak_gap_ms: 30
+  # 노트 시각 옮김. ±25ms 점수로 고른 값
+  offset_ms: 0
+  # 검증 10곡에서 고른 패드별 문턱값
+  thresholds:
+    KICK: 0.60
+    SNARE: 0.60
+    HIHAT: 0.60
+    SMALL_TOM: 0.70
+    MID_TOM: 0.60
+    FLOOR_TOM: 0.65
+    CRASH: 0.60
+    RIDE: 0.65
+  # 킥이 탐으로 잡히는 곡 보정(strum_rules.py 설명). 문턱값을 넘는 탐이 킥보다 많은 곡만 대상.
+  # target은 검증 10곡의 곡별 킥 피크 점수 90 백분위의 중앙값. 실제 발매곡 69곡 중 5곡(배율 1.03 ~ 1.26),
+  # ENST 64곡 중 19곡(전부 드러머 1, 배율 1.32 ~ 1.59), MDB 23곡 중 0곡에 걸림
+  kick_gain:
+    target: 0.79355
+    percentile: 90
+    floor: 0.2
+    min_peaks: 20
+    max_gain: 2.5
+    near_ms: 30
+license_code: MIT (STRUM)
+license_weights: MIT (STRUM 공개 가중치)를 Songsterr 인기곡 탭·원곡과 E-GMD(CC BY 4.0)로 이어 학습한 가중치. Songsterr 탭은 학습·교육 목적 비상업 조건
+source_url: https://github.com/opria123/strum
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  SMALL_TOM: SMALL_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE

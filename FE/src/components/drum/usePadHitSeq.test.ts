@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import type { ResolvedHit } from '@/domain/events';
 
 // 테스트 환경이 node라 렌더러가 없다. useState·useEffect만 즉시 실행하는 최소 대역으로 바꾼다

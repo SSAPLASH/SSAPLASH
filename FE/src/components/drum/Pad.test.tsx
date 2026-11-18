@@ -1,7 +1,8 @@
 // Pad 배지 마크업 테스트: 문자열 배지 호환, PadBadge level(now·next·later), 격자 밖 점
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { PadBadge } from '@/domain/drumKit';
+import type { PadBadge } from '@/domain/kit/drumKit';
+import { KIT_ART_PERSP, kitArtPad } from '@/domain/kit/kitArt';
 import { DrumKit, type DrumKitProps } from './DrumKit';
 import { Pad, PadDefs } from './Pad';
 
@@ -75,37 +76,77 @@ describe('DrumKit 배지 전달', () => {
   });
 });
 
-describe('Pad 질감·모션 구조', () => {
-  const render = (shape: 'drum' | 'cymbal' | 'kick') =>
+describe('실물 패드(이미지) 구조', () => {
+  const ART = { drum: 'SNARE', cymbal: 'CRASH', kick: 'KICK' } as const;
+  const art = (shape: 'drum' | 'cymbal' | 'kick') => kitArtPad(KIT_ART_PERSP, ART[shape])!;
+  const render = (shape: 'drum' | 'cymbal' | 'kick', extra: { w?: number; textSize?: number } = {}) =>
     renderToStaticMarkup(
       <svg>
-        <Pad shape={shape} left={0} top={0} w={160} label="x" state="hit" defsId="t" />
+        <Pad shape={shape} left={0} top={0} w={extra.w ?? 160} label="x" state="hit" art={art(shape)} textSize={extra.textSize} defsId="t" />
       </svg>,
     );
 
-  it.each(['drum', 'cymbal', 'kick'] as const)('%s는 drum-pad-body 그룹을 가진다', (shape) => {
-    expect(render(shape)).toContain('class="drum-pad-body"');
+  it.each(['drum', 'cymbal', 'kick'] as const)('%s는 drum-pad-body 그룹 안에 조각 이미지를 가진다', (shape) => {
+    const html = render(shape);
+    expect(html).toContain('class="drum-pad-body"');
+    expect(html).toContain('<image class="drum-pad-art"');
   });
 
-  it('cymbal은 원판을 drum-pad-cymbal 그룹으로 묶고 스탠드는 그 밖에 있다', () => {
+  it('심벌은 원판 조각을 drum-pad-cymbal 그룹으로 묶고 스탠드 조각은 그 밖에 있다', () => {
     const html = render('cymbal');
-    const start = html.indexOf('class="drum-pad-cymbal"');
-    expect(start).toBeGreaterThan(-1);
-    const standAt = html.indexOf('t-stand');
-    expect(standAt).toBeGreaterThan(-1);
-    expect(standAt).toBeLessThan(start);
+    const group = html.indexOf('class="drum-pad-cymbal"');
+    expect(group).toBeGreaterThan(-1);
+    expect(html.match(/<image class="drum-pad-art"/g)).toHaveLength(2);
+    expect(html.indexOf('<image class="drum-pad-art"')).toBeLessThan(group);
     expect(render('drum')).not.toContain('drum-pad-cymbal');
+    expect(render('drum').match(/<image class="drum-pad-art"/g)).toHaveLength(1);
   });
 
-  it('PadDefs에 새 그라디언트 id가 있다', () => {
+  it('누름 영역과 번쩍임은 그 패드의 헤드 타원이다', () => {
+    const head = art('drum').head;
+    const html = render('drum');
+    expect(html).toContain(`<ellipse class="drum-pad-hitarea" cx="${head.cx}" cy="${head.cy}" rx="${head.rx}" ry="${head.ry}"`);
+    expect(html).toContain(`<ellipse class="drum-pad-flash" cx="${head.cx}" cy="${head.cy}" rx="${head.rx}" ry="${head.ry}"`);
+    // 킥은 번쩍임이 없다
+    expect(render('kick')).not.toContain('drum-pad-flash');
+    expect(render('kick')).toContain('drum-pad-hitarea');
+  });
+
+  it('글자 크기: textSize를 주면 패드 크기와 무관하게 같고, 없으면 헤드 크기에 비례한다', () => {
+    const label = (html: string) => /scale\(([\d.]+)\)"><text class="drum-pad-label"/.exec(html)?.[1];
+    // 폭 80이면 패드 배율 0.5 → 글자 배율 2로 상쇄한다
+    expect(Number(label(render('drum', { w: 80, textSize: 1 })))).toBeCloseTo(2);
+    expect(Number(label(render('drum', { w: 160, textSize: 1 })))).toBeCloseTo(1);
+    // 옛 그림은 헤드 가로 반지름이 79였다
+    expect(Number(label(render('drum')))).toBeCloseTo(art('drum').head.rx / 79);
+  });
+
+  it('실물인데 그림 자리가 없으면 그림을 그리지 않는다', () => {
+    const html = renderToStaticMarkup(
+      <svg>
+        <Pad shape="drum" left={0} top={0} w={160} label="x" defsId="t" />
+      </svg>,
+    );
+    expect(html).not.toContain('<image');
+    expect(html).toContain('class="drum-pad"');
+  });
+
+  it('고정 배치 킷은 조각 이미지 12장(받침 9 + 심벌 원판 3)과 라벨 9개를 그린다', () => {
+    const html = renderToStaticMarkup(<DrumKit />);
+    expect(html.match(/<image class="drum-pad-art"/g)).toHaveLength(12);
+    expect(html.match(/class="drum-pad-label"/g)).toHaveLength(9);
+    expect(html).toContain(`viewBox="0 0 ${KIT_ART_PERSP.box.w} ${KIT_ART_PERSP.box.h}"`);
+  });
+
+  it('PadDefs에는 전자 드럼 그라디언트만 남는다', () => {
     const html = renderToStaticMarkup(
       <svg>
         <PadDefs id="t" />
       </svg>,
     );
-    for (const name of ['drum-head', 'drum-rim', 'kick-rim', 'cymbal']) {
+    for (const name of ['el-hoop', 'el-mesh', 'el-edge', 'el-rubber', 'el-bell', 'el-bolt']) {
       expect(html).toContain(`id="t-${name}"`);
     }
-    expect(html).toContain('<radialGradient id="t-drum-head"');
+    expect(html).not.toContain('id="t-drum-head"');
   });
 });

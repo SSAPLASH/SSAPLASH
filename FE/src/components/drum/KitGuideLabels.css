@@ -1,0 +1,69 @@
+/* 키트 가이드 이름표(DrumKit overlay). 글자 크기는 킷 폭에 비례한다 */
+.free-plabels {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+.free-plabel {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(5, 6, 7, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(242, 245, 248, 0.92);
+  font-size: clamp(11px, 1.25cqw, 13px);
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+  word-break: keep-all;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  transition-delay: calc(var(--i) * 18ms);
+}
+.free-plabel.is-hit {
+  animation: free-plabel-hit 0.7s var(--ease-out);
+}
+@keyframes free-plabel-hit {
+  0%,
+  25% {
+    border-color: var(--brand-text);
+    background: color-mix(in srgb, var(--brand) 55%, var(--bg-canvas));
+    color: #fff;
+  }
+}
+.free-plabels.is-off .free-plabel {
+  opacity: 0;
+  transform: translate(-50%, -30%) scale(0.94);
+  transition-delay: 0s;
+}
+.free-plabel kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text-2);
+  font: 600 10px var(--font-num);
+}
+.free-plabel kbd:first-of-type {
+  margin-left: 3px;
+}
+
+/* 움직임 줄이기: 꺼진 이름표가 아래로 내려앉는 전환을 없앤다 */
+@media (prefers-reduced-motion: reduce) {
+  .free-plabels.is-off .free-plabel {
+    transform: translate(-50%, -50%);
+  }
+}

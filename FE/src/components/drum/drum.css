@@ -60,7 +60,8 @@
   pointer-events: none;
 }
 .drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
-.drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body {
+.drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body,
+.drum-pad[data-state='hit'][data-shape='pedal'] .drum-pad-body {
   animation: drum-pad-press 220ms ease-out;
 }
 .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
@@ -87,6 +88,7 @@
 @media (prefers-reduced-motion: reduce) {
   .drum-pad[data-state='hit'][data-shape='drum'] .drum-pad-body,
   .drum-pad[data-state='hit'][data-shape='kick'] .drum-pad-body,
+  .drum-pad[data-state='hit'][data-shape='pedal'] .drum-pad-body,
   .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-cymbal {
     animation: drum-pad-bright 220ms ease-out;
   }
@@ -229,7 +231,8 @@
 
 /* ---- 네온: 모양별 네온색 ---- */
 .drum-pad[data-skin='neon'] { --neon: #22e4ff; }
-.drum-pad[data-skin='neon'][data-shape='cymbal'] { --neon: #ffc24a; }
+.drum-pad[data-skin='neon'][data-shape='cymbal'],
+.drum-pad[data-skin='neon'][data-shape='pedal'] { --neon: #ffc24a; }
 .drum-pad[data-skin='neon'][data-shape='kick'] { --neon: #ff3ec8; }
 
 .neon-body {
@@ -277,4 +280,178 @@
 .drum-pad-flash.neon-flash {
   fill: var(--neon);
   opacity: 0.32;
+}
+
+/* ---- 보정 화면(PLAY-004): 유령 목표 패드·흐린 페달·나타남 ---- */
+.drum-pad-ghost {
+  opacity: 0.45;
+}
+.drum-pad-ghost .drum-pad-ring.armed {
+  animation: drum-ghost-blink 0.9s ease-in-out infinite;
+}
+@keyframes drum-ghost-blink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.drum-pad-faded {
+  opacity: 0.35;
+}
+/* 나타남: motion-184 토큰(0.2s ease-out), 0.8 → 1 */
+.drum-pad-appear {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drum-pad-appear 0.2s ease-out;
+}
+@keyframes drum-pad-appear {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-ghost .drum-pad-ring.armed,
+  .drum-pad-appear {
+    animation: none;
+  }
+}
+
+/* ---- UX-64 보정 무대: 킷 전체 흐림(0.18) + 지금 칠 패드만 원래 밝기 + 브랜드색 글로우 ---- */
+.drum-pad-dim {
+  opacity: 0.18;
+}
+.drum-pad-lit {
+  filter: drop-shadow(0 0 12px var(--brand)) drop-shadow(0 0 28px color-mix(in srgb, var(--brand) 55%, transparent));
+}
+
+/* ---- 실시간 코칭 대상 패드 링(COACH-001 D4): 문구가 떠 있는 동안만 그려진다 ---- */
+.drum-pad-coach {
+  pointer-events: none;
+}
+.drum-pad-coach ellipse {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 6;
+  filter: drop-shadow(0 0 8px var(--brand-text));
+  animation: drum-coach-pulse 0.9s ease-in-out infinite;
+}
+@keyframes drum-coach-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-coach ellipse {
+    animation: none;
+  }
+}
+
+/* ---- 보정 결과 화면: 서로 너무 가까운 패드(--warn 테두리)와 선택한 패드(브랜드 링). 클릭을 가로채지 않는다 ---- */
+.drum-pad-warn,
+.drum-pad-selected {
+  pointer-events: none;
+}
+.drum-pad-warn ellipse {
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 7;
+  filter: drop-shadow(0 0 6px var(--warn));
+}
+.drum-pad-selected ellipse {
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 4;
+  stroke-dasharray: 10 8;
+}
+
+/* 타격 이펙트 캔버스(FxCanvas): 킷 SVG 크기에 맞춘 래퍼 위에 절대 위치로 겹치고 포인터를 통과시킨다 */
+.drum-kit-fx {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+.fx-canvas {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ---- 실물 스킨(이미지 조각, components/drum/acoustic) ---- */
+/* 조각 상자끼리 겹치므로 이미지는 누름을 받지 않고, 헤드 타원이 누름 영역이다 */
+.drum-pad-art {
+  pointer-events: none;
+}
+.drum-pad-hitarea {
+  fill: transparent;
+  pointer-events: all;
+}
+/* 이미지 위에 놓이는 라벨은 어두운 테두리로 읽히게 한다 */
+.drum-pad:not([data-skin]) .drum-pad-label {
+  fill: var(--text-1);
+  paint-order: stroke;
+  stroke: var(--bg-canvas);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* ---- 실물 하이햇: 닫힘 모션 + 페달 "칙"(motion 토큰, 동작 줄이기는 토큰이 0ms라 위치만 즉시 바뀐다) ---- */
+/* 원판 그룹이 열림(원위치) ↔ 닫힘(closeDy만큼 아래)을 옮긴다. 닫힐 때는 빠르게(press), 열릴 때는 조금 느리게(fast) */
+.drum-pad-top {
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.drum-pad-top[data-closed] {
+  transform: translateY(var(--close-dy));
+  transition-duration: var(--motion-press);
+}
+/* 닫힌 하이햇은 흔들림 각도를 절반으로 */
+.drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-top[data-closed] .drum-pad-cymbal {
+  animation: drum-pad-sway-closed 450ms ease-out;
+}
+@keyframes drum-pad-sway-closed {
+  0% { transform: rotate(0deg); filter: brightness(1); }
+  10% { transform: rotate(-2deg); filter: brightness(1.15); }
+  40% { transform: rotate(1.5deg); }
+  70% { transform: rotate(-0.75deg); }
+  100% { transform: rotate(0deg); filter: brightness(1); }
+}
+/* 페달을 밟는 순간(칙): 원판이 한 번 더 closeDy*4/28 눌렸다 돌아온다. pedalHitSeq가 0보다 클 때만 */
+.drum-pad-pulse[data-pulse] {
+  animation: drum-hihat-chick var(--motion-press) var(--ease-out);
+}
+@keyframes drum-hihat-chick {
+  0% { transform: translateY(0); }
+  45% { transform: translateY(calc(var(--close-dy) * 4 / 28)); }
+  100% { transform: translateY(0); }
+}
+
+/* 페달 그림: 닫힘(밟힘)이면 뒤꿈치를 기준으로 살짝 눌리고, 연결이 없으면 어둡게 */
+.drum-pad-pedal,
+.drum-pad-pedal-pulse {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.drum-pad-pedal {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    filter var(--motion-fast) var(--ease-out);
+}
+.drum-pad-pedal[data-pressed] {
+  transform: scaleY(0.96);
+  transition-duration: var(--motion-press);
+}
+.drum-pad-pedal[data-off] {
+  filter: brightness(0.32);
+}
+.drum-pad-pedal-pulse[data-pulse] {
+  animation: drum-pedal-chick var(--motion-press) var(--ease-out);
+}
+@keyframes drum-pedal-chick {
+  0% { transform: scaleY(1); }
+  45% { transform: scaleY(0.97); }
+  100% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drum-pad-pulse[data-pulse],
+  .drum-pad-pedal-pulse[data-pulse] {
+    animation: none;
+  }
+  /* 닫힌 하이햇도 흔들림 없이 밝기 변화만(위의 일반 심벌 규칙보다 선택자가 구체적이라 따로 둔다) */
+  .drum-pad[data-state='hit'][data-shape='cymbal'] .drum-pad-top[data-closed] .drum-pad-cymbal {
+    animation: drum-pad-bright 220ms ease-out;
+  }
 }

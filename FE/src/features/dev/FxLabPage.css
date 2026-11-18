@@ -1,0 +1,136 @@
+/* FX 랩(개발 전용). 토큰만 쓰고 꾸밈은 최소로 둔다 */
+.fxlab {
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--bg-base);
+  color: var(--text-1);
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.fxlab h1 {
+  font-size: 18px;
+  margin: 0;
+}
+.fxlab-note {
+  color: var(--text-2);
+  font-size: 13px;
+  margin: 0;
+}
+.fxlab-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 12px 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.fxlab-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fxlab-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+}
+.fxlab select,
+.fxlab button {
+  background: var(--surface-2);
+  color: var(--text-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.fxlab button[aria-pressed='true'] {
+  background: var(--brand);
+  color: var(--brand-on);
+  border-color: var(--brand);
+}
+.fxlab label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.fxlab-kits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
+  gap: 24px;
+}
+.fxlab-kit {
+  /* 이펙트가 킷 바깥으로 번지므로 여백을 둔다 */
+  padding: 8% 6%;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fxlab-kit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.fxlab-kit-head strong {
+  font-family: var(--font-hud);
+}
+.fxlab-stats {
+  border-collapse: collapse;
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fxlab-stats th,
+.fxlab-stats td {
+  padding: 4px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+.fxlab-stats th:first-child,
+.fxlab-stats td:first-child {
+  text-align: left;
+}
+.fxlab-stats th {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.fxlab-over {
+  color: var(--brand-sub);
+}
+
+/* 콤보·축하 미리보기 영역 */
+.fxlab-previews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.fxlab-combo-stage,
+.fxlab-celebrate-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.fxlab-celebrate-text {
+  color: var(--text-2);
+  font-size: 14px;
+}

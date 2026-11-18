@@ -1,4 +1,4 @@
-# MUSDB18-HQ 테스트 50곡. 공개 수치와 비교하는 기본 평가 데이터 (ADR-004).
+# MUSDB18-HQ 테스트 50곡. 공개 수치와 비교하는 기본 평가 데이터.
 # root는 AI/ 폴더 기준 상대 경로. 받는 법·라이선스·md5는 AI/README.md "데이터" 절.
 name: musdb18hq_test
 kind: musdb

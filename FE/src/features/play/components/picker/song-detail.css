@@ -1,0 +1,215 @@
+/* 선택한 곡 패널 (Figma SongDetailPanel 126:3582) */
+.play-sd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  width: 352px;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.play-sd-caption {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.play-sd-empty {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.play-sd .play-sd-cover {
+  width: 100%;
+  margin: var(--space-xs) 0;
+}
+.play-sd-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.play-sd-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.play-sd-artist {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+}
+.play-sd-best {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.play-sd-best strong {
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.play-sd-line {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-sd-error {
+  font-size: 12px;
+}
+/* [프리셋 · 준비] 한 줄(Figma 126:3582, 11/03): 위 여백 8, [준비] 폭 120 */
+.play-sd-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  margin-top: var(--space-s);
+}
+.play-sd .play-sd-prepare {
+  flex: none;
+  width: 120px;
+}
+/* 비슷한 곡 한 줄(Figma 666:33646·666:33647): 구분선 → 위·아래 8, 글 묶음과 [이 곡 보기] 사이 12, 글 줄 사이 2 */
+.play-sd-divider {
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--line);
+}
+.play-sd-similar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: var(--space-s) 0;
+}
+.play-sd-similar-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.45;
+}
+.play-sd-similar-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-sd-similar-caption {
+  color: var(--brand-text);
+  font-size: 12px;
+  letter-spacing: 0.48px;
+}
+.play-sd-similar-title {
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 700;
+}
+.play-sd-similar-meta {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.play-sd-similar-reason {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.play-sd .play-sd-similar-pick {
+  flex: none;
+}
+
+/* 바로 플레이 모양(Figma 904:4326, 11/10 애플풍): 둥근 패널·커버, 제목 묶음 간격 2, 기록 두 칸, 맨 아래 [단계 세그먼트][▶ 플레이] */
+.play-sd-quick {
+  gap: var(--space-m);
+}
+.play-sd-quick .play-sd-cover {
+  margin: 0;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+.play-sd-quick .play-sd-head {
+  gap: 2px;
+}
+.play-sd-records {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.play-sd-record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.play-sd-record-end {
+  align-items: flex-end;
+  text-align: right;
+}
+.play-sd-record-caption {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.play-sd-record-value {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-sd-play-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+/* 단계 세그먼트(설계 U8 C안): 트랙·고르지 않은 칸은 중립, 고른 칸만 단계 네온색이 아래에서 은은하게 번진다 */
+.play-sd-play-row .play-sd-levels {
+  flex: none;
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item {
+  --seg-level: var(--level-normal);
+  padding: 8px 10px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='EASY'] {
+  --seg-level: var(--level-easy);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item[data-value='HARD'] {
+  --seg-level: var(--level-hard);
+}
+.play-sd-play-row .play-sd-levels .ui-seg-item.selected {
+  background:
+    radial-gradient(120% 140% at 50% 120%, color-mix(in srgb, var(--seg-level) 30%, transparent), transparent 70%),
+    var(--surface-3);
+  color: color-mix(in srgb, var(--seg-level) 70%, #ffffff);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--seg-level) 45%, transparent),
+    0 0 18px -4px color-mix(in srgb, var(--seg-level) 55%, transparent);
+}
+/* 그 곡에 없는 단계: 색 없이 흐리게 */
+.play-sd-play-row .play-sd-levels .ui-seg-item:disabled {
+  opacity: 0.35;
+}
+.play-sd .play-sd-play {
+  flex: 1;
+  min-width: 0;
+  /* 카드의 유일한 강조 동작이라 아이콘(20)·글자(17)를 한 단계 키운다 */
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+}

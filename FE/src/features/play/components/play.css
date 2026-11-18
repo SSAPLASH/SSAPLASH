@@ -1,0 +1,149 @@
+/* 연주 화면 공통 컴포넌트(GuideSlot·HitReadout). 토큰은 tokens.css의 새 이름만 쓴다 */
+
+/* GuideSlot: 264×51 고정 박스. 연주 중 LLM 보조 문구 20자(13px 한 줄)가 들어가는 폭(2026-11-16, 220에서 넓힘) */
+.guide-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 264px;
+  height: 51px;
+  font-family: var(--font);
+  line-height: 1.45;
+  justify-content: center;
+  overflow: visible;
+}
+.guide-slot-label {
+  font-size: 12px;
+}
+.guide-slot-title {
+  font-size: 16px;
+  color: var(--text-1);
+}
+.guide-slot-sub {
+  font-size: 14px;
+  color: var(--text-2);
+}
+/* 코칭 모드는 구령(제목) + 보조 두 줄만 칸 안에 넣는다. 라벨은 화면에서 감추고 스크린리더에만 읽힌다.
+   칸(51px)보다 커지지 않고 하이웨이 쪽(위)으로 번지지 않도록 줄 높이·간격을 줄이고 넘침은 잘라 낸다 */
+.guide-slot.coach-info,
+.guide-slot.coach-warn,
+.guide-slot.coach-good {
+  gap: 2px;
+  line-height: 1.3;
+  overflow: hidden;
+}
+.guide-slot.coach-info .guide-slot-label,
+.guide-slot.coach-warn .guide-slot-label,
+.guide-slot.coach-good .guide-slot-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.guide-slot.coach-info .guide-slot-sub,
+.guide-slot.coach-warn .guide-slot-sub,
+.guide-slot.coach-good .guide-slot-sub {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guide-slot.coach-info .guide-slot-title,
+.guide-slot.coach-warn .guide-slot-title,
+.guide-slot.coach-good .guide-slot-title {
+  white-space: nowrap;
+}
+.guide-slot.coach-info .guide-slot-label,
+.guide-slot.coach-info .guide-slot-title {
+  color: var(--brand-text);
+}
+.guide-slot.coach-warn .guide-slot-label,
+.guide-slot.coach-warn .guide-slot-title {
+  color: var(--brand-sub);
+}
+.guide-slot.coach-good .guide-slot-label,
+.guide-slot.coach-good .guide-slot-title {
+  color: var(--good);
+}
+
+/* 큰 코칭 모양(악보 연습, 설계 MODE-003-practice-speed D13·D14): 킷 왼쪽 빈 곳으로 칸을 넓히고 글자를 키운다.
+   종류별 색(안내 파랑·주의 노랑·칭찬 초록)의 은은한 면과 왼쪽 굵은 선. 보조는 두 줄까지 줄바꿈한다 */
+.guide-slot.lg {
+  --coach-color: var(--brand-text);
+  gap: 6px;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  padding: 14px 18px;
+  box-sizing: border-box;
+  border-left: 6px solid var(--coach-color);
+  border-radius: 0 16px 16px 0;
+  background: color-mix(in srgb, var(--coach-color) 13%, transparent);
+  line-height: 1.3;
+}
+.guide-slot.lg.coach-warn {
+  --coach-color: var(--brand-sub);
+}
+.guide-slot.lg.coach-good {
+  --coach-color: var(--good);
+}
+.guide-slot.lg .guide-slot-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.guide-slot.lg .guide-slot-sub {
+  color: var(--text-1);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+/* 코칭 손 대상 칩: 킷 슬롯(게임 380×150 · 악보 532×210) 왼쪽 아래 빈 곳. 하이웨이(위쪽)를 가리지 않는다 */
+.coach-kit {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.coach-kit > svg {
+  display: block;
+}
+.coach-hand-chip {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--brand-text);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-text) 16%, transparent);
+  color: var(--brand-text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+/* ---- 「오디오 준비 중…」 (AudioWaitNotice, 설계 MODE-001 오디오 시계 시작 대기 D7). 시작·재개 전 대기가 길어질 때만 화면 아래 가운데에 뜬다 ---- */
+.audio-wait-notice {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  z-index: 60;
+  margin: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 14px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}

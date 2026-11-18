@@ -1,0 +1,32 @@
+# 11/08 추가 공용 곡 학습 25곡. scripts/make_songsterr_splits.py
+name: public_songs_train_25
+kind: songsterr
+root: data/songsterr
+sample_rate: 44100
+clip: null
+songs:
+- 4_non_blondes_what_s_up
+- alice_in_chains_would
+- avenged_sevenfold_shepherd_of_fire
+- deftones_be_quiet_and_drive_far_away
+- fleetwood_mac_dreams
+- foo_fighters_everlong
+- gojira_silvera
+- guns_n_roses_don_t_cry
+- linkin_park_given_up
+- megadeth_symphony_of_destruction
+- metallica_creeping_death
+- metallica_fade_to_black
+- nirvana_come_as_you_are
+- nirvana_smells_like_teen_spirit
+- pixies_where_is_my_mind
+- rage_against_the_machine_killing_in_the_name
+- red_hot_chili_peppers_californication
+- rush_tom_sawyer
+- stone_temple_pilots_interstate_love_song
+- system_of_a_down_chop_suey
+- the_cranberries_zombie
+- three_days_grace_i_hate_everything_about_you
+- tool_schism
+- tool_sober
+- weezer_undone_the_sweater_song_eb_standard

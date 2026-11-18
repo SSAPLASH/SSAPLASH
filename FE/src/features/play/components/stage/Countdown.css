@@ -1,0 +1,50 @@
+/* 카운트다운: 배경(dim 55% 일정 · clear 없음) + 가운데 숫자만. 배경 전환은 0.2s ease-out(Figma 모션 토큰) */
+.play-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-canvas) 55%, transparent);
+  transition: background-color var(--motion-fade) var(--ease-out);
+  pointer-events: none;
+}
+.play-countdown-dim {
+  background: color-mix(in srgb, var(--bg-canvas) 55%, transparent);
+}
+.play-countdown-clear {
+  background: color-mix(in srgb, var(--bg-canvas) 0%, transparent);
+}
+.play-countdown-value {
+  font-family: var(--font-display);
+  font-size: 200px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text-1);
+}
+/* 딤이 없으면 뒤의 노트·악보 위에서 읽히도록 그림자로 가독성을 확보한다 */
+.play-countdown-clear .play-countdown-value {
+  text-shadow:
+    0 0 24px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 0 8px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 2px 4px color-mix(in srgb, var(--bg-canvas) 80%, transparent);
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out),
+    play-countdown-pop var(--motion-move) var(--ease-out);
+}
+/* scale 1.15 → 1 (투명도는 motion-fade-in) */
+@keyframes play-countdown-pop {
+  from {
+    transform: scale(1.15);
+  }
+}
+/* 모션 줄이기: 배경 전환·숫자 등장 모션 없이 교체 */
+@media (prefers-reduced-motion: reduce) {
+  .play-countdown {
+    transition: none;
+  }
+  .play-countdown-clear .play-countdown-value {
+    animation: none;
+  }
+}

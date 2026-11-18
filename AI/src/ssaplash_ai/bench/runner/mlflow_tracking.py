@@ -1,18 +1,12 @@
-"""MLflow 기록 (설계 2장 tracking, 인수 조건 7). 실행 1회 = run 1개.
+"""MLflow 기록. 실행 1회 = run 1개.
 
-기본은 로컬 파일 모드(`mlruns/`, git 미추적). 팀 MLflow 서버(S15P31A307-45)가 생기면
-tracking_uri만 바꿔 같은 규약으로 기록. 환경 변수 MLFLOW_TRACKING_URI가 있으면 그 값이 기본.
-MLflow 3.x는 파일 저장소를 유지보수 모드로 두고 기본 차단하므로 폴더 경로를 받으면
-MLFLOW_ALLOW_FILE_STORE=true를 켜고 씀 (코랩 드라이브에서 sqlite보다 안전해 파일 모드 유지).
+기본은 로컬 파일 모드(`mlruns/`). 환경 변수 MLFLOW_TRACKING_URI가 있으면 그 값이 기본.
+MLflow 3.x는 파일 저장소를 기본 차단하므로 폴더 경로를 받으면 MLFLOW_ALLOW_FILE_STORE=true를 켬.
 
-기록 규약
-- 실험 이름: separation-bench (분리), transcription-bench (채보). run 이름: runId
-- 파라미터: dataset, models(쉼표 구분), device, gpuName, host, clip, nSongs, nModels, nErrors, nSkipped
-- 이어하기로 여러 번 돌리면 마지막 실행의 run만 남음. 지표는 CSV 전체(건너뛴 행 포함)로 계산
-- 태그: runId, 모델별 configHash(`config_hash.{model}`)
-- 지표: 모델별 요약값 `{model}/{열}` (report.summarize의 중앙값). -inf·nan은 건너뜀
-- 산출물: 결과 CSV, 요약 표(md), 곡별 CSV, 그래프 PNG
-- 지난 결과 폴더를 다시 올리는 것은 runner.relog (설계 CHART-003-mlflow-relog). 같은 runId 태그가 있으면 건너뜀
+- 실험 이름: separation-bench, transcription-bench, chart-rules, adtof-finetune·adtof-eval. run 이름: runId
+- 파라미터: dataset, models, device, gpuName, host, clip, nSongs, nModels, nErrors, nSkipped. 채보는 input·separator·rules.{키}도
+- 태그: runId, 모델별 configHash. 지표: 모델별 요약값 `{model}/{열}`. -inf·nan은 건너뜀
+- 이어하기로 여러 번 돌리면 마지막 실행의 run만 남음
 """
 
 from __future__ import annotations

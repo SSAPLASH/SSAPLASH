@@ -20,8 +20,10 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <bluefruit.h>
+#include <nrf_soc.h>                       /* sd_clock_hfclk_request */
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
+#include <Adafruit_NeoPixel.h>             /* 상태 LED (라이브러리 매니저: "Adafruit NeoPixel") */
 using namespace Adafruit_LittleFS_Namespace;
 
 extern "C" {
@@ -37,8 +39,14 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 1                     /* 1 = Feather nRF52840 Sense */
-#define FW_MINOR 2                     /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234) */
-#define FW_TAG   "BOOT 1.2 nrf52"
+#define FW_MINOR 11                    /* 1 = 프로토콜 v0.8 (연결 즉시 STATUS, UNCONFIGURED 플래그), 2 = 정지 중 바이어스 재추정 (234), 3 = 전원 버튼·상태 LED (237), 4 = 패드 밖 타격 진동 안 함, 5 = 끄기를 systemOff 대신 대기 후 리셋 (DFU 진입 방지), 6 = 세기 상한 2000·세기별 진동 3단계 (236), 7 = 스틱을 돌려 쥐어도 타격 감지 (235), 8 = 세기 상한 1400·진동 경계 68/92 (343), 9 = µs 시계를 크리스탈(HFXO)로 고정 (345), 10 = 정지 바이어스 재추정 조건 강화 (346), 11 = 크리스탈(HFXO) 실패 재시도·연주 중 감시 (345), 자이로 포화 로그 SAT (346) */
+/* 비교 실험용: 1이면 1.9의 느슨한 정지 판정으로 빌드 (11/10 1.9 vs 1.10 비교). 평소엔 0 */
+#define BIAS_STILL_V19    0
+#if BIAS_STILL_V19
+#define FW_TAG   "BOOT 1.11 nrf52 bias19"
+#else
+#define FW_TAG   "BOOT 1.11 nrf52"
+#endif
 
 /* 스틱마다 이 한 줄만 바꿔서 굽는다: 0 = 왼손, 1 = 오른손.
  * HIT 등 모든 패킷 flags 비트 0–1에 실리고(프로토콜 v0.7), BLE 이름 끝에 -L / -R이 붙는다.
@@ -58,7 +66,10 @@ extern "C" {
 #define ACC_G_PER_LSB    0.000488f     /* ±16g */
 #define G_MS2            9.80665f
 
-/* 스윙 축: 2026-10-26 녹화에서 내려칠 때 자이로 y가 + (보드를 손에 쥔 방향 기준. 스틱 부착 후 재확인) */
+/* 타격 신호 (235): 1 = 스틱 끝이 아래로 내려가는 회전 속도(pose_down_rate). 스틱을 돌려 쥐어도 같다.
+ *                  0 = 예전 방식, 센서 y축 하나 (위아래를 맞춰 쥐어야 함). 문제 생기면 0으로 되돌린다 */
+#define HIT_ROLL_FREE 1
+/* 스윙 축 (HIT_ROLL_FREE 0일 때만): 2026-10-26 녹화에서 내려칠 때 자이로 y가 + (보드를 손에 쥔 방향 기준) */
 #define HIT_AXIS 1
 #define HIT_SIGN (+1)
 /* 스틱 끝 방향 (센서 좌표). 부착 방향이 정해지면 녹화로 확인할 것 */
@@ -69,22 +80,36 @@ static const float TIP_AXIS[3] = {1.0f, 0.0f, 0.0f};
 #define BIAS_SAMPLES     1666          /* 부팅 시 바이어스 측정 1초 */
 #define BIAS_MAX_SD_DPS  3.0f          /* 이보다 흔들리면 측정 실패 → 기본값 */
 static const float BIAS_DEFAULT_DPS[3] = {1.0f, -3.9f, -0.1f};   /* 2026-10-26 실측 (보드 1개 값. 플래시에 저장값이 없을 때만) */
-#define BIAS_SAVE_SD_DPS 0.8f          /* 부팅 측정이 이만큼 조용하면(책상 위) 이 보드 값으로 플래시에 저장 */
+#define BIAS_SAVE_SD_DPS 0.5f          /* 부팅 측정이 이만큼 조용하면(책상 위) 이 보드 값으로 플래시에 저장. 11/4 손에 쥔 부팅이 sd 0.6으로 저장돼 0.8 → 0.5 */
 #define BIAS_FILE        "/gyro_bias.bin"
 
 /* 정지 중 자이로 바이어스 재추정 (S15P31A307-234)
  * 2026-11-04 실측: 왼손 보드는 7분 쓰는 동안 바이어스가 +0.5°/s 변해 방위각이 분당 약 17° 밀렸다 (칩 온도 변화).
  * 부팅 때 한 번 잰 값으로는 못 따라가서, 스틱이 멈춰 있을 때마다 그 순간의 자이로 평균으로 천천히 다시 잡는다.
  * 기준값은 swing_1026·nohit_1026 녹화로 확인: 스윙 중에는 정지로 잡히지 않아 바이어스가 0.1°/s 넘게 흔들리지 않음 */
-#define STILL_DPS         4.0f         /* 바이어스 뺀 각속도 크기가 이보다 작고 */
+#if BIAS_STILL_V19
+#define STILL_DPS         4.0f
+#define STILL_MIN_SAMPLES 500
+#else
+#define STILL_DPS         1.5f         /* 바이어스 뺀 각속도 크기가 이보다 작고 (1.9까지 4.0: 손에 들고 천천히 돌리는 것까지 정지로 봤다) */
+#define STILL_MIN_SAMPLES 1666         /* 1초(1.66kHz) 이상 이어지면 정지 (1.9까지 0.3초) */
+#endif
 #define STILL_ACC_MS2     0.6f         /* | |a| − g | 가 이보다 작은 샘플이 */
-#define STILL_MIN_SAMPLES 500          /* 0.3초(1.66kHz) 이상 이어지면 정지 */
 #define BIAS_TAU_S        2.0f         /* 정지 중 바이어스를 따라가는 시간 상수 */
-#define BIAS_MAX_DEV_DPS  4.0f         /* 부팅 값에서 이보다 멀어지지 않게 (오판정 방어) */
+#if BIAS_STILL_V19
+#define BIAS_MAX_DEV_DPS  4.0f
+#else
+#define BIAS_MAX_DEV_DPS  1.0f         /* 부팅 값에서 이보다 멀어지지 않게 (1.9까지 4.0)
+                                        * 11/10 리듬 게임 중 왼손 BT x가 0.83 → −0.56 → 1.05°/s로 튐: 쉬는 박자에 들고 있던 움직임을
+                                        * 바이어스로 먹어 방향이 분당 수십 도 흘렀다. 온도로 변하는 양은 ±1°/s 안 */
+#endif
 
 /* ===================== µs 시계 (TIMER4, 1MHz, 32비트) =====================
  * 프로토콜 시각이 µs u32(약 71.6분 랩어라운드)이므로 하드웨어 타이머를 그대로 쓴다.
- * Arduino micros()는 이 보드에서 약 1ms 단위라 쓰지 않는다 (2026-10-26 실측) */
+ * Arduino micros()는 이 보드에서 약 1ms 단위라 쓰지 않는다 (2026-10-26 실측)
+ * TIMER4는 HFCLK로 돈다. SoftDevice는 무선을 쓸 때만 크리스탈(HFXO)을 켜고 그 사이엔 내부 RC(HFINT)로 돌려서
+ * 보드마다 시계가 분당 수십 ms씩 다르게 흘렀다 (11/10 모니터: 오른손 오프셋 6분에 −176ms, 웹 판정이 손마다 어긋남).
+ * hfxo_hold()로 크리스탈을 계속 켜 둔다 (약 0.25mA 더 씀, 오차 ±20ppm = 분당 약 1ms) */
 static void clock_init()
 {
     NRF_TIMER4->TASKS_STOP = 1;
@@ -94,6 +119,35 @@ static void clock_init()
     NRF_TIMER4->TASKS_CLEAR = 1;
     NRF_TIMER4->TASKS_START = 1;
 }
+
+/* SoftDevice가 켜진 뒤(Bluefruit.begin 다음)에 부른다. 켜졌는지 로그로 남긴다 */
+static bool hfxo_hold()
+{
+    if (sd_clock_hfclk_request() != NRF_SUCCESS) return false;
+    uint32_t running = 0;
+    for (int i = 0; i < 50 && !running; i++) { sd_clock_hfclk_is_running(&running); delay(1); }   /* 기동 약 0.4ms */
+    return running != 0;
+}
+/* 11/12 왼손이 하루 종일 분당 −21~−39ms로 흘렀다(오른손·페달 0~3ms). 부팅 때 크리스탈이 안 걸렸거나 도중에 풀린 것으로 본다.
+ * 부팅 때 3번까지 다시 시도하고, 연주 중에도 10초마다 확인해 꺼져 있으면 다시 켠다 (345) */
+static void send_log(const char *s);
+static uint16_t hfxo_lost = 0;                          /* 연주 중 풀려서 다시 켠 횟수 */
+static void hfxo_watch()
+{
+    uint32_t running = 0;
+    sd_clock_hfclk_is_running(&running);
+    if (running) return;
+    sd_clock_hfclk_request();
+    hfxo_lost++;
+    char m[19];
+    snprintf(m, sizeof m, "HFXO lost %u", hfxo_lost);
+    send_log(m);
+}
+
+/* 자이로 포화 (346): ±2000dps 끝에 닿은 샘플 수를 축별로 센다. 빠른 연주에서 오른손 방향이 25~60° 흐른 원인 확인용 */
+#define SAT_LSB 27857                                   /* 1950dps / 0.070 */
+static uint32_t sat_n[3] = {0, 0, 0};
+
 static inline uint32_t now_us()                        /* 메인 루프용 (CC[0]) */
 {
     NRF_TIMER4->TASKS_CAPTURE[0] = 1;
@@ -160,6 +214,7 @@ static uint8_t        role = STICK_ROLE;               /* 0 왼손, 1 오른손 
 static uint8_t        mode = 0;                        /* 0 연주, 1 설정(+POSE) */
 static int16_t        pose_rate_hz = 50;
 static int16_t        haptic_enable = 1, haptic_strength = 200;
+static int16_t        lat_log = 0;                    /* SET_PARAM 0x10 = 1: 타격마다 펌웨어 구간 지연 LOG "LT" (233, 측정용) */
 static uint8_t        hit_seq = 0, pose_seq = 0;
 static uint32_t       n_samples = 0, n_missed = 0;
 
@@ -234,6 +289,7 @@ static void send_status()
 }
 
 static void send_log(const char *s);
+static void power_off(const char *why);
 
 /* 5초마다: 전압 읽기, 30초마다 LOG "BAT 3987mV 82%" (사용 시간 측정용), 저전압이면 경고·꺼짐 */
 static void bat_update()
@@ -247,9 +303,7 @@ static void bat_update()
     if (bat_mv < BAT_WARN_MV && !warned) { warned = true; send_log("BAT LOW"); }
     n_low = bat_mv < BAT_OFF_MV ? n_low + 1 : 0;
     if (n_low >= BAT_OFF_N) {
-        send_log("BAT OFF");
-        delay(200);                                     /* 마지막 LOG가 나가도록 */
-        systemOff(PIN_USER_SW, LOW);                    /* 깊은 잠. USER 버튼 누르면 재부팅 */
+        power_off("BAT OFF");                           /* 깊은 잠. USER 버튼 누르면 재부팅 */
     }
 }
 
@@ -339,12 +393,14 @@ static uint32_t vib_t0_us = 0;
 static int16_t  vib_prev[3];
 static uint8_t  vib_n = 0;
 
-static uint8_t hit_effect[3] = {14, 48, 50};       /* 세기 상·중·하: Strong Buzz 100%, Buzz 2 80%, Buzz 4 40% (10/30 손으로 골라봄) */
+static bool    haptic_seq_dirty = false;            /* 버튼 진동이 WAVESEQ2를 썼으면 다음 진동 전에 비운다 */
+static uint8_t hit_effect[3] = {14, 17, 19};       /* 세기 강·중·약: Strong Buzz 100%, Strong Click 1 100%, Strong Click 3 60% (11/6 손으로 고름. 세기만 다르면 LRA에서 구분 안 돼 종류를 다르게) */
 
 static void haptic_effect(uint8_t effect)
 {
     if (!drv_ok || effect == 0 || effect > 123) return;
     if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }
+    if (haptic_seq_dirty) { drv_w(0x05, 0); haptic_seq_dirty = false; }
     drv_w(0x04, effect);
     drv_w(0x0C, 0x01);
 }
@@ -354,6 +410,7 @@ static void haptic_click(uint8_t level)             /* level 0~255 */
     if (!drv_ok || level == 0) return;
     uint8_t effect = hit_effect[level > 170 ? 0 : level > 85 ? 1 : 2];
     if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }   /* RTP 테스트 중이면 끝냄 */
+    if (haptic_seq_dirty) { drv_w(0x05, 0); haptic_seq_dirty = false; }
     drv_w(0x04, effect);
     drv_w(0x0C, 0x01);                              /* GO */
 #if SERIAL_MODE == SERIAL_TEXT
@@ -380,6 +437,174 @@ static void haptic_poll()
     }
 }
 
+/* ===================== 전원 버튼 · 상태 LED (S15P31A307-237) =====================
+ * 버튼 = 보드 USER 버튼(7번 핀, 뚜껑 누름 탭). LED = 보드 NeoPixel(뚜껑 LED 창).
+ *   꺼진 상태에서 누름    → 깨어나 부팅 (부팅 중 초록, 준비되면 초록 → 진동 짧게 1번)
+ *   1.5초 누름           → 누르는 동안 빨강이 밝아짐 → 꺼짐 (빨강 0.5초 + 진동 길게, 손 떼면 깊은 잠)
+ *   두 번 누름           → 정면 보정 (흰색 2번 + 진동 2번)
+ *   한 번 누름           → 배터리 표시 1초 (초록 > 50%, 주황 > 20%, 빨강)
+ *   연결 찾는 중 파랑 깜빡, 연결되면 초록 반짝 + 진동 2번 → 은은한 파랑, 끊기면 진동 길게
+ *   배터리 20% 이하 10초마다 주황 2번, 5% 이하 빨강 깜빡
+ *   BLE도 USB 시리얼도 없이 10분 → 자동으로 꺼짐
+ * 꺼져 있어도 NeoPixel 칩이 약 1mA를 먹는다 (오래 안 쓰면 배터리 커넥터를 뺀다) */
+#define LED_BRIGHT      60            /* 표시 밝기 0~255 */
+#define LED_IDLE        6             /* 연결됨 상태 파랑 (연주 중 거슬리지 않게) */
+#define LONG_PRESS_MS   1500
+#define DOUBLE_GAP_MS   400
+#define AUTO_OFF_MS     (10UL * 60UL * 1000UL)
+#define FX_SHORT        1             /* DRV2605L 라이브러리: Strong Click 100% */
+#define FX_DOUBLE       10            /* Double Click 100% */
+#define FX_LONG         47            /* Buzz 1 100% (두 번 이어서 길게) */
+
+static Adafruit_NeoPixel pix(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+enum { ANIM_NONE, ANIM_BOOT, ANIM_CONNECTED, ANIM_RESET, ANIM_BATT };
+static uint8_t  ui_anim = ANIM_NONE;
+static uint32_t ui_anim_t0 = 0, ui_link_ms = 0, ui_px = 0xFFFFFFFF;
+static bool     ui_armed = false;     /* 부팅을 깨운 누름이 떨어진 뒤부터 버튼을 받는다 */
+static uint32_t ui_hold_t0 = 0;       /* 누르고 있는 중이면 누른 시각, 아니면 0 */
+
+static void handle_cmd(const cmd_t *c);
+
+static void led_set(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint32_t c = pix.Color(r, g, b);
+    if (c == ui_px) return;
+    ui_px = c;
+    pix.setPixelColor(0, c);
+    pix.show();
+}
+
+static void haptic_seq(uint8_t a, uint8_t b)
+{
+    if (!drv_ok) return;
+    if (haptic_off_ms) { drv_w(0x02, 0); drv_w(0x01, 0x00); haptic_off_ms = 0; }
+    drv_w(0x04, a);
+    drv_w(0x05, b);
+    drv_w(0x06, 0);
+    haptic_seq_dirty = b != 0;
+    drv_w(0x0C, 0x01);
+}
+
+static void ui_start(uint8_t anim) { ui_anim = anim; ui_anim_t0 = millis(); }
+
+static void power_off(const char *why)
+{
+    send_log(why);
+    haptic_seq(FX_LONG, FX_LONG);
+    led_set(LED_BRIGHT * 2, 0, 0);
+    delay(500);
+    led_set(0, 0, 0);
+    while (!digitalRead(PIN_USER_SW)) delay(10);        /* 누른 채로 자면 바로 다시 깨어난다 */
+    delay(100);
+    imu_wr(0x10, 0x00);                                 /* IMU 가속도·자이로 끔 */
+    imu_wr(0x11, 0x00);
+    if (drv_ok) drv_w(0x01, 0x40);                      /* DRV2605L 대기 */
+    delay(20);
+    /* systemOff로 자면 USER 버튼으로 깨어날 때 버튼이 눌린 채 리셋된다. Feather 부트로더는 USER 버튼(P1.02)이
+     * DFU 버튼이라, 그대로 DFU 모드로 들어가 빨강만 켜지고 앱이 안 돈다 (11/5 확인).
+     * 그래서 앱이 저전력으로 기다리다가, 버튼을 눌렀다 뗀 뒤에 리셋한다 → 부트로더가 바로 앱으로 넘어간다 */
+    Bluefruit.Advertising.restartOnDisconnect(false);
+    Bluefruit.Advertising.stop();
+    for (uint16_t h = 0; h < BLE_MAX_CONNECTION; h++)
+        if (Bluefruit.connected(h)) Bluefruit.disconnect(h);
+    sd_clock_hfclk_release();                           /* 꺼진 동안은 크리스탈 끔 (0.25mA) */
+    for (;;) {
+        delay(50);                                      /* FreeRTOS 대기: CPU는 잔다 */
+        if (digitalRead(PIN_USER_SW)) continue;
+        uint32_t t = millis();
+        while (!digitalRead(PIN_USER_SW)) delay(10);    /* 뗄 때까지 */
+        if (millis() - t >= 30) {                       /* 30ms 미만은 튐 */
+            led_set(0, LED_BRIGHT / 3, 0);
+            delay(20);
+            NVIC_SystemReset();                         /* 버튼이 떼진 상태로 리셋 → 앱 부팅 */
+        }
+    }
+}
+
+static void ui_button(uint32_t now)
+{
+    static uint8_t  prev = 1, clicks = 0;
+    static uint32_t t_down = 0, t_up = 0;
+    uint8_t b = digitalRead(PIN_USER_SW);
+    if (!ui_armed) { if (b) ui_armed = true; prev = b; return; }
+    if (!b && prev) t_down = now;
+    ui_hold_t0 = b ? 0 : (t_down ? t_down : 1);
+    if (!b && now - t_down >= LONG_PRESS_MS) power_off("OFF (btn)");
+    if (b && !prev && now - t_down > 30) {              /* 30ms 미만은 튐 */
+        clicks++;
+        t_up = now;
+        if (clicks >= 2) {
+            clicks = 0;
+            cmd_t c = {1, {CMD_RESET_POSE}, 0};
+            handle_cmd(&c);
+            send_log("RESET_POSE (btn)");
+            haptic_effect(FX_DOUBLE);
+            ui_start(ANIM_RESET);
+        }
+    }
+    if (clicks == 1 && b && now - t_up > DOUBLE_GAP_MS) { clicks = 0; ui_start(ANIM_BATT); }
+    prev = b;
+}
+
+static void ui_led(uint32_t now)
+{
+    static uint32_t t_last = 0;
+    if (now - t_last < 20) return;                      /* 50Hz */
+    t_last = now;
+    uint32_t a = now - ui_anim_t0;
+    if (ui_hold_t0 && now - ui_hold_t0 > 200) {        /* 끄는 중: 빨강이 점점 (짧은 누름은 표시 그대로) */
+        uint32_t h = now - ui_hold_t0;
+        if (h > LONG_PRESS_MS) h = LONG_PRESS_MS;
+        led_set((uint8_t)(LED_BRIGHT * 2 * h / LONG_PRESS_MS), 0, 0);
+        return;
+    }
+    switch (ui_anim) {
+    case ANIM_BOOT:                                     /* 초록 0.5초 서서히 */
+        if (a < 500) { led_set(0, (uint8_t)(LED_BRIGHT * a / 500), 0); return; }
+        if (a < 800) { led_set(0, LED_BRIGHT, 0); return; }
+        break;
+    case ANIM_CONNECTED:
+        if (a < 300) { led_set(0, LED_BRIGHT, 0); return; }
+        break;
+    case ANIM_RESET:                                    /* 흰색 2번 */
+        if (a < 450) { uint8_t v = (a < 150 || a >= 300) ? LED_BRIGHT : 0; led_set(v, v, v); return; }
+        break;
+    case ANIM_BATT:
+        if (a < 1000) {
+            if (bat_pct == 0xFF || bat_pct > 50) led_set(0, LED_BRIGHT, 0);
+            else if (bat_pct > 20)               led_set(LED_BRIGHT, LED_BRIGHT / 3, 0);
+            else                                 led_set(LED_BRIGHT, 0, 0);
+            return;
+        }
+        break;
+    }
+    ui_anim = ANIM_NONE;
+    if (bat_pct != 0xFF && bat_pct <= 5) {             /* 곧 꺼짐: 빨강 깜빡 */
+        led_set((now / 500) % 2 ? LED_BRIGHT : 0, 0, 0);
+        return;
+    }
+    if (bat_pct != 0xFF && bat_pct <= 20) {            /* 10초마다 주황 2번 */
+        uint32_t k = now % 10000;
+        if (k < 450) { uint8_t v = (k < 150 || k >= 300) ? LED_BRIGHT : 0; led_set(v, v / 3, 0); return; }
+    }
+    if (ble_connected) led_set(0, 0, LED_IDLE);
+    else               led_set(0, 0, (now / 500) % 2 ? LED_BRIGHT / 2 : 0);
+}
+
+static void ui_poll()
+{
+    static bool was = false;
+    uint32_t now = millis();
+    bool c = ble_connected;
+    if (c && !was) { haptic_effect(FX_DOUBLE); ui_start(ANIM_CONNECTED); }
+    if (!c && was) haptic_seq(FX_LONG, FX_LONG);
+    was = c;
+    if (c || Serial) ui_link_ms = now;                  /* USB 시리얼(PC 측정 페이지)로 쓰는 중이어도 안 꺼짐 */
+    if (now - ui_link_ms > AUTO_OFF_MS) power_off("OFF (idle 10min)");
+    ui_button(now);
+    ui_led(now);
+}
+
 /* ===================== 파라미터 (SET_PARAM id → 값) ===================== */
 static int16_t param_get(uint8_t id)
 {
@@ -398,6 +623,7 @@ static int16_t param_get(uint8_t id)
     case 0x0D: return (int16_t)hp.rearm_idle_ms;
     case 0x0E: return hp.ts_corr_us;
     case 0x0F: return hp.vel_max_dps;
+    case 0x10: return lat_log;
     }
     return 0;
 }
@@ -419,12 +645,13 @@ static bool param_set(uint8_t id, int16_t v)
     case 0x0D: hp.rearm_idle_ms = (uint16_t)clampi(v, 0, 1000); break;
     case 0x0E: hp.ts_corr_us = clampi(v, -20000, 20000); break;
     case 0x0F: hp.vel_max_dps = clampi(v, 200, 2000); break;
+    case 0x10: lat_log = clampi(v, 0, 1); return true;   /* 검출기와 무관 */
     default: return false;
     }
     hd.p = hp;                                          /* 검출기 상태는 유지하고 파라미터만 교체 */
     return true;
 }
-static const uint8_t PARAM_IDS[] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F};
+static const uint8_t PARAM_IDS[] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10};
 
 /* ===================== 명령 처리 ===================== */
 /* BLE 콜백은 다른 태스크에서 돌기 때문에 큐에 넣고 loop()에서 처리한다. SYNC 수신 시각만 콜백에서 바로 찍는다 */
@@ -638,11 +865,16 @@ void app_setup()
 #endif
 
     pinMode(PIN_USER_SW, INPUT_PULLUP);
+    pix.begin();
+    led_set(0, LED_BRIGHT / 3, 0);                      /* 깨어나자마자 초록: 켜지는 중 */
     clock_init();
     uint8_t i2c_state = i2c_recover();
     Wire.begin();
     Wire.setClock(400000);
     ble_init();
+    bool hfxo = false;
+    uint8_t hfxo_try = 0;
+    while (!hfxo && hfxo_try < 3) { hfxo_try++; hfxo = hfxo_hold(); if (!hfxo) delay(100); }
     InternalFS.begin();                                 /* 보드별 바이어스 저장 (Bluefruit 본딩과 같은 파일시스템) */
 
     if (!imu_init()) {
@@ -656,11 +888,16 @@ void app_setup()
     hp.max_swing_ms  = 160;                             /* 진짜 71~112ms, 가짜 175~219ms */
     hp.min_swing_ms  = 20;                              /* 버튼·충격 튐(1ms) 제거 */
     hp.ts_corr_us    = 800;                             /* 정지 시각 평균 오차 0으로 */
-    hp.vel_max_dps   = 1200;                            /* 세게 친 타격이 127에 붙지 않게 */
+    hp.vel_max_dps   = 1400;                            /* PLAY-006: 세게 친 타격이 100~120 (11/9 1600 실측 오른손 강 79~102 → 1400 환산 94~122) */
     hit_init(&hd, &hp);
     pad_table_default(&pads);
 
     send_log(FW_TAG);
+    {
+        char m[19];
+        snprintf(m, sizeof m, hfxo ? "HFXO on %u" : "HFXO FAIL %u", hfxo_try);   /* 숫자 = 시도 횟수 */
+        send_log(m);
+    }
     if (i2c_state) send_log(i2c_state == 1 ? "I2C stuck->freed" : "I2C stuck SDA low");
     drv_init();                                         /* 자동 보정 진동 = 켜짐 알림. 정지 측정 전에 끝냄 */
     delay(200);
@@ -671,6 +908,9 @@ void app_setup()
     pose_start(&pose, acc0);
     bat_update();
     send_status();
+    ui_link_ms = millis();
+    haptic_effect(FX_SHORT);                            /* 준비 완료 */
+    ui_start(ANIM_BOOT);
 #if SERIAL_MODE == SERIAL_TEXT
     if (Serial) Serial.print("n t_hit_ms pad el az mg peak vel sw decel | detect->send us | missed\r\n");
 #endif
@@ -679,9 +919,8 @@ void app_setup()
 /* ===================== 루프 ===================== */
 void app_loop()
 {
-    static uint32_t last_count = 0, t_prev = 0, t_status = 0, t_pose = 0, t_btn = 0;
+    static uint32_t last_count = 0, t_prev = 0, t_status = 0, t_pose = 0;
     static uint32_t rej_prev[4] = {0};
-    static uint8_t  btn_prev = 1;
     static float    az_swing_start = 0;
     static hit_state_t st_prev = HIT_IDLE;
     static uint32_t acc_div = 0;
@@ -700,19 +939,12 @@ void app_loop()
     }
 #endif
 
-    /* 버튼: 정면 보정 */
-    uint8_t btn = digitalRead(PIN_USER_SW);
-    if (!btn && btn_prev && millis() - t_btn > 300) {
-        t_btn = millis();
-        cmd_t c = {1, {CMD_RESET_POSE}, 0};
-        handle_cmd(&c);
-        send_log("RESET_POSE (btn)");
-    }
-    btn_prev = btn;
+    /* 전원 버튼·상태 LED·자동 꺼짐 (237) */
+    ui_poll();
 
     /* 상태 5초마다 */
     if (status_due) { status_due = false; t_status = millis(); send_status(); send_bias(); }   /* 연결 직후 1회 */
-    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); } }
+    { static uint32_t t_bias = 0; if (millis() - t_bias > 10000) { t_bias = millis(); send_bias(); hfxo_watch(); } }
     if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 
     /* IMU 새 샘플 */
@@ -725,6 +957,7 @@ void app_loop()
     int16_t v[6];
     if (!imu_read(v)) return;
     n_samples++;
+    for (int i = 0; i < 3; i++) if (v[i] >= SAT_LSB || v[i] <= -SAT_LSB) sat_n[i]++;
     if (vib_t0_us) {                                    /* 진동 지연 측정 중 */
         int32_t dsum = 0;
         for (int i = 0; i < 3; i++) { dsum += abs(v[3 + i] - vib_prev[i]); vib_prev[i] = v[3 + i]; }
@@ -769,7 +1002,11 @@ void app_loop()
     pose_update(&pose, g, ap, dt);
 
     /* 타격 검출: hit_detect는 BNO055 단위(16 LSB/dps) 정수로 받는다 */
+#if HIT_ROLL_FREE
+    int32_t down = (int32_t)(pose_down_rate(&pose, g) * 16.0f);   /* 수평으로 쥐고 롤 0이면 HIT_SIGN·g[y]와 같은 값 */
+#else
     int32_t down = (int32_t)(HIT_SIGN * g[HIT_AXIS] * 16.0f);
+#endif
     hit_event_t ev;
     int fired = hit_update(&hd, t, down, &ev);
 
@@ -779,6 +1016,7 @@ void app_loop()
     st_prev = hd.st;
 
     if (fired) {
+        uint32_t t_det = now_us();                      /* 233: 샘플(DRDY 인터럽트 시각 t) → 검출 끝 */
         float el, az;
         pose_angles(&pose, &el, &az);
         pad_result_t pr = pad_classify(&pads, el, az);
@@ -803,8 +1041,17 @@ void app_loop()
         uint8_t n = pkt_hit(b, &h);
         send(b, n);
         uint32_t t_sent = now_us();
-        if (haptic_enable)                              /* 세기: hapticStrength × (0.6 + 0.4 × 타격 세기) → 클릭 3단계 */
-            haptic_click((uint8_t)(haptic_strength * (77 + 51 * ev.velocity / 127) / 128));
+        /* 패드를 판정 못 한 타격(PAD_NONE, 패드 밖)은 울리지 않는다 (11/5 FE 지적).
+         * 236: 타격 세기 → 진동 3단계 (약 ≤68, 중 69~92, 강 ≥93. vel_max 1400 기준, 11/9 양손 번갈아 30타씩 실측에서 잡은 경계).
+         * hapticStrength(기본 200) × 100/66/33% → haptic_click 의 >170 / >85 경계로 강·중·약 파형이 골라진다 */
+        if (haptic_enable && pr.id != PAD_NONE)
+            haptic_click((uint8_t)(haptic_strength * (ev.velocity >= 93 ? 100 : ev.velocity > 68 ? 66 : 33) / 100));
+        if (lat_log) {                                  /* 233: 샘플 시각 t 기준 µs. 검출 끝 / 전송 끝 / 진동 GO 쓰기 끝 */
+            uint32_t t_hap = now_us();
+            char m[20];
+            snprintf(m, sizeof m, "LT %lu %lu %lu", (unsigned long)(t_det - t), (unsigned long)(t_sent - t), (unsigned long)(t_hap - t));
+            send_log(m);
+        }
 #if SERIAL_MODE == SERIAL_TEXT
         if (Serial)
             Serial.printf("%3u %8lu %-9s%c %4d %4d %3u %4u %3u %3u %4.1f | %4lu | %lu\r\n",
@@ -821,6 +1068,18 @@ void app_loop()
         char m[20]; snprintf(m, sizeof m, "drop %s %ld", why[i], (long)(hd.peak / 16));
         send_log(m);
         rej_prev[i] = rej[i];
+    }
+
+    /* 자이로 포화 → LOG "SAT x y z" (축별 샘플 수, 1초에 한 번까지). 재무장 단계라 HIT을 늦추지 않음 */
+    {
+        static uint32_t t_sat = 0;
+        if ((sat_n[0] | sat_n[1] | sat_n[2]) && millis() - t_sat >= 1000) {
+            t_sat = millis();
+            char m[20];
+            snprintf(m, sizeof m, "SAT %lu %lu %lu", (unsigned long)sat_n[0], (unsigned long)sat_n[1], (unsigned long)sat_n[2]);
+            send_log(m);
+            sat_n[0] = sat_n[1] = sat_n[2] = 0;
+        }
     }
 
     /* 설정 모드: POSE 주기 전송 */

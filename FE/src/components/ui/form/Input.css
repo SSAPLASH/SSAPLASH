@@ -1,0 +1,85 @@
+/* Controls / Input 126:1927 */
+.ui-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.ui-input-label {
+  color: var(--text-1);
+  font-size: 14px;
+}
+.ui-input-field {
+  height: 44px;
+  padding: 0 var(--space-s);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 14px;
+  transition: border-color var(--motion-fast);
+}
+.ui-input-field::placeholder {
+  color: var(--text-2);
+}
+.ui-input-field:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.ui-input-field:focus {
+  border-color: var(--brand);
+  outline: none;
+}
+.ui-input-field:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ui-input.error .ui-input-field {
+  border-color: var(--miss);
+}
+.ui-input-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-height: 1em;
+  font-size: 12px;
+}
+.ui-input-help {
+  color: var(--text-3);
+}
+.ui-input-error {
+  color: var(--miss);
+}
+.ui-input-counter {
+  margin-left: auto;
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+/* compact: 라벨은 화면 읽기 프로그램용으로만 남긴다 */
+.ui-input-label-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* trailing: 입력칸 안 오른쪽에 요소를 얹는다(글자가 요소 밑으로 들어가지 않게 오른쪽 여백 40) */
+.ui-input-control {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.ui-input-trailing {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  transform: translateY(-50%);
+}
+.ui-input.has-trailing .ui-input-field {
+  padding-right: 40px;
+}

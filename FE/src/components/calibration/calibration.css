@@ -1,0 +1,376 @@
+/* 보정·재정렬 공용 조각(PLAY-004). 세팅 ② 본문(CalibrationStage)과 네 진입점의 RealignPrompt */
+
+/* ---- 재정렬 프롬프트 ---- */
+.realign-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.realign-prompt.card {
+  padding: var(--space-s) var(--space-m);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.realign-prompt.row {
+  flex: 1;
+  justify-content: flex-end;
+}
+.realign-prompt.band {
+  width: 100%;
+  justify-content: center;
+  padding: var(--space-xs) var(--space-m);
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface-1));
+  border-radius: var(--radius-control);
+}
+.realign-hands {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.realign-hand {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-1);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.realign-hand.off {
+  opacity: 0.3;
+}
+.realign-hand.wait {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.realign-hand.done {
+  background: var(--good, #4caf50);
+  border-color: var(--good, #4caf50);
+  color: #0e1320;
+}
+.realign-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-1);
+}
+.realign-prompt.row .realign-text {
+  flex: none;
+}
+.realign-skip {
+  flex: none;
+}
+
+/* ---- 세팅 ② 보정 본문 ---- */
+.cal-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.cal-stage-kit {
+  width: 100%;
+  border-radius: var(--radius-control);
+  background: var(--bg-canvas);
+  border: 1px solid var(--line);
+  padding: var(--space-s) 0;
+}
+.cal-stage-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+}
+.cal-stage-target {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.cal-stage-counts {
+  display: inline-flex;
+  gap: var(--space-s);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cal-stage-counts .full {
+  color: var(--good, #4caf50);
+}
+.cal-stage-warn {
+  color: var(--danger, #e5484d);
+  font-size: 13px;
+}
+.cal-stage-hint {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.cal-stage-progress {
+  display: inline-flex;
+  gap: 4px;
+}
+.cal-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.cal-stage-dot.done {
+  background: var(--good, #4caf50);
+  border-color: var(--good, #4caf50);
+}
+.cal-stage-dot.now {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+/* ---- 보정 중·결과(PLAY-004 D9~D11 · SETUP-fixed-kit-noir D5): 보정 팝업 본문. 위 안내·진행 점 / 가운데 드럼 그림(contain) / 아래 손별 타격 점·경고 ---- */
+.cal-stage-canvas {
+  position: relative;
+  width: 100%;
+  height: 360px;
+}
+.cal-stage-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.cal-stage-headline {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(20px, 2.4vw, 36px);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-1);
+}
+.cal-hands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.cal-hand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.cal-hand-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+.cal-hit-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: transparent;
+}
+.cal-hit-dot.on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.cal-gap-warn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-gap-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.cal-gap-advice,
+.cal-overlap-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.cal-overlap-line {
+  color: var(--warn);
+}
+/* 경고 배너(GapBanner, D3·D11): --warn 톤. 반투명 바탕 + 경고 테두리 */
+.cal-gap-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  box-sizing: border-box;
+  padding: var(--space-s) var(--space-m);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+  pointer-events: auto;
+}
+.cal-gap-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.cal-gap-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.cal-gap-banner-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
+}
+
+/* ---- 시작 위치 보정 자세 안내(ReferencePoseGuide) ---- */
+.pose-guide {
+  display: grid;
+  gap: 12px;
+}
+.pose-guide-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.pose-guide-figs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pose-guide-fig {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+  transition: border-color var(--motion-fast);
+}
+.pose-guide-fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pose-guide-fig figcaption {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.pose-guide-body {
+  fill: none;
+  stroke: #5b6677;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pose-guide-body.mid {
+  stroke-width: 5;
+}
+.pose-guide-body.thin {
+  stroke-width: 4;
+}
+.pose-guide-fill {
+  fill: #2b323c;
+  stroke: #5b6677;
+  stroke-width: 2;
+}
+/* 스틱은 브랜드 파랑에 은은한 네온 빛(안쪽은 또렷하게, 바깥은 넓고 옅게) */
+.pose-guide-stick {
+  fill: var(--brand);
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--brand) 90%, transparent)) drop-shadow(0 0 6px color-mix(in srgb, var(--brand) 45%, transparent));
+}
+/* 벌어진 자세 윤곽에는 빛을 넣지 않는다 */
+.pose-guide-ghost {
+  opacity: 0.3;
+}
+.pose-guide-ghost .pose-guide-stick {
+  filter: none;
+}
+.pose-guide-tip {
+  fill: var(--text-1);
+}
+.pose-guide-label {
+  fill: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* 가운데 점선: 스틱 끝이 모일 자리. 상태에 따라 색이 바뀐다 */
+.pose-guide-line {
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+.pose-guide[data-state='holding'] .pose-guide-line {
+  stroke: var(--brand);
+}
+.pose-guide[data-state='shaky'] .pose-guide-line {
+  stroke: var(--miss);
+}
+.pose-guide[data-state='done'] .pose-guide-line {
+  stroke: var(--good);
+}
+.pose-guide[data-state='done'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--good) 55%, transparent);
+}
+.pose-guide-check circle {
+  fill: var(--good);
+}
+.pose-guide-check path {
+  fill: none;
+  stroke: #04140a;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pose-guide-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pose-guide-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.pose-guide-steps li i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+}
+.pose-guide-steps li.on {
+  color: var(--text-1);
+}
+.pose-guide-steps li.on i {
+  background: var(--brand);
+  color: var(--brand-on);
+}
+@media (max-width: 520px) {
+  .pose-guide-figs,
+  .pose-guide-steps {
+    grid-template-columns: 1fr;
+  }
+}

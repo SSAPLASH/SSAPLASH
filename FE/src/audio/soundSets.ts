@@ -1,9 +1,9 @@
 // 사운드 세트: 소리의 출처를 묶는 단위. 합성음(synth)은 코드에 내장, 샘플 세트는 kit-config.json을 읽어 만든다.
 // 세트를 바꿔도 입력·판정·텔레메트리는 모른다. 파일 하나가 실패하면 그 패드만 합성음으로 폴백한다.
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { resolveKitPads, resolveKitVariants, type KitConfig, type KitVariantId } from './kitConfig';
 
-import type { SoundSetId } from '@/domain/soundSet';
+import type { SoundSetId } from '@/domain/kit/soundSet';
 
 export type { SoundSetId };
 

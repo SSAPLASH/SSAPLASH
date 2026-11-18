@@ -55,7 +55,7 @@ def _const(text: str) -> Callable[[Sequence[str]], str]:
 def _pad_late(pads: Sequence[str]) -> str:
     pad = _label(pads, 0, "그 패드")
     return (
-        f"{pad}만 따로 골라 박에 맞춰 반복해 보세요. "
+        f"자유 연습에서 메트로놈을 켜고 {pad}만 박에 맞춰 쳐 보세요. "
         "그 패드로 손을 옮기는 동작을 미리 준비하면 제때 칠 수 있어요."
     )
 
@@ -63,8 +63,8 @@ def _pad_late(pads: Sequence[str]) -> str:
 def _pad_early(pads: Sequence[str]) -> str:
     pad = _label(pads, 0, "그 패드")
     return (
-        f"{pad}만 따로 골라 박에 맞춰 반복해 보세요. "
-        "그 패드는 박 소리를 조금 더 기다렸다가 치면 정확해져요."
+        f"자유 연습에서 메트로놈을 켜고 {pad}만 박에 맞춰 쳐 보세요. "
+        "그 패드는 박을 조금 더 기다렸다가 치면 정확해져요."
     )
 
 
@@ -72,7 +72,7 @@ def _transition_late(pads: Sequence[str]) -> str:
     # pads는 [이전 패드, 현재 패드] 순서다(patterns/transition.py)
     a, b = _label(pads, 0, "앞 패드"), _label(pads, 1, "다음 패드")
     return (
-        f"{a}에서 {_ro(b)} 넘어가는 부분만 따로 느리게 반복해 보세요. "
+        f"자유 연습에서 {a}에서 {_ro(b)} 넘어가는 동작을 천천히 반복해 보세요. "
         f"{_eul(a)} 치자마자 {b} 쪽으로 손을 미리 보내면 좋아요."
     )
 
@@ -80,8 +80,8 @@ def _transition_late(pads: Sequence[str]) -> str:
 def _transition_miss(pads: Sequence[str]) -> str:
     a, b = _label(pads, 0, "앞 패드"), _label(pads, 1, "다음 패드")
     return (
-        f"{a}에서 {_ro(b)} 넘어가는 부분을 아주 느린 템포로 시작해 보세요. "
-        "익숙해지면 템포를 조금씩 올려요."
+        f"자유 연습에서 {a}에서 {_ro(b)} 넘어가는 동작을 아주 천천히 시작해 보세요. "
+        "익숙해지면 조금씩 빠르게 쳐 봐요."
     )
 
 
@@ -96,28 +96,28 @@ def _pad_confusion(pads: Sequence[str]) -> str:
 
 _TIPS: dict[str, Callable[[Sequence[str]], str]] = {
     "TIMING_LATE": _const(
-        "스틱을 미리 올려 두고, 박 소리가 들리는 순간 내려쳐 보세요. "
-        "느린 템포부터 시작하면 감이 빨리 와요."
+        "스틱을 미리 올려 두고, 박에 맞춰 내려쳐 보세요. "
+        "자유 연습에서 메트로놈을 켜고 치면 감이 빨리 와요."
     ),
     "TIMING_EARLY": _const(
-        "박 소리를 끝까지 듣고, 소리가 울리는 순간에 내려쳐 보세요. "
-        "서두르지 말고 느린 템포에서 여유를 가져 보세요."
+        "박을 끝까지 기다렸다가 내려쳐 보세요. "
+        "자유 연습에서 메트로놈을 켜고 여유 있게 쳐 보면 좋아요."
     ),
     "PAD_LATE": _pad_late,
     "PAD_EARLY": _pad_early,
     "TRANSITION_LATE": _transition_late,
     "TRANSITION_MISS": _transition_miss,
-    # 어느 손(왼손/오른손)인지는 문서에 없어서 "약한 쪽 손"이라고만 쓴다(patterns/hand.py)
+    # 조언은 pads만 받아서 "약한 쪽 손"이라고 쓴다. 어느 손인지는 제목과 설명이 알려 준다
     "HAND_WEAK": _const(
         "약한 쪽 손으로만 같은 리듬을 반복해 보세요. "
         "스틱을 꽉 쥐지 말고 튕겨 올리듯 치면 소리가 고르게 나요."
     ),
     "MISS_CLUSTER": _const(
-        "놓친 부분만 따로 떼어 느린 템포로 반복해 보세요. "
-        "한 번에 한 마디씩 익히면 곡 전체가 쉬워져요."
+        "이 구간을 들어 보며 어떤 노트를 놓쳤는지 먼저 확인해 보세요. "
+        "그다음 쉬운 연습 단계로 쳐 보면 곡이 한결 쉬워져요."
     ),
     "UNSTEADY": _const(
-        "박 소리에 맞춰 스네어 하나만 일정하게 길게 쳐 보세요. "
+        "자유 연습에서 메트로놈을 켜고 스네어 하나만 일정하게 쳐 보세요. "
         "간격이 고르게 느껴지면 다른 패드를 섞어 보세요."
     ),
     # 아래 다섯은 규칙이 아직 꺼져 있다(config.ENABLED_PATTERNS). 켜질 때 바로 붙도록 문구만 둔다.
@@ -135,8 +135,7 @@ _TIPS: dict[str, Callable[[Sequence[str]], str]] = {
     ),
     "PAD_CONFUSION": _pad_confusion,
     "DENSE_WEAK": _const(
-        "음이 빽빽한 부분은 가장 느린 템포에서 시작해 보세요. "
-        "박 하나하나를 또박또박 치다가 템포를 조금씩 올려요."
+        "음이 빽빽한 부분은 쉬운 연습 단계로 먼저 쳐 보세요. 익숙해지면 연습 단계를 하나씩 올려요."
     ),
 }
 
@@ -164,6 +163,11 @@ def level_for(severity: float) -> str:
     return "LOW"
 
 
+def _weak_hand(metrics: dict[str, float | int | str]) -> str:
+    """약한 손 이름. 스틱 0은 왼손, 1은 오른손이다(공통 명세서 9장). 값이 없으면 "약한 쪽 손"."""
+    return {0: "왼손", 1: "오른손"}.get(metrics.get("weakStickId"), "약한 쪽 손")  # type: ignore[arg-type]
+
+
 def _int(value: object) -> int | None:
     return int(round(float(value))) if isinstance(value, (int, float)) else None
 
@@ -183,13 +187,13 @@ def detail_for(
     count = _int(metrics.get("hitCount"))
     if pattern in ("TIMING_LATE", "TIMING_EARLY") and count is not None:
         way = (
-            ("늦게", "박 소리를 듣는 방법")
+            ("늦게", "스틱을 미리 준비하는 습관")
             if pattern == "TIMING_LATE"
-            else ("빠르게", "박 소리를 기다리는 방법")
+            else ("빠르게", "박을 기다리는 습관")
         )
         return (
             f"곡 전체에서 박보다 {way[0]} 치는 경향이에요({count}번 기준). "
-            f"특정 구간이 아니라 습관이라 {way[1]}을 바꾸면 한꺼번에 좋아져요."
+            f"특정 구간보다 치는 습관에 가까워서 {way[1]}을 들이면 곡 전체가 좋아질 수 있어요."
         )
     if pattern in ("PAD_LATE", "PAD_EARLY"):
         mean, overall = metrics.get("meanDeltaMs"), metrics.get("overallMeanDeltaMs")
@@ -219,7 +223,7 @@ def detail_for(
         weak, strong = _int(metrics.get("weakHitCount")), _int(metrics.get("strongHitCount"))
         if isinstance(ratio, (int, float)) and weak is not None and strong is not None:
             return (
-                f"약한 쪽 손이 센 쪽의 {ratio * 100:.0f}% 세기로 쳤어요(각각 {weak}번, {strong}번 기준). "
+                f"{_weak_hand(metrics)}이 다른 손의 {ratio * 100:.0f}% 세기로 쳤어요(각각 {weak}번, {strong}번 기준). "
                 "소리 크기가 들쭉날쭉하게 들릴 수 있어요."
             )
     if pattern == "MISS_CLUSTER":
@@ -234,7 +238,7 @@ def detail_for(
         std = metrics.get("stdDeltaMs")
         if isinstance(std, (int, float)) and count is not None:
             return (
-                f"박과의 간격이 평균 {std:.0f}ms씩 흩어져요({count}번 기준). "
+                f"치는 시각이 박을 기준으로 약 {std:.0f}ms 폭으로 흔들려요({count}번 기준). "
                 "곡 전체의 박자감을 맞추는 연습이 필요해요."
             )
     return None

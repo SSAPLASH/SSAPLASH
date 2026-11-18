@@ -201,6 +201,14 @@ uv run python scripts/run_recommend_poc.py --data data/recommend/internal --stag
 `--mlflow`는 실험 `song-recommend`에 방법마다 run을 남긴다(시드·데이터 해시·코드 커밋·출처 단계·하이퍼파라미터). `MLFLOW_TRACKING_URI` 또는 `--tracking-uri`로 기록할 곳을 정한다.
 오류(데이터 규격 위반, 단계 규칙 위반, 알 수 없는 방법)는 종료 코드 2다.
 
+## 일반 사용자 데이터(P2) 평가
+
+일반 사용자 데이터는 파일로 두지 않는다. `--from-views`로 BE 읽기 뷰에서 메모리로 읽고, 결과는 집계 값만 남긴다. `--data`로 P2를 쓰면 멈춘다.
+
+```bash
+docker compose -p infra run --rm --entrypoint python recommend-batch -m ssaplash_ai.recommend.run --from-views --stage P2 --p2-approval <근거> --models M0,M1,M2,M3,M5FM,M6FM --mlflow
+```
+
 ## 실데이터(P1) 실행 준비 (작업 8)
 
 실데이터 실행에 필요한 것은 ① 입력 CSV(BE 내보내기), ② 곡 메타데이터 변환, ③ 보고서다. ②와 ③은 이 저장소에 준비되어 있고, ①은 BE가 만들어야 한다. **음원은 필요 없다.** 추천은 채보에서 BE가 이미 계산한 특징만 쓴다.

@@ -20,10 +20,12 @@ from ssaplash_ai.chart.tempo import (
     LibrosaTempo,
     bpm_from_beats,
     create_tempo_estimator,
+    downbeat_phase_ms,
     ensure_beat_this_checkpoint,
     estimate_from_beats,
     fold_bpm,
     models_dir,
+    tempo_map_from_beats,
 )
 
 LIBROSA = TempoConfig(method="librosa")
@@ -51,7 +53,7 @@ def test_박_간격_계산은_튀는_간격을_뺌():
 
 @pytest.mark.parametrize("bpm", [84.0, 110.0, 178.0])
 def test_20ms_단위_박에서_bpm이_0점01_안(bpm: float):
-    # Beat This! 박 시각처럼 20ms 단위로 끊고, 박 5%를 무작위로 빼서 구간을 끊음 (설계 인수 조건 13)
+    # Beat This! 박 시각처럼 20ms 단위로 끊고, 박 5%를 무작위로 빼서 구간을 끊음
     rng = np.random.default_rng(int(bpm))
     beats = 0.37 + np.arange(int(180 * bpm / 60)) * 60.0 / bpm
     beats = np.round(beats / 0.02) * 0.02
@@ -80,6 +82,66 @@ def test_박이_모자라면_힌트_그것도_없으면_기본값():
     none = estimate_from_beats(np.array([]), None, TempoConfig(), "librosa")
     assert not none.estimated and none.bpm == FALLBACK_BPM and none.raw_bpm is None
     assert none.first_beat_ms is None and none.first_downbeat_ms is None
+    assert hinted.downbeat_phase_ms is None and none.downbeat_phase_ms is None
+
+
+# ---- 마디 첫 박 다수결 ----
+
+
+def test_다수결은_첫_번째만_틀리면_다수_쪽_위치():
+    # 120bpm 한 마디 2000ms. 첫 마디 첫 박만 두 박 밀린 1000ms 위치, 나머지 열 개는 300ms 위치
+    downbeats = np.r_[1.3, 2.3 + 2.0 * np.arange(10)]
+    assert downbeat_phase_ms(downbeats, 2000.0) == 300
+
+
+def test_다수결은_마디_경계를_넘어_셈():
+    # 1995ms(마디 끝 근처)와 5ms·15ms(마디 처음 근처)는 같은 위치. 다른 위치 1000ms 두 개보다 많음
+    downbeats = np.array([1.995, 4.005, 6.015, 7.995, 1.0, 3.0])
+    assert downbeat_phase_ms(downbeats, 2000.0) == 0
+
+
+def test_빠르기_구간은_일정하면_하나():
+    beats = 0.3 + 0.5 * np.arange(40)  # 120bpm, 마디 첫 박은 1번 박(0.8초)부터 4개마다
+    points = tempo_map_from_beats(beats, beats[1::4], 4, 20.0, 60.0, 200.0)
+    assert points is not None and len(points) == 1
+    assert points[0].beat == 0 and points[0].time_ms == pytest.approx(800.0)
+    assert points[0].bpm == 120.0
+
+
+def test_빠르기_구간은_바뀌는_곳에서_나뉨():
+    # 120bpm 16박 뒤 100bpm 16박. 마디 경계(4박마다)가 구간 bpm으로 계산한 시각과 1ms 안
+    beats = np.r_[0.5 * np.arange(17), 8.0 + 0.6 * np.arange(1, 17)]
+    points = tempo_map_from_beats(beats, beats[0::4], 4, 20.0, 60.0, 200.0)
+    assert [p.bpm for p in points] == [120.0, 100.0]
+    assert [p.beat for p in points] == [0, 16]
+    assert points[1].time_ms == pytest.approx(8000.0, abs=1.0)
+
+
+def test_빠르기_구간을_못_만들면_None():
+    beats = 0.5 * np.arange(40)
+    assert tempo_map_from_beats(beats, np.array([]), 4, 20.0, 60.0, 200.0) is None
+    assert tempo_map_from_beats(beats[:8], beats[:8:4], 4, 20.0, 60.0, 200.0) is None
+    fast = 0.2 * np.arange(60)  # 300bpm: 8분 단위로 잡은 박
+    assert tempo_map_from_beats(fast, fast[::4], 4, 20.0, 60.0, 200.0) is None
+
+
+def test_설정을_켜야_빠르기_구간을_만듦():
+    beats = 0.3 + 0.5 * np.arange(40)
+    off = estimate_from_beats(beats, beats[1::4], TempoConfig(), "beat_this")
+    on = estimate_from_beats(beats, beats[1::4], TempoConfig(tempo_map=True), "beat_this")
+    assert off.tempo_map is None and on.tempo_map is not None
+
+
+def test_다수결은_마디_첫_박이_없으면_None():
+    assert downbeat_phase_ms(np.array([]), 2000.0) is None
+    assert downbeat_phase_ms(np.array([1.0]), 0.0) is None
+
+
+def test_박_시각에서_다수결_위치를_만듦():
+    beats = np.arange(0.3, 30.0, 0.5)  # 120bpm
+    downbeats = np.r_[1.3, 2.3 + 2.0 * np.arange(12)]
+    est = estimate_from_beats(beats, downbeats, TempoConfig(), "beat_this")
+    assert est.first_downbeat_ms == 1300 and est.downbeat_phase_ms == 300
 
 
 @pytest.mark.parametrize("bpm", [87.0, 90.0, 120.0, 128.0, 150.0])

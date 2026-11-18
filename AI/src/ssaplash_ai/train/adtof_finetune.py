@@ -1,18 +1,11 @@
-"""ADTOF Frame_RNN 파인튜닝 학습 루프 (설계 CHART-003-tom-finetune 3-2·3-3·4-3절).
+"""ADTOF Frame_RNN 파인튜닝 학습 루프.
 
-- 모델 구조는 ADTOF-pytorch 포트 그대로. 출력층만 클래스 수(5·6·7·9)에 맞춤
-- 6클래스(five_pedal)·7클래스(five_pedal_cym)·9클래스(pads)는 5클래스 가중치에서 출력층을 복사해 초기화
-  (탐 3개 ← 탐, 크래시·라이드 ← 심벌, 페달 ← 하이햇)
-- 손실: 프레임·클래스별 이진 교차 엔트로피. 양성 가중치 = 클래스 가중치(탐은 × tom_weight_mult,
-  페달은 × pedal_weight_mult). 데이터셋의 ignore_classes 채널은 그 윈도에서 손실에서 뺌
-- 학습 전에 기본 가중치를 5클래스로 한 번 검증해 기준값으로 둠. 시작 가중치도 한 번 검증해 log.csv 에폭 -1 줄
-- 에폭 = steps_per_epoch 스텝. 에폭마다 검증 F1을 재서 select_metric이 오르고, 5가지 클래스 F1이 모두
-  기준값보다 guard_drop 넘게 떨어지지 않았으면 best.pth. 그런 에폭이 하나도 없으면 마지막 가중치를 best.pth로(경고)
-- 검증 점수가 lr_reduce_patience 에폭 안 오르면 학습률 ×0.2, early_stop_patience 에폭 안 오르면 종료
-- 끝나면 fit_thresholds로 검증 데이터에서 클래스별 문턱값을 맞춰 best.pth의 model_info에 기록
-- 끊긴 학습은 resume으로 last.pth·log.csv에서 이어 감(옵티마이저 상태는 새로 시작)
-체크포인트 형식은 기본 가중치 파일과 같은 {'model_weights': state_dict, 'model_info': {...}}.
-데이터 읽기는 adtof_data, 점수는 adtof_eval.
+- 모델 구조는 ADTOF-pytorch 포트 그대로. 출력층만 클래스 수(5·6·7·9)에 맞추고 5클래스 가중치에서 복사해 초기화
+- 손실: 프레임·클래스별 이진 교차 엔트로피. 양성 가중치 = 클래스 가중치
+- 에폭마다 검증 F1을 측정해 select_metric이 오르고 5가지 클래스 F1이 기준값보다 guard_drop 넘게 떨어지지 않았으면 best.pth
+- 검증 점수가 안 오르면 학습률 ×0.2, 더 안 오르면 종료. 끝나면 클래스별 문턱값을 맞춰 model_info에 기록
+- 끊긴 학습은 resume으로 last.pth·log.csv에서 이어 감
+체크포인트 형식은 {'model_weights': state_dict, 'model_info': {...}}.
 """
 
 from __future__ import annotations
@@ -99,7 +92,7 @@ class ValSpec:
 
 @dataclass
 class TrainConfig:
-    """configs/train/*.yaml 한 파일 (설계 3-2절 표)."""
+    """configs/train/*.yaml 한 파일."""
 
     train_datasets: list[DatasetSpec]
     val_datasets: list[ValSpec]
@@ -343,7 +336,7 @@ class TrainState:
 
 @dataclass
 class ResumePoint:
-    """끊긴 학습을 이어 갈 자리 (설계 4-3절 10). log.csv를 처음부터 다시 읽어 계산."""
+    """끊긴 학습을 이어 갈 자리. log.csv를 처음부터 다시 읽어 계산."""
 
     state: TrainState
     start_epoch: int
@@ -547,7 +540,7 @@ def train(
         epochs = range(0) if finished else range(start_epoch, cfg.max_epochs)
     else:
         t0 = time.time()
-        # 학습 전 시작 가중치 (6·9클래스는 출력층을 복사한 상태라 하이햇·탐이 겹쳐 나올 수 있음)
+        # 학습 전 시작 가중치 (6·7·9클래스는 출력층을 복사한 상태라 하이햇·탐이 겹쳐 나올 수 있음)
         start_row: dict = {"epoch": -1, "step": 0, "lr": state.lr, "loss": float("nan"), "sec": 0}
         consider(evaluate_model(model, val_songs, cfg.classes, thresholds, device), -1, start_row)
         write_row(start_row)

@@ -1,0 +1,16 @@
+/* 레인 → 패드 연결 층: 판정선부터 킷 아래까지, 하이웨이 열과 같은 폭으로 겹친다. 킷(.play-stage-drum)보다 아래 층이라 선이 패드 뒤로 지나간다 */
+.lane-link {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-l);
+  width: min(calc(100% - 2 * var(--space-l)), 1060px);
+  /* 80 = LINK_ZONE_H */
+  height: calc(80px + var(--game-kit-h));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.lane-link canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

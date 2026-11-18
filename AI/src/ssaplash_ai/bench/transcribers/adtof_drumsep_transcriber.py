@@ -1,25 +1,14 @@
-"""ADTOF + 드럼 킷 분리 어댑터 (채보 설계 1-1절 결정, U8). "5가지 모델을 8패드로 늘리는 길".
+"""ADTOF + 드럼 킷 분리 어댑터. 5가지를 내는 ADTOF 결과를 8패드로 늘림.
 
-흐름: ADTOF(5가지: 킥·스네어·하이햇·탐·심벌) → MDX23C DrumSep(기존 msst 어댑터, 6스템: kick·snare·toms·
-hh·ride·crash)로 입력 드럼을 다시 나눔 → 규칙으로 탐·심벌 타격에 패드를 붙임.
-- 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 피크(tom_fmin~tom_fmax Hz)를 기본 주파수로 봄.
-  tom_mode가 fixed(기본)면 tom_bands(Hz 경계 두 개)로 FLOOR_TOM / MID_TOM / SMALL_TOM. 경계값은 yaml(rules)에
-  있고 GMD 정답으로 한 번 맞춘 값(U8): GMD(TD-11 킷) 정답 탐의 기본 주파수 중앙값이 플로어 97·미드 129·하이
-  160Hz라 경계를 113·142Hz로 둠. 실제 드럼 킷은 음높이가 달라 MDB에서는 틀릴 수 있음(한계로 표기,
-  S15P31A307-163 분석). drum2midi의 "음높이 순서" 규칙을 절대 구간으로 바꾼 것.
-  tom_mode가 relative면 곡 안의 탐 타격 음높이를 모아 큰 틈에서 1~3묶음으로 나누고 낮은 순서로 이름을 붙임
-  (S15P31A307-164 실험). 묶음이 3개보다 적을 때는 tom_relative_naming대로 이름을 정함.
-  tom_gate_ratio가 있으면 타격 직후 toms 트랙 에너지가 입력 드럼 에너지의 그 비율보다 작은 탐 타격은 버림
-  (탐이 아닌 소리를 탐으로 잡은 것 거르기, S15P31A307-164 실험). 입력 드럼(mixture)이 필요함.
-- 심벌: 타격 직후 cymbal_window_ms(없으면 window_ms) 구간에서 crash 스템과 ride 스템의 에너지를 비교해 큰 쪽.
-  crash 에너지에는 cymbal_crash_weight(기본 1.0)를 곱함. 크래시·라이드를 따로 내는 파인튜닝 체크포인트
-  (출력에 51번이 있음, S15P31A307-164 v0.3)면 이 규칙을 안 쓰고 49 → CRASH, 51 → RIDE 그대로.
-킥·스네어·하이햇은 ADTOF 결과 그대로. 세기 없음. 채보 시간에는 ADTOF + 분리 + 규칙이 다 들어감.
-- 탐 전용 가중치(tom_checkpoint_path, S15P31A307-164 작업 11): 있으면 ADTOF를 그 가중치로 한 번 더 돌려 같은
-  분리 트랙·규칙으로 패드를 붙이고, 탐 3종은 그 결과에서, 나머지는 checkpoint_path 결과에서 가져옴. 실제 녹음으로
-  학습한 가중치가 처음 보는 드럼 세트의 킥을 탐으로 적는 것을 원래 가중치 탐으로 막으려는 것. "default"면 패키지 기본 가중치.
-- 심벌 전용 가중치(cymbal_checkpoint_path, S15P31A307-241): 같은 방식으로 크래시·라이드만 그 가중치 결과에서 가져옴.
-  크래시·라이드를 직접 나눠 내는 7클래스 가중치를 쓰면 스템 에너지 비교 규칙 대신 모델 출력으로 정해짐.
+흐름: ADTOF(킥·스네어·하이햇·탐·심벌) → MDX23C DrumSep으로 입력 드럼을 6스템으로 나눔 → 규칙으로 탐·심벌에 패드를 붙임.
+킥·스네어·하이햇은 ADTOF 결과 그대로. 세기 없음.
+- 탐: 탐 스템에서 타격 직후 window_ms 구간의 스펙트럼 최대 피크를 음높이로 봄. tom_mode가 fixed면 tom_bands 경계로,
+  relative면 곡 안 음높이를 1~3묶음으로 나눠 이름을 붙임. tom_gate_ratio가 있으면 탐 트랙 에너지가 작은 타격은 버림
+- 심벌: 타격 직후 crash 스템과 ride 스템의 에너지를 비교해 큰 쪽. crash에는 cymbal_crash_weight를 곱함.
+  크래시·라이드를 따로 내는 체크포인트면 모델 출력을 그대로 씀
+- tom_checkpoint_path·cymbal_checkpoint_path: 탐 3종 또는 크래시·라이드만 다른 가중치 결과에서 가져옴
+- average_checkpoints: ADTOF 가중치 여러 개의 프레임별 점수를 열마다 평균한 뒤 피크를 고름
+규칙 값은 모델 yaml의 rules, 기본값은 DEFAULT_RULES.
 """
 
 from __future__ import annotations
@@ -31,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ssaplash_ai.bench.transcribers.adtof_transcriber import AdtofTranscriber
+from ssaplash_ai.bench.transcribers.adtof_transcriber import AdtofTranscriber, model_input
 from ssaplash_ai.bench.transcribers.transcriber_base import BaseTranscriber, RawHit
 
 DEFAULT_RULES: dict = {
@@ -51,11 +40,11 @@ DEFAULT_RULES: dict = {
         "hh": "hh",
     },
     "cymbal_min_energy": 1e-8,
-    # crash 스템 에너지에 곱하는 값. 1보다 크면 크래시 쪽으로 기움 (S15P31A307-164 v0.3 후보)
+    # crash 스템 에너지에 곱하는 값. 1보다 크면 크래시 쪽으로 기움
     "cymbal_crash_weight": 1.0,
-    # 심벌 판정 구간. None이면 window_ms와 같음 (탐 구간만 따로 바꿀 수 있게, S15P31A307-163)
+    # 심벌 판정 구간. None이면 window_ms와 같음 (탐 구간만 따로 바꿀 수 있게)
     "cymbal_window_ms": None,
-    # 탐 방식 (S15P31A307-164). fixed: 고정 Hz 경계. relative: 곡 안에서 탐 음높이를 모아 순서로 나눔
+    # 탐 방식. fixed: 고정 Hz 경계. relative: 곡 안에서 탐 음높이를 모아 순서로 나눔
     "tom_mode": "fixed",
     # relative일 때 최대 묶음 수, 묶음을 가르는 최소 틈(반음), 묶음 하나의 최소 타격 수(작으면 이웃에 합침)
     "tom_relative_k": 3,
@@ -63,14 +52,14 @@ DEFAULT_RULES: dict = {
     "tom_relative_min_hits": 2,
     # 묶음이 3개보다 적을 때 이름 붙이기. bands: 묶음 중앙값을 고정 경계로 / order: 순서만 (1개 MID, 2개 FLOOR·MID)
     "tom_relative_naming": "bands",
-    # 탐 아닌 소리 거르기 (S15P31A307-164). None이면 끔. toms 트랙 에너지 / 입력 드럼 에너지가 이 값 아래면 버림
+    # 탐 아닌 소리 거르기. None이면 끔. toms 트랙 에너지 / 입력 드럼 에너지가 이 값 아래면 버림
     "tom_gate_ratio": None,
     # 거르기 에너지를 재는 구간. None이면 window_ms
     "tom_gate_window_ms": None,
     # 거른 탐을 어떻게 할지. drop: 버림. snare: 50ms 안에 ADTOF 스네어 타격이 없으면 SNARE로 돌리고 있으면 버림
-    # (거른 탐 대부분이 정답 스네어 옆이라서, S15P31A307-164 분석)
+    # (거른 탐 대부분이 정답 스네어 옆이라서)
     "tom_gate_action": "drop",
-    # 탐 타격 시각 고르기 (S15P31A307-164 재연구). ADTOF 프레임별 확신 점수가 있을 때만 적용
+    # 탐 타격 시각 고르기. ADTOF 프레임별 확신 점수가 있을 때만 적용
     "tom_threshold": None,  # 탐 확신 점수 기준값. None이면 저장소 기본값 0.32
     # madmom: 100ms 이동평균을 뺀 뒤 기준값과 비교(저장소 방식). raw: 이동평균을 빼지 않음
     "tom_peak_mode": "madmom",
@@ -82,14 +71,14 @@ DEFAULT_RULES: dict = {
     "tom_gate_low_rescue": None,
     "tom_gate_low_min_score": 0.5,
     "tom_low_hz": [60.0, 130.0],
-    # 음높이 재는 법 (S15P31A307-164 재연구). peak: 구간 전체 스펙트럼의 가장 큰 피크 하나(지금 방식).
+    # 음높이 계산 방법. peak: 구간 전체 스펙트럼의 가장 큰 피크 하나(지금 방식).
     # median: 구간을 tom_f0_frame_ms 길이·tom_f0_hop_ms 간격 프레임으로 잘라 프레임마다 피크를 재고 중앙값.
     # 킥 겹침·스틱 잡음이 한 프레임에만 있을 때 흔들리지 않게. tom_f0_start_ms는 타격 뒤 얼마부터 잴지
     "tom_f0_method": "peak",
     "tom_f0_frame_ms": 40.0,
     "tom_f0_hop_ms": 20.0,
     "tom_f0_start_ms": 0.0,
-    # 탐 음높이 잴 때 킥 울림 빼기 (S15P31A307-164 ENST 드러머 1 분석). None이면 끔. 탐 구간의 가장 큰 피크가 곡의
+    # 탐 음높이 잴 때 킥 울림 빼기. None이면 끔. 탐 구간의 가장 큰 피크가 곡의
     # 킥 음높이 ±이 반음 안이면, 그 밖의 가장 큰 피크가 최대의 tom_kick_exclude_ratio배 이상일 때 그쪽을 음높이로 씀.
     # 킥을 다른 세트의 플로어탐 높이로 조율한 세트(킥 101Hz)에서 킥 울림이 탐 묶음 하나로 잡혀 이름이 밀리는 경우 대응.
     # 곡의 킥 음높이는 ADTOF 킥 시각에서 tom_kick_pitch_source 트랙의 스펙트럼 피크 중앙값
@@ -106,8 +95,8 @@ DEFAULT_RULES: dict = {
     # 높은 쪽은 small_min 위면 SMALL 아니면 MID. 둘이 같아지면 순서로 벌림. 3묶음: 순서
     "tom_hybrid_floor_max_hz": 120.0,
     "tom_hybrid_small_min_hz": 200.0,
-    # 곡 안 음높이 묶는 법. gap: 반음으로 정렬해 이웃 사이 틈이 tom_relative_min_gap 이상인 곳에서 자름(-164 실험 방식.
-    # 타격이 수백 개면 음높이가 연속으로 깔려 틈이 안 생겨 묶음이 하나가 됨). peaks: 반음 히스토그램을 부드럽게 한 뒤
+    # 곡 안 음높이 묶는 법. gap: 반음으로 정렬해 이웃 사이 틈이 tom_relative_min_gap 이상인 곳에서 자름.
+    # 타격이 수백 개면 음높이가 연속으로 깔려 틈이 안 생겨 묶음이 하나가 됨. peaks: 반음 히스토그램을 부드럽게 한 뒤
     # 피크를 찾고(피크 사이 최소 거리 tom_relative_min_gap) 타격을 가장 가까운 피크에 붙임
     "tom_relative_method": "gap",
     "tom_relative_bin": 0.25,  # peaks 히스토그램 칸(반음)
@@ -115,7 +104,7 @@ DEFAULT_RULES: dict = {
     # 묶음 하나의 최소 타격 비율(곡 안 탐 타격 수 대비). tom_relative_min_hits와 둘 중 큰 쪽을 씀.
     # 실제 드럼은 같은 탐도 세기에 따라 음높이가 3반음쯤 흔들려 작은 곁가지 묶음이 생기므로 비율로 합침
     "tom_relative_min_frac": 0.0,
-    # 킥과 겹친 탐 지우기 (S15P31A307-164 파인튜닝 뒤 ENST drummer_1 분석). None이면 끔. 이름을 붙인 뒤
+    # 킥과 겹친 탐 지우기. None이면 끔. 이름을 붙인 뒤
     # tom_kick_drop_pads에 든 탐이 ADTOF 킥 타격과 이 거리(ms) 안이면 버림. 파인튜닝 모델이 실제 킥을 킥과
     # 플로어탐으로 함께 내는 경우 대응. tom_kick_drop_max_score를 주면 탐 확신 점수가 그 값 미만인 것만 버림
     "tom_kick_drop_ms": None,
@@ -141,10 +130,13 @@ ADTOF_KICK = 35
 ADTOF_SNARE = 38
 ADTOF_TOM = 47
 ADTOF_CYMBAL = 49
-ADTOF_PEDAL = 44  # 페달 출력을 더한 파인튜닝 체크포인트(S15P31A307-164 v0.2)만 냄
+ADTOF_PEDAL = 44  # 페달 출력을 더한 파인튜닝 체크포인트만 냄
 ADTOF_RIDE = 51  # 크래시·라이드를 나눈 파인튜닝 체크포인트(v0.3)만 냄. 이때 49는 크래시만
 TOM_PAD_NAMES = ("SMALL_TOM", "MID_TOM", "FLOOR_TOM")
 CYMBAL_PAD_NAMES = ("CRASH", "RIDE")
+CYMBAL_MODES = ("take", "name")
+AVERAGE_COLUMNS = "ksthc"  # ADTOF 5종 점수 열 순서: 킥 35·스네어 38·탐 47·하이햇 42·심벌 49
+RENAME_NEAR_SEC = 0.05  # cymbal_mode name에서 이름을 가져올 타격 거리
 LABEL_BY_PITCH = {ADTOF_KICK: "KICK", ADTOF_SNARE: "SNARE", 42: "HIHAT", ADTOF_PEDAL: "HIHAT_PEDAL"}
 TOM_MODES = ("fixed", "relative")
 TOM_NAMINGS = ("bands", "order", "hybrid")
@@ -184,7 +176,7 @@ def rules_with_defaults(rules: dict | None) -> dict:
     return out
 
 
-# ---------- 탐 타격 시각 고르기 (S15P31A307-164 재연구) ----------
+# ---------- 탐 타격 시각 고르기 ----------
 
 
 def _moving_average(x: np.ndarray, left: int, right: int) -> np.ndarray:
@@ -445,7 +437,7 @@ def cymbal_pad(
     return "RIDE" if e_ride > e_crash else "CRASH"
 
 
-# ---------- 탐: 곡별 상대 방식·거르기 (S15P31A307-164) ----------
+# ---------- 탐: 곡별 상대 방식·거르기 ----------
 
 
 def semitones(f0: np.ndarray) -> np.ndarray:
@@ -567,11 +559,8 @@ def name_clusters(
 ) -> list[str]:
     """묶음 중앙값(낮은 순) → 패드 이름. 3개면 순서대로 FLOOR·MID·SMALL.
 
-    1~2개일 때 bands는 중앙값을 고정 경계로 이름 짓고 둘이 같으면 그 안에서 순서로 벌림(둘 다 플로어면
-    FLOOR·MID, 둘 다 스몰이면 MID·SMALL, 둘 다 미드면 경계에 더 가까운 쪽을 밖으로). order는 1개 MID, 2개 FLOOR·MID.
-    hybrid는 1개면 floor_max 아래 FLOOR·small_min 위 SMALL·사이 MID, 2개면 낮은 쪽을 floor_max 아래일 때만
-    FLOOR(아니면 MID), 높은 쪽을 small_min 위일 때만 SMALL(아니면 MID)로 하고 둘이 같아지면 순서로 벌림.
-    실제 킷은 탐이 둘인 경우가 많고 그 랙탐이 160~180Hz라 MID로 두는 것이 정답(MDB 표기)과 맞음.
+    1~2개일 때 bands는 고정 경계로, order는 순서로(1개 MID, 2개 FLOOR·MID) 이름을 붙임.
+    hybrid는 floor_max 아래만 FLOOR, small_min 위만 SMALL, 나머지는 MID로 하고 둘이 같아지면 순서로 벌림.
     """
     medians = [float(m) for m in medians_hz]
     m = len(medians)
@@ -608,7 +597,7 @@ def name_clusters(
 
 @dataclass
 class TomAssignment:
-    """곡 하나의 탐 타격 처리 결과. 분석 도구(rule_eval·tom_pitch)가 by_song 통계에 씀."""
+    """곡 하나의 탐 타격 처리 결과. 분석 도구 rule_eval이 by_song 통계에 씀."""
 
     times: list[float]
     f0: np.ndarray  # Hz, 무음이면 nan
@@ -881,7 +870,7 @@ def assign_pads(
     """ADTOF 피치별 시각 + 분리 스템 (+ 입력 드럼, 프레임별 점수) → (시각, 패드 이름, None) 목록.
 
     mixture는 tom_gate_ratio(탐 아닌 소리 거르기)를 켰을 때 필요한 입력 드럼 (채널, 샘플).
-    activations는 ADTOF 프레임별 점수 (프레임, 5 또는 6). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
+    activations는 ADTOF 프레임별 점수 (프레임, 5·6·7). 있으면 tom_threshold·tom_peak_mode대로 탐 시각을 다시 고르고
     낮은 탐 되살리기의 점수 조건에 씀. 없으면 peaks의 탐 시각 그대로.
     """
     r = rules_with_defaults(rules)
@@ -946,6 +935,33 @@ def merge_pad_hits(
     return sorted(out, key=lambda h: h[0])
 
 
+def rename_pad_hits(
+    hits: Sequence[RawHit], other: Sequence[RawHit], pads: Sequence[str]
+) -> list[RawHit]:
+    """hits의 pads 타격 시각은 두고, RENAME_NEAR_SEC 안 가장 가까운 other의 pads 타격 이름으로 바꿈"""
+    times = np.array([h[0] for h in other if h[1] in pads], dtype=np.float64)
+    names = [h[1] for h in other if h[1] in pads]
+    out = []
+    for h in hits:
+        if h[1] in pads and len(times):
+            j = int(np.argmin(np.abs(times - h[0])))
+            if abs(times[j] - h[0]) <= RENAME_NEAR_SEC:
+                h = (h[0], names[j], h[2])
+        out.append(h)
+    return out
+
+
+def average_activations(main: np.ndarray, members: Sequence[tuple[np.ndarray, str]]) -> np.ndarray:
+    """주 가중치 점수 (프레임, 5)와 (점수, 열 글자) 목록 → 열마다 평균. 길이는 가장 짧은 것에 맞춤"""
+    n = min([len(main), *(len(a) for a, _ in members)])
+    out = np.array(main[:n, :5], dtype=np.float32)
+    for j, letter in enumerate(AVERAGE_COLUMNS):
+        use = [a[:n, j] for a, cols in members if letter in cols]
+        if use:
+            out[:, j] = (out[:, j] + np.sum(use, axis=0)) / (1 + len(use))
+    return out
+
+
 def merge_tom_hits(hits: Sequence[RawHit], tom_hits: Sequence[RawHit]) -> list[RawHit]:
     """hits에서 탐 3종을 빼고 tom_hits의 탐 3종을 넣음. 시각순"""
     return merge_pad_hits(hits, tom_hits, TOM_PAD_NAMES)
@@ -963,6 +979,18 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         self._adtof = AdtofTranscriber(config, device)
         self._tom_adtof = self._extra_adtof(config.tom_checkpoint_path, device)
         self._cym_adtof = self._extra_adtof(config.cymbal_checkpoint_path, device)
+        if config.cymbal_mode not in CYMBAL_MODES:
+            raise ValueError(
+                f"{config.name}: cymbal_mode는 {CYMBAL_MODES} 중 하나: {config.cymbal_mode}"
+            )
+        self._avg_adtofs: list[tuple[AdtofTranscriber, str]] = []
+        for item in config.average_checkpoints:
+            cols = str(item.get("columns") or AVERAGE_COLUMNS)
+            if not item.get("path") or set(cols) - set(AVERAGE_COLUMNS):
+                raise ValueError(
+                    f"{config.name}: average_checkpoints 항목은 path와 {AVERAGE_COLUMNS} 글자 columns: {item}"
+                )
+            self._avg_adtofs.append((self._extra_adtof(str(item["path"]), device), cols))
         self._sep = None
         self.rules = rules_with_defaults(config.rules)
 
@@ -990,12 +1018,19 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
         self._sep.prepare()
 
     def _load(self) -> None:
-        for adtof in (self._adtof, self._tom_adtof, self._cym_adtof):
+        for adtof in (self._adtof, self._tom_adtof, self._cym_adtof, *self._avg_models()):
             if adtof is not None:
                 adtof._load()
                 adtof.loaded = True
+        if self._avg_adtofs:
+            for adtof in (self._adtof, *self._avg_models()):
+                if adtof._labels != [35, 38, 47, 42, 49]:
+                    raise ValueError(f"점수 평균은 ADTOF 5종 가중치만 됨: {adtof._checkpoint_id()}")
         self._sep._load()
         self._sep.loaded = True
+
+    def _avg_models(self) -> list[AdtofTranscriber]:
+        return [a for a, _ in self._avg_adtofs]
 
     def stems(self, audio: np.ndarray, sample_rate: int) -> dict[str, np.ndarray]:
         """드럼 킷 분리 스템 이름 → (채널, 샘플)."""
@@ -1007,7 +1042,13 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
     def _transcribe(
         self, audio: np.ndarray, sample_rate: int, song_id: str | None
     ) -> Sequence[RawHit]:
-        activations = self._adtof.activations(audio, sample_rate)
+        x = model_input(audio, sample_rate)  # 가중치 여러 개가 같은 입력 특징을 씀
+        activations = self._adtof.activations_from_input(x)
+        if self._avg_adtofs:
+            activations = average_activations(
+                activations,
+                [(a.activations_from_input(x), cols) for a, cols in self._avg_adtofs],
+            )
         peaks = self._adtof.peaks(activations)
         stems = self.stems(audio, sample_rate)
         missing = [
@@ -1025,29 +1066,33 @@ class AdtofDrumsepTranscriber(BaseTranscriber):
             peaks, stems, sample_rate, self.rules, mixture=audio, activations=activations
         )
         for adtof, pads in self._extras():
-            act = adtof.activations(audio, sample_rate)
+            act = adtof.activations_from_input(x)
             other = assign_pads(
                 adtof.peaks(act), stems, sample_rate, self.rules, mixture=audio, activations=act
             )
-            hits = merge_pad_hits(hits, other, pads)
+            if pads == CYMBAL_PAD_NAMES and self.config.cymbal_mode == "name":
+                hits = rename_pad_hits(hits, other, pads)
+            else:
+                hits = merge_pad_hits(hits, other, pads)
         return hits
 
     def _checkpoint_id(self) -> str:
         sep_ckpt = self._sep.info().checkpoint if self._sep is not None and self._sep.loaded else ""
         names = {id(self._tom_adtof): "tom", id(self._cym_adtof): "cymbal"}
         extra = "".join(f"+{names[id(a)]}:{a._checkpoint_id()}" for a, _ in self._extras())
-        return f"{self._adtof._checkpoint_id()}{extra}+{sep_ckpt}"
+        avg = "".join(f"+avg:{a._checkpoint_id()}:{cols}" for a, cols in self._avg_adtofs)
+        return f"{self._adtof._checkpoint_id()}{avg}{extra}+{sep_ckpt}"
 
     def _n_params(self) -> int | None:
         a = self._adtof._n_params()
-        for adtof, _ in self._extras():
+        for adtof in [*(x for x, _ in self._extras()), *self._avg_models()]:
             a = (a or 0) + (adtof._n_params() or 0)
         b = self._sep._n_params() if self._sep is not None and self._sep.loaded else None
         return (a or 0) + (b or 0) if (a is not None or b is not None) else None
 
     def _close(self) -> None:
         self._adtof.close()
-        for adtof, _ in self._extras():
+        for adtof in [*(x for x, _ in self._extras()), *self._avg_models()]:
             adtof.close()
         if self._sep is not None:
             self._sep.close()

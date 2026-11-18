@@ -1,6 +1,6 @@
 // 타격 → 노트 매칭 규칙 (MODE-001-judge-window 3-1). 상태를 바꾸지 않는 순수 함수.
 // 기본은 판정 폭 안의 가장 이른 노트. 뒤 노트의 PERFECT 폭에 정확히 들어온 타격만 예외로 뒤 노트에 붙인다.
-import type { TimingWindows } from '@/domain/judgement';
+import type { TimingWindows } from '@/domain/play/judgement';
 
 export interface MatchCandidate {
   index: number;

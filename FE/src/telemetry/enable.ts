@@ -3,7 +3,7 @@
 // 켜기 값은 localStorage 키 하나이고, 같은 출처의 다른 창이 바꾸면 storage 이벤트로 따라간다.
 // 화면(모니터 제어 섹션)은 이 모듈의 telemetryStore만 구독한다.
 import { useAuth } from '@/store/authStore';
-import type { UserRole } from '@/domain/auth';
+import type { UserRole } from '@/domain/account/auth';
 import type { StickId } from '@/domain/events';
 import { TelemetryCollector } from './collector';
 import { TelemetryQueue } from './queue';

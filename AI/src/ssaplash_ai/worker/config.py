@@ -1,7 +1,7 @@
-"""워커 설정 (설계 3-1절). 환경 변수 `SSAPLASH_WORKER_*` → WorkerSettings.
+"""워커 설정. 환경 변수 → WorkerSettings.
 
 비밀 값(BE 주소·workerId·토큰)은 환경 변수로만 받음. 토큰은 repr·오류 메시지에 넣지 않음.
-모델 설정 yaml 경로는 명령줄 인자로 받고, 기본값은 `configs/chart/*.yaml`(chart.config).
+music_check_config가 None이면 분리 전 검사를 하지 않음.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ ENV_TOKEN = "SSAPLASH_WORKER_TOKEN"
 ENV_POLL_SEC = "SSAPLASH_WORKER_POLL_SEC"
 ENV_HEARTBEAT_SEC = "SSAPLASH_WORKER_HEARTBEAT_SEC"
 ENV_KEEP_FILES = "SSAPLASH_WORKER_KEEP_FILES"
-# 실패 보고 본문에 reason을 넣을지 (S15P31A307-246). BE 저장·노출 연동을 확인하기 전까지 기본 꺼짐
+# 실패 보고 본문에 reason을 넣을지. BE 저장·노출 연동을 확인하기 전까지 기본 꺼짐
 ENV_SEND_REASON = "SSAPLASH_WORKER_SEND_REASON"
 
 REQUIRED_ENV = (ENV_BASE_URL, ENV_WORKER_ID, ENV_TOKEN, ENV_WORK_DIR)
@@ -38,6 +38,9 @@ ENV_NARRATIVE_LLM_URL = "SSAPLASH_NARRATIVE_LLM_URL"
 ENV_NARRATIVE_LLM_API = "SSAPLASH_NARRATIVE_LLM_API"
 ENV_NARRATIVE_MODEL = "SSAPLASH_NARRATIVE_MODEL"
 DEFAULT_NARRATIVE_LLM_URL = "http://127.0.0.1:11434"
+# 연주 중 LLM 구간 코칭 워커(docs/live-coach-llm.md). 모델은 총평과 같은 설정(SSAPLASH_NARRATIVE_LLM_*·MODEL)을 쓴다
+ENV_LIVE_POLL_SEC = "SSAPLASH_LIVE_POLL_SEC"
+ENV_LIVE_LLM_TIMEOUT_SEC = "SSAPLASH_LIVE_LLM_TIMEOUT_SEC"
 TRUE_WORDS = ("1", "true", "yes", "on")
 
 
@@ -55,7 +58,9 @@ class WorkerSettings:
     send_reason: bool = False
     separation_config: Path = DEFAULT_SEPARATION_CONFIG
     transcription_config: Path = DEFAULT_TRANSCRIPTION_CONFIG
-    # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기 (설계 3-2·3-6절)
+    # 분리 전 음악 여부 검사 설정 yaml. None이면 검사 안 함
+    music_check_config: Path | None = None
+    # HTTP 시간 제한(초). JSON API는 연결·읽기, 파일 전송은 읽기·쓰기
     connect_timeout_sec: float = 5.0
     read_timeout_sec: float = 30.0
     download_timeout_sec: float = 120.0
@@ -65,6 +70,9 @@ class WorkerSettings:
     narrative_llm_url: str = DEFAULT_NARRATIVE_LLM_URL
     narrative_llm_api: str = "ollama"  # "ollama" 또는 "openai"(OpenAI 호환, vLLM·llama.cpp 서버)
     narrative_model: str = ""
+    # 연주 중 구간 코칭: 큐를 보는 주기와 모델 한 번 호출의 시간 제한(늦은 답은 버려지므로 짧게)
+    live_poll_sec: float = 1.0
+    live_llm_timeout_sec: float = 8.0
 
     @property
     def narrative_api_url(self) -> str:
@@ -88,6 +96,7 @@ class WorkerSettings:
         *,
         separation_config: str | Path | None = None,
         transcription_config: str | Path | None = None,
+        music_check_config: str | Path | None = None,
     ) -> WorkerSettings:
         """환경 변수에서 설정 읽기. 빠진 값·잘못된 값은 ValueError (토큰 값은 메시지에 안 넣음)."""
         source: Mapping[str, str] = os.environ if env is None else env
@@ -116,8 +125,13 @@ class WorkerSettings:
             or DEFAULT_NARRATIVE_LLM_URL,
             narrative_llm_api=source.get(ENV_NARRATIVE_LLM_API, "").strip().lower() or "ollama",
             narrative_model=source.get(ENV_NARRATIVE_MODEL, "").strip(),
+            live_poll_sec=_positive_float(source, ENV_LIVE_POLL_SEC, cls.live_poll_sec),
+            live_llm_timeout_sec=_positive_float(
+                source, ENV_LIVE_LLM_TIMEOUT_SEC, cls.live_llm_timeout_sec
+            ),
             separation_config=Path(separation_config or DEFAULT_SEPARATION_CONFIG),
             transcription_config=Path(transcription_config or DEFAULT_TRANSCRIPTION_CONFIG),
+            music_check_config=Path(music_check_config) if music_check_config else None,
         )
 
 

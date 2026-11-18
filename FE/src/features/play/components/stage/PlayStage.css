@@ -1,0 +1,195 @@
+/* 연주 화면 골격: 세로 flex, 사방 24 · gap 16. 상단 Dock은 자리를 차지하지 않고 HUD 위에 떠서 겹친다 */
+.play-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  width: 100%;
+  min-height: 100vh;
+  padding: var(--space-l);
+  background: var(--bg-base);
+  box-sizing: border-box;
+}
+.play-stage-hud {
+  flex: none;
+  height: 96px;
+}
+.play-stage.game .play-stage-hud,
+.play-stage.game .play-stage-divider,
+.play-stage.game .play-stage-area,
+.play-stage.sheet .play-stage-hud,
+.play-stage.sheet .play-stage-divider {
+  width: 100%;
+  max-width: 1060px;
+  margin-inline: auto;
+}
+/* 악보 연습: HUD는 리듬 게임과 같은 1060 열에 두고(안쪽 좌우 20), 위 줄(Dock·기기 칩·아바타, 화면 위 0–60) 아래인 y 64에서 시작한다 */
+.play-stage.sheet {
+  padding-top: 64px;
+  /* 킷 이펙트 캔버스는 킷보다 사방으로 12 %쯤 크다. 킷이 커지면 화면 아래로 넘쳐 세로 스크롤이 생기므로 화면 밖은 잘라 낸다 */
+  overflow: clip;
+}
+.play-stage.sheet .play-stage-hud {
+  padding-inline: 20px;
+  box-sizing: border-box;
+}
+.play-stage-divider {
+  flex: none;
+  width: 100%;
+  height: 1px;
+  margin-block: 0;
+  border: 0;
+  background: var(--line);
+}
+.play-stage-area {
+  flex: none;
+  width: 100%;
+  height: 420px;
+}
+/* 세로가 900보다 작으면 영역을 줄인다 */
+@media (max-height: 899px) {
+  .play-stage-area {
+    height: min(420px, calc(100vh - 64px - 96px - 210px - 73px));
+  }
+}
+/* 악보 연습: HUD와 악보 사이를 줄인다(구분선 위아래 16 → 8). 줄인 16px은 악보 칸이 갖는다 */
+.play-stage.sheet .play-stage-divider {
+  margin-block: -8px;
+}
+/* 악보 연습은 화면 높이를 꽉 채운다. 킷 높이는 kit/sheetKitFit이 정하고(악보가 가장 크게 그려지는 높이를 뺀 나머지, 210~640),
+   악보 칸은 그 나머지를 모두 갖는다 — 1280×860에서 274. 킷이 최대 크기에 닿은 큰 화면에서는 악보 칸이 더 높아지고
+   악보와 타이밍 막대가 그 가운데에 놓인다. 화면이 아주 낮아 킷이 최소 210이면 악보 칸이 줄어든다 */
+.play-stage.sheet {
+  height: 100vh;
+  min-height: 580px;
+}
+.play-stage.sheet .play-stage-area {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+/* 드럼 영역 1392×210: 가운데 정렬 gap 16 */
+.play-stage-drum {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-m);
+  height: 210px;
+}
+.play-stage-guide,
+.play-stage-readout {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.play-stage-guide {
+  width: 264px;
+}
+.play-stage-readout {
+  width: 180px;
+}
+.play-stage-kit {
+  flex: none;
+  width: 532px;
+  height: 210px;
+}
+
+/* 악보 연습 드럼 줄: [안내 칸 · 킷 · 최근 타격] 3열. 킷은 화면 가운데에 있고 크기는 화면 높이에 맞춘다
+   (--kit-w·--kit-h는 PlayStage의 kitSize, 계산은 kit/sheetKitFit — 높이 210~640).
+   안내 칸은 킷 왼쪽 남는 폭을 쓴다(큰 코칭 모양은 최대 340) — 화면이 좁으면 안내 칸이 먼저 줄고 킷은 줄지 않는다 */
+.play-stage.sheet .play-stage-drum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: var(--kit-h, 210px);
+}
+.play-stage.sheet .play-stage-kit {
+  width: var(--kit-w, 532px);
+  height: var(--kit-h, 210px);
+}
+.play-stage.sheet .play-stage-guide {
+  justify-self: end;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 340px;
+  min-width: 0;
+}
+.play-stage.sheet .play-stage-guide > .guide-slot:not(.lg) {
+  margin-left: auto;
+}
+.play-stage.sheet .play-stage-readout {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* 리듬 게임: 화면 높이를 꽉 채우고 남는 높이는 모두 하이웨이가 갖는다(레인을 길게).
+   HUD는 자리를 차지하지 않고 하이웨이 위쪽에 겹쳐 뜬다(배경 없음 — 레인이 화면 위 끝까지 간다).
+   킷은 네온 0.6배(456×180), 화면 높이 820 이상이면 0.7배(532×210)다(link/laneLinkGeometry의 gameKitScale과 같은 기준).
+   악보 연습(sheet)의 킷 크기는 위의 --kit-w·--kit-h가 정한다 */
+.play-stage.game {
+  --game-kit-w: 456px;
+  --game-kit-h: 180px;
+  height: 100vh;
+  min-height: 460px;
+}
+@media (min-height: 820px) {
+  .play-stage.game {
+    --game-kit-w: 532px;
+    --game-kit-h: 210px;
+  }
+}
+/* 하이웨이 안쪽 위(위 여백 8, 좌우 20)에 얹는다. 이 높이(8 + 96)가 PlayPage의 GAME_HUD_INSET이다 */
+.play-stage.game .play-stage-hud {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--space-l) + 8px);
+  left: 50%;
+  width: calc(100% - 2 * var(--space-l));
+  padding-inline: 20px;
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  pointer-events: none;
+  /* 뒤로 지나가는 노트 위에서도 글이 읽히게 */
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+}
+.play-stage.game .play-stage-divider {
+  display: none;
+}
+.play-stage.game .play-stage-area {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+/* 킷은 하이웨이 바로 아래에 붙인다(간격 없음). 판정선 아래 80px과 킷 위로 연결 층(link/lane-link.css)이 겹친다.
+   킷이 화면 가운데에 정확히 오도록 안내 칸·최근 타격 칸을 양옆 같은 폭 칸에 둔다(연결 층이 킷을 가운데 정렬로 계산한다) */
+.play-stage.game .play-stage-drum {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  height: var(--game-kit-h);
+  margin-top: calc(-1 * var(--space-m));
+}
+.play-stage.game .play-stage-guide {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+}
+.play-stage.game .play-stage-readout {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+}
+.play-stage.game .play-stage-kit {
+  width: var(--game-kit-w);
+  height: var(--game-kit-h);
+}
+/* 킷을 줄인 만큼 패드 위 판정 글씨는 키운다(SVG 단위 26 × 0.6~0.7배 = 화면 16~18px) */
+.play-stage.game .drum-pad .drum-pad-judge {
+  font-size: 26px;
+}
+/* 가이드 박 번호 배지도 킷 배율만큼 키운다(네온 평면 패드 배지 자리 (80, 12) 기준 1.6배) */
+.play-stage.game .drum-pad-badge {
+  transform: translate(80px, 12px) scale(1.6);
+}

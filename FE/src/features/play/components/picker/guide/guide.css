@@ -1,0 +1,260 @@
+/* 곡 선택 안내 줄 (Figma 112:696, 11/10 악보 모드 목업). 토큰은 tokens.css의 새 이름만 */
+.guide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 352px;
+  gap: var(--space-l);
+  align-items: stretch;
+}
+@media (max-width: 1100px) {
+  .guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 애니메이션 패널 */
+.guide-anim {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.guide-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.guide-desc {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.guide-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg-base);
+}
+
+/* 단계 칩 · 조작 버튼 줄 */
+.guide-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+.guide-top-gap {
+  flex: 1;
+}
+.guide-phase {
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.guide-phase.on {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+.guide-ctl {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 높이는 패딩으로 정한다 */
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+}
+.guide-ctl:hover {
+  border-color: var(--brand);
+  background: var(--surface-2);
+}
+
+/* 장면: 논리 좌표 760×470 한 판을 폭에 맞춰 비율 유지로 줄인다. 킷(HTML)은 아래, 악보·연결선 SVG는 위에 겹친다 */
+.guide-scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 760 / 470;
+}
+.guide-scene-kit {
+  position: absolute;
+}
+.guide-scene-kit .drum-kit {
+  width: 100%;
+  height: auto;
+  max-width: none;
+}
+.guide-scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* 악보: sheetStripDraw.ts와 같은 색·굵기 */
+.guide-st-line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+.guide-st-bar {
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+}
+.guide-st-ink {
+  stroke: var(--text-1);
+  stroke-width: 1.5;
+  fill: none;
+}
+.guide-st-beam {
+  fill: var(--text-1);
+}
+.guide-st-num {
+  fill: var(--text-3);
+  font: 600 11px var(--font);
+}
+.guide-st-sig {
+  fill: var(--text-1);
+  font: 700 22px var(--font);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+.guide-sym {
+  fill: none;
+  stroke: var(--text-1);
+  stroke-width: 2;
+  transition: stroke 160ms;
+}
+.guide-sym.fill {
+  fill: var(--text-1);
+  stroke: none;
+  transition: fill 160ms;
+}
+.guide-note.done .guide-sym {
+  stroke: var(--good);
+}
+.guide-note.done .guide-sym.fill {
+  fill: var(--good);
+}
+.guide-note-ring {
+  fill: none;
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity 160ms;
+}
+.guide-note.hit .guide-note-ring {
+  opacity: 1;
+}
+.guide-cursor {
+  stroke: var(--brand-text);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px var(--brand));
+}
+.guide-beat-n {
+  fill: var(--brand-text);
+  font: 700 28px var(--font);
+}
+.guide-beat-u {
+  fill: var(--text-3);
+  font: 600 12px var(--font);
+}
+
+/* 연결선: 음표 → 패드 */
+.guide-link {
+  fill: none;
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  opacity: 0.9;
+  animation:
+    guide-link-in 160ms ease-out,
+    guide-dash 600ms linear infinite;
+}
+@keyframes guide-link-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes guide-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-link {
+    animation: none;
+  }
+  .guide-sym,
+  .guide-note-ring {
+    transition: none;
+  }
+}
+
+/* 「지금 칠 것」 줄 */
+.guide-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+  min-height: 36px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.guide-lead {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.guide-pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.guide-pchip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.guide-pchip small {
+  color: var(--text-2);
+  font-weight: 500;
+}
+.guide-pchip small.foot {
+  color: var(--brand-sub);
+  font-weight: 600;
+}
+.guide-plus {
+  color: var(--text-3);
+}
+
+/* ── 리듬 게임 장면: 네온 스킨(drum.css neon) · 드럼 배치 순 레인 ── */
+.guide-strip-bg { fill: #05070d; stroke: rgba(34, 228, 255, 0.18); }
+.guide-strip-sep { stroke: rgba(34, 228, 255, 0.08); stroke-width: 1; }
+.guide-lane-tag { fill: var(--text-3); font: 700 11px var(--font); letter-spacing: 1px; text-anchor: middle; transition: fill 120ms; }
+.guide-lane-tag.on { fill: var(--c); filter: drop-shadow(0 0 6px var(--c)); }
+.guide-judge { stroke: #e8f7ff; stroke-width: 2; filter: drop-shadow(0 0 6px #22e4ff); }
+.guide-judge-cap { fill: var(--text-3); font: 600 10px var(--font); }
+.guide-gnote { fill: var(--c); filter: drop-shadow(0 0 6px var(--c)); transition: opacity 140ms; }
+.guide-gnote.on { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 14px var(--c)); }
+.guide-lane-flash { opacity: 0; transition: opacity 160ms; }
+.guide-lane-flash.on { opacity: 1; }
+.guide-lane-flash.hov { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) { .guide-lane-flash, .guide-gnote, .guide-lane-tag { transition: none; } }

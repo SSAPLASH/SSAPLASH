@@ -1,7 +1,7 @@
 // 전자·네온 스킨 마크업 테스트
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { kitPadsFor, KIT_SKINS, type KitSkin, type PadShape, type PadVisualState } from '@/domain/drumKit';
+import { kitPadsFor, KIT_SKINS, type KitSkin, type PadShape, type PadVisualState } from '@/domain/kit/drumKit';
 import { DrumKit } from './DrumKit';
 import { Pad, PadDefs } from './Pad';
 
@@ -75,14 +75,14 @@ describe('2D 스킨 렌더', () => {
 });
 
 describe('DrumKit 스킨', () => {
-  it('skin별 패드 8개가 kitPadsFor 좌표에 놓인다', () => {
+  it('skin별 패드가 kitPadsFor 좌표에 놓인다(실물 9개 · 전자·네온 8개)', () => {
     for (const skin of KIT_SKINS) {
       const html = renderToStaticMarkup(<DrumKit skin={skin} />);
       const pads = kitPadsFor(skin);
       const found = [...html.matchAll(/class="drum-pad" data-state="idle" data-shape="\w+"(?: data-skin="\w+")? transform="([^"]+)"/g)].map(
         (m) => m[1],
       );
-      expect(found).toHaveLength(8);
+      expect(found).toHaveLength(skin === 'acoustic' ? 9 : 8);
       expect(found).toEqual(pads.map((p) => `translate(${p.left} ${p.top}) scale(${p.w / 160})`));
       expect(html.includes('<svg class="drum-kit"')).toBe(true);
       expect(/<svg class="drum-kit"[^>]*data-skin=/.test(html)).toBe(skin !== 'acoustic');
@@ -97,9 +97,15 @@ describe('DrumKit 터치 연주(onPadDown)', () => {
     expect(html).not.toContain('touchable');
   });
 
+  it('없으면 svg가 포인터 클릭 타격 영역이다(QA 352)', () => {
+    expect(renderToStaticMarkup(<DrumKit />)).toMatch(/<svg class="drum-kit"[^>]*data-pointer-strike=""/);
+  });
+
   it('있으면 svg에 data-no-pointer-strike와 touchable 클래스가 붙는다', () => {
     const html = renderToStaticMarkup(<DrumKit onPadDown={() => {}} />);
     expect(html).toContain('data-no-pointer-strike');
     expect(html).toContain('class="drum-kit touchable"');
+    // 터치가 패드를 맡으므로 포인터 클릭 타격 영역이 아니다
+    expect(html).not.toContain('data-pointer-strike');
   });
 });

@@ -1,13 +1,10 @@
-"""서비스 설정 읽기 (설계 3장 "서비스 설정").
+"""서비스 설정 읽기. `configs/chart/*.yaml` → SeparationConfig·TranscriptionConfig·MusicCheckConfig.
 
-`configs/chart/separation.yaml` → SeparationConfig, `configs/chart/transcription.yaml` → TranscriptionConfig
-(S15P31A307-169). 둘 다 공통 부분(ChartConfig)을 상속. yaml의 상대 경로는 벤치마크 yaml과 같이
-AI/ 폴더(현재 작업 폴더) 기준.
-
-환경 변수(`SSAPLASH_` 접두사, 인프라 -125 회신과 같은 규칙)가 yaml 값을 덮어씀.
+yaml의 상대 경로는 AI/ 폴더 기준. 아래 환경 변수가 yaml 값을 덮어씀.
 - SSAPLASH_CHART_DEVICE: 장치(cuda / cpu)
-- SSAPLASH_MODELS_DIR: 가중치 폴더. 벤치마크 어댑터(`SeparatorConfig.model_dir`)가 읽음. 기본 data/models
-- SSAPLASH_WORK_DIR: 중간 파일 폴더. 명령줄 --out이 없을 때 cli가 씀
+- SSAPLASH_MODELS_DIR: 가중치 폴더. 기본 data/models
+- SSAPLASH_WORK_DIR: 명령줄 --out이 없을 때 출력 폴더의 부모
+- SSAPLASH_CHART_MODEL: 채보 모델 이름. transcription.yaml의 model 값보다 우선
 """
 
 from __future__ import annotations
@@ -27,18 +24,21 @@ ENV_CHART_MODEL = "SSAPLASH_CHART_MODEL"
 
 DEFAULT_SEPARATION_CONFIG = Path("configs/chart/separation.yaml")
 DEFAULT_TRANSCRIPTION_CONFIG = Path("configs/chart/transcription.yaml")
+DEFAULT_MUSIC_CHECK_CONFIG = Path("configs/chart/music_check.yaml")
 OUTPUT_FORMATS = ("flac", "wav")
-# beat_this: 서비스(설계 U15), librosa: torch 없이 도는 mock·테스트용
+# beat_this: 서비스, librosa: torch 없이 도는 mock·테스트용
 TEMPO_METHODS = ("beat_this", "librosa")
-# offsetMs 원점 방식(설계 v0.5). downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
+# offsetMs 원점 방식. downbeat: Beat This! 첫 마디 첫 박 그대로, notes: 킥·스네어 노트로 박 안 위치 보정
 ORIGIN_MODES = ("downbeat", "notes")
+# Beat This! 후처리. minimal: 확률 봉우리 그대로, dbn: madmom DBN으로 박 간격·마디 길이를 고르게
+TEMPO_POSTPROCESS = ("minimal", "dbn")
 # BE WorkerResults가 schemaVersion 1만 받음
 SCHEMA_VERSIONS = (1,)
 
 
 @dataclass
 class OutputConfig:
-    """드럼 트랙·반주 파일 형식. flac은 16비트 무손실(설계 U2), wav는 PCM_16."""
+    """드럼 트랙·반주 파일 형식. flac은 16비트 무손실, wav는 PCM_16."""
 
     sample_rate: int = 44100
     format: str = "flac"
@@ -104,7 +104,7 @@ class SeparationConfig(ChartConfig):
 
 @dataclass
 class TempoConfig:
-    """bpm 추정 설정 (설계 U4·U15). 추정값이 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음."""
+    """bpm 추정 설정. 추정값이 [min_bpm, max_bpm] 밖이면 2배·절반으로 접어 넣음."""
 
     method: str = "beat_this"
     min_bpm: float = 60.0
@@ -112,11 +112,21 @@ class TempoConfig:
     time_signature: str = "4/4"
     # offsetMs 원점 방식. ORIGIN_MODES 중 하나
     origin: str = "downbeat"
+    # Beat This! 후처리. TEMPO_POSTPROCESS 중 하나
+    postprocess: str = "minimal"
+    # 찾은 박을 따라가는 빠르기 구간(tempoMap)을 낼지
+    tempo_map: bool = False
+    # 빠르기 구간 묶음 허용(ms). 구간 안 마디 경계가 모두 이 거리 안이면 한 구간으로 묶음
+    tempo_map_tolerance_ms: float = 20.0
+    # 채보 노트로 bpm·offsetMs 다시 맞추기(chart/tempo_refine.py). 끄면 박 추적 bpm 그대로
+    refine: bool = False
 
     @classmethod
     def from_dict(cls, raw: dict | None) -> TempoConfig:
         raw = raw or {}
-        unknown = sorted(set(raw) - {"method", "min_bpm", "max_bpm", "time_signature", "origin"})
+        known = {"method", "min_bpm", "max_bpm", "time_signature", "origin", "postprocess"}
+        known |= {"tempo_map", "tempo_map_tolerance_ms", "refine"}
+        unknown = sorted(set(raw) - known)
         if unknown:
             raise ValueError(f"모르는 tempo 필드: {unknown}")
         method = str(raw.get("method", cls.method)).lower()
@@ -135,21 +145,34 @@ class TempoConfig:
         origin = str(raw.get("origin", cls.origin)).lower()
         if origin not in ORIGIN_MODES:
             raise ValueError(f"tempo.origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
+        postprocess = str(raw.get("postprocess", cls.postprocess)).lower()
+        if postprocess not in TEMPO_POSTPROCESS:
+            raise ValueError(f"tempo.postprocess는 {TEMPO_POSTPROCESS} 중 하나: {postprocess!r}")
+        tempo_map = raw.get("tempo_map", cls.tempo_map)
+        if not isinstance(tempo_map, bool):
+            raise ValueError(f"tempo.tempo_map은 true/false: {tempo_map!r}")
+        tolerance = float(raw.get("tempo_map_tolerance_ms", cls.tempo_map_tolerance_ms))
+        if not tolerance > 0:
+            raise ValueError(f"tempo.tempo_map_tolerance_ms는 양수: {tolerance}")
+        refine = raw.get("refine", cls.refine)
+        if not isinstance(refine, bool):
+            raise ValueError(f"tempo.refine은 true 또는 false: {refine!r}")
         return cls(
             method=method,
             min_bpm=min_bpm,
             max_bpm=max_bpm,
             time_signature=time_signature,
             origin=origin,
+            postprocess=postprocess,
+            tempo_map=tempo_map,
+            tempo_map_tolerance_ms=tolerance,
+            refine=refine,
         )
 
 
 @dataclass
 class DrumCheckConfig:
-    """채보 가능 검사 (S15P31A307-246 설계 3-3절). 걸리면 NOT_TRANSCRIBABLE 실패.
-
-    min_notes_per_minute가 None이면 노트 수 검사를 하지 않음. 기준값은 실제 곡 분포를 측정한 뒤 정함.
-    """
+    """채보 가능 검사. 걸리면 NOT_TRANSCRIBABLE 실패. min_notes_per_minute가 None이면 노트 수 검사를 하지 않음."""
 
     min_notes_per_minute: float | None = None
     fail_on_unknown_tempo: bool = True
@@ -243,6 +266,78 @@ class TranscriptionConfig(ChartConfig):
             tempo=TempoConfig.from_dict(raw.get("tempo")),
             max_duration_sec=max_duration,
             drum_check=DrumCheckConfig.from_dict(raw.get("drum_check")),
+        )
+
+
+@dataclass
+class MusicCheckConfig:
+    """`configs/chart/music_check.yaml` 한 파일. 분리 전에 원곡이 음악인지 보는 검사.
+
+    음악 확률 평균이 min_music_prob 미만이거나 말소리 확률 평균이 max_speech_prob 이상이면 NOT_TRANSCRIBABLE.
+    기준값 두 개가 모두 None이면 검사하지 않고 모델도 올리지 않음. 장치는 SSAPLASH_CHART_DEVICE를 따르지 않음.
+    """
+
+    model: str = "MIT/ast-finetuned-audioset-10-10-0.4593"
+    device: str = "cpu"
+    min_music_prob: float | None = None
+    max_speech_prob: float | None = None
+    positions: tuple[float, ...] = (0.2, 0.4, 0.6, 0.8)
+    window_sec: float = 10.0
+    max_duration_sec: float = 600.0
+    source_path: Path | None = field(default=None, repr=False)
+
+    @property
+    def enabled(self) -> bool:
+        """기준값이 하나라도 있으면 검사함."""
+        return self.min_music_prob is not None or self.max_speech_prob is not None
+
+    @classmethod
+    def from_yaml(cls, path: str | Path = DEFAULT_MUSIC_CHECK_CONFIG) -> MusicCheckConfig:
+        path = Path(path)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"음악 여부 검사 설정이 비어 있음: {path}")
+        return cls.from_dict(raw, source_path=path)
+
+    @classmethod
+    def from_dict(cls, raw: dict, source_path: Path | None = None) -> MusicCheckConfig:
+        known = {"model", "device", "min_music_prob", "max_speech_prob", "positions"}
+        known |= {"window_sec", "max_duration_sec"}
+        unknown = sorted(set(raw) - known)
+        if unknown:
+            raise ValueError(f"모르는 음악 여부 검사 설정 필드: {unknown}")
+        model = str(raw.get("model", cls.model)).strip()
+        if not model:
+            raise ValueError("음악 여부 검사 설정의 model이 비어 있음")
+        thresholds = {}
+        for name in ("min_music_prob", "max_speech_prob"):
+            value = raw.get(name)
+            if value is not None:
+                value = float(value)
+                if not 0.0 < value < 1.0:
+                    raise ValueError(f"{name}은 0과 1 사이 또는 비움: {value}")
+            thresholds[name] = value
+        positions = raw.get("positions", cls.positions)
+        if not isinstance(positions, (list, tuple)) or not positions:
+            raise ValueError(f"positions는 비어 있지 않은 목록: {positions!r}")
+        positions = tuple(float(p) for p in positions)
+        if any(not 0.0 <= p <= 1.0 for p in positions):
+            raise ValueError(f"positions는 0과 1 사이 비율: {positions}")
+        window_sec = float(raw.get("window_sec", cls.window_sec))
+        if window_sec <= 0:
+            raise ValueError(f"window_sec는 양수: {window_sec}")
+        max_duration = float(raw.get("max_duration_sec", cls.max_duration_sec))
+        if max_duration <= 0:
+            raise ValueError(f"max_duration_sec는 양수: {max_duration}")
+        return cls(
+            model=model,
+            device=str(raw.get("device", cls.device)),
+            min_music_prob=thresholds["min_music_prob"],
+            max_speech_prob=thresholds["max_speech_prob"],
+            positions=positions,
+            window_sec=window_sec,
+            max_duration_sec=max_duration,
+            source_path=source_path,
         )
 
 

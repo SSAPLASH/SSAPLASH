@@ -30,7 +30,7 @@ from ssaplash_ai.bench.report.charts import (
 FIVE_COLOR = PALETTE[0]
 PADS_COLOR = PALETTE[1]
 DRUMS_INPUT = "drums"
-RTF_TARGET = 0.15  # 채보 RTF 기준 (-107 지표 정의, ADR-020)
+RTF_TARGET = 0.15  # 채보 RTF 기준 (-107 지표 정의)
 
 
 def _datasets(summary: pd.DataFrame) -> list[str]:

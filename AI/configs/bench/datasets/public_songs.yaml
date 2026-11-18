@@ -1,0 +1,40 @@
+# 공용 곡 31곡 (-245, Songsterr 탭을 원곡에 맞춘 채보). data/songsterr/<곡>/final/ 를 읽음. git 미추적 데이터
+# 평가 전용. 11/08 추가 곡(학습·검증)은 public_songs_train_{25,50,all}.yaml·public_songs_val.yaml
+# 정답은 사람이 적은 탭이라 실제 연주와 다른 노트가 있을 수 있음. 11/08 노트 시각 13.7ms 보정함
+name: public_songs
+kind: songsterr
+root: data/songsterr
+sample_rate: 44100
+clip: null
+songs:
+  - a7x_hail_to_the_king
+  - arctic_monkeys_505
+  - arctic_monkeys_do_i_wanna_know
+  - arctic_monkeys_r_u_mine
+  - billie_jean
+  - black_skirts_everything
+  - day6_congratulations
+  - day6_welcome_to_the_show
+  - day6_zombie
+  - fall_out_boy_sugar_were_goin_down
+  - foo_fighters_the_pretender
+  - franz_ferdinand_take_me_out
+  - gorillaz_feel_good_inc
+  - guckkasten_mirror
+  - hyukoh_tomboy
+  - imagine_dragons_believer
+  - killers_mr_brightside
+  - kings_of_leon_sex_on_fire
+  - linkin_park_numb
+  - maneskin_beggin
+  - maneskin_i_wanna_be_your_slave
+  - mcr_welcome_to_the_black_parade
+  - muse_hysteria
+  - muse_uprising
+  - paramore_misery_business
+  - qotsa_no_one_knows
+  - qwer_gominjungdok
+  - royal_blood_figure_it_out
+  - strokes_reptilia
+  - twenty_one_pilots_heathens
+  - white_stripes_seven_nation_army

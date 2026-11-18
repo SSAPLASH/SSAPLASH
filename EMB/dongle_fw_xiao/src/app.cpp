@@ -24,9 +24,19 @@
 #define MAX_STICKS  3          /* 스틱 2 + 페달 보드 1 (S15P31A307-232) */
 #define CONN_ITV    6          /* 1.25ms 단위 → 7.5ms */
 #define CMD_ROUTE   0x70       /* 동글 전용: [0x70, 역할 마스크, 명령...] */
-#define SCAN_2ND_S  10         /* 첫 스틱 연결 뒤 두 번째 스틱을 찾는 시간 (초) */
+/* 스캔 (S15P31A307-231): 스캔은 연결과 라디오를 나눠 써서, 많이 켜 두면 연결 이벤트를 놓쳐 지연이 튄다
+ * (10/28 실측: 100ms마다 50ms 듣기를 계속 켜면 왕복 50ms). 그래서
+ *   기기 0개           → 빠르게 (100ms마다 50ms)
+ *   첫 연결 뒤 10초    → 빠르게 (같이 켠 기기를 바로 잡음)
+ *   그 뒤 빈 자리 있음 → 느리게 계속 (1초마다 30ms, 라디오 3%) — 나중에 켠 페달·다시 켠 스틱도 잡는다
+ *   빈 자리 없음       → 끔 */
+#define SCAN_FAST_ITV  160      /* 0.625ms 단위: 100ms */
+#define SCAN_FAST_WIN  80       /* 50ms */
+#define SCAN_SLOW_ITV  1600     /* 1000ms */
+#define SCAN_SLOW_WIN  48       /* 30ms */
+#define SCAN_FAST_AFTER_MS 10000
 #define DONGLE_FW_MAJOR 2      /* 2 = XIAO 동글 */
-#define DONGLE_FW_MINOR 2      /* 1 = LINK (v0.8), 2 = 연결 3개·연결당 역할 여러 개(페달 보드) */
+#define DONGLE_FW_MINOR 3      /* 1 = LINK (v0.8), 2 = 연결 3개·연결당 역할 여러 개(페달 보드), 3 = 느린 스캔 계속(나중에 켠 기기) */
 #define LINK_PERIOD_MS  1000
 
 /* a7d5000X-9a3c-4f2e-b1c8-5f0e2d7c0001, 바이트 역순 (스틱 펌웨어와 같음) */
@@ -47,6 +57,7 @@ static stick_link_t sticks[MAX_STICKS];
 /* ---------- USB로 내보낼 패킷 큐 (BLE 태스크 → loop) ---------- */
 struct out_t { uint8_t len; uint8_t d[PKT_MAX]; };
 static QueueHandle_t outq;
+static volatile bool scan_kick = true;   /* 연결·끊김이 생기면 스캔 정책을 바로 다시 정한다 (231) */
 static volatile uint32_t n_drop = 0;
 
 static void out_push(const uint8_t *p, uint16_t n)
@@ -116,11 +127,8 @@ static void connect_cb(uint16_t h)
     }
     s->chr_notify.enableNotify();
     s->ready = true;
-    out_log(n_ready() == 1 ? "DONGLE stick 1" : "DONGLE stick 2");
-
-    /* 스캔은 연결과 라디오를 나눠 쓴다. 계속 켜 두면 연결 이벤트를 놓쳐 지연이 수십 ms 튄다 (10/28 실측 RTT 50ms).
-     * 그래서 두 번째 스틱은 첫 연결 뒤 SCAN_2ND_S초 동안만 찾고 끈다. 나중에 붙이려면 동글 리셋 */
-    if (free_slot()) Bluefruit.Scanner.start(SCAN_2ND_S * 100);   /* 10ms 단위 */
+    { char m[16]; snprintf(m, sizeof m, "DONGLE stick %d", n_ready()); out_log(m); }
+    scan_kick = true;                                   /* 스캔은 loop의 scan_poll이 다시 정한다 */
 }
 
 static void disconnect_cb(uint16_t h, uint8_t reason)
@@ -129,7 +137,29 @@ static void disconnect_cb(uint16_t h, uint8_t reason)
     stick_link_t *s = by_conn(h);
     if (s) { s->conn = BLE_CONN_HANDLE_INVALID; s->ready = false; s->roles = 0; }
     out_log("DONGLE lost");
-    Bluefruit.Scanner.start(0);                         /* 다시 붙을 때까지 찾기 (붙으면 위 규칙대로 꺼짐) */
+    scan_kick = true;
+}
+
+/* 스캔 정책 (231). BLE 콜백이 scan_kick을 세우면 바로, 아니면 0.5초마다 다시 정한다 */
+static void scan_poll()
+{
+    static uint8_t  cur = 0xFF;                         /* 0 끔, 1 빠름, 2 느림 */
+    static uint32_t t_check = 0, t_first = 0;
+    static bool     had = false;
+    uint32_t now = millis();
+    if (!scan_kick && now - t_check < 500) return;
+    scan_kick = false;
+    t_check = now;
+    int n = n_ready();
+    if (n > 0 && !had) t_first = now;                  /* 0개 → 첫 연결 */
+    had = n > 0;
+    uint8_t want = !free_slot() ? 0 : (n == 0 || now - t_first < SCAN_FAST_AFTER_MS) ? 1 : 2;
+    if (want == cur && (want == 0 || Bluefruit.Scanner.isRunning())) return;
+    Bluefruit.Scanner.stop();
+    if (want == 1) Bluefruit.Scanner.setInterval(SCAN_FAST_ITV, SCAN_FAST_WIN);
+    if (want == 2) Bluefruit.Scanner.setInterval(SCAN_SLOW_ITV, SCAN_SLOW_WIN);
+    if (want) Bluefruit.Scanner.start(0);
+    cur = want;
 }
 
 /* ---------- LINK (v0.8) ---------- */
@@ -199,7 +229,7 @@ void app_setup()
     Bluefruit.Scanner.setRxCallback(scan_cb);
     Bluefruit.Scanner.restartOnDisconnect(false);       /* disconnect_cb에서 직접 다시 시작 */
     Bluefruit.Scanner.filterUuid(BLEUuid(UUID_SVC));
-    Bluefruit.Scanner.setInterval(160, 80);             /* 100ms마다 50ms 듣기 */
+    Bluefruit.Scanner.setInterval(SCAN_FAST_ITV, SCAN_FAST_WIN);
     Bluefruit.Scanner.useActiveScan(false);
     Bluefruit.Scanner.start(0);
 }
@@ -207,6 +237,7 @@ void app_setup()
 void app_loop()
 {
     link_poll();
+    scan_poll();
 
     /* 스틱 → PC */
     out_t o;

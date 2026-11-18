@@ -1,5 +1,5 @@
 # GMD test split 드럼 연주 45개 (CC BY 4.0). 드럼 트랙 입력 채보 평가·8패드 점수용.
-# 고른 규칙(설계 4-2절): test split, beat 유형, 오디오 있음, 30초 이상, 합성곡 synth_v1에 쓴 5개 제외.
+# 고른 규칙: test split, beat 유형, 오디오 있음, 30초 이상, 합성곡 synth_v1에 쓴 5개 제외.
 # 밴드 장르만(40개)으로는 CRASH 73·MID_TOM 34로 "탐·심벌 각 100개 이상"에 못 미쳐 재즈 2·라틴 3 연주를 더함.
 # 목록 다시 뽑기: uv run python scripts/make_synth_songs.py list-gmd data/gmd/groove --split test --min-sec 30 --hits
 name: gmd_test

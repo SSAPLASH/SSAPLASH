@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLive } from '@/store/liveStore';
 import type { RhythmSession } from '@/engine/RhythmSession';
-import type { PadId } from '@/domain/pads';
-import { HIT_MS, JUDGE_MS, visualPadOf, type PadVisualState } from '@/domain/drumKit';
+import type { PadId } from '@/domain/kit/pads';
+import { HIT_MS, JUDGE_MS, visualPadOf, type PadVisualState } from '@/domain/kit/drumKit';
 import { createPadStateMachine } from './padStateMachine';
 
 type States = Partial<Record<PadId, PadVisualState>>;

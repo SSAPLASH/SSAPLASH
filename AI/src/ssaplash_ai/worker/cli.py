@@ -1,16 +1,11 @@
-"""채보 워커 명령줄 (설계 3-1절 명령 표). AI/ 폴더에서 실행.
+"""채보 워커 명령줄. AI/ 폴더에서 실행.
 
-- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복. 환경 변수 SSAPLASH_WORKER_* 필요
-- check: 환경 변수·설정 yaml 검사, 모델 두 개 올려 보고 시간 출력. BE는 부르지 않음
-- fake-be: 테스트·로컬 확인용 BE 대역을 띄우고 곡을 작업으로 넣음 (개발용)
-
-예
-  uv run ssaplash-worker check
-  uv run ssaplash-worker run --once
-  uv run ssaplash-worker fake-be --song data/synth_v1/funk_108/mixture.wav --out data/fake_be
+- run: 모델 올리기 → BE claim 폴링 → 작업 처리 반복
+- check: 환경 변수·설정 yaml 검사, 모델을 올려 보고 시간·음악 여부 검사 상태 출력. BE는 부르지 않음
+- live-run: 연주 중 LLM 구간 코칭 워커
+- fake-be: 테스트·로컬 확인용 BE 대역 (개발용)
 
 종료 코드: 0 정상, 1 설정·모델 오류, 2 인증 실패(401). 로그는 표준 오류.
-로그 설정은 이 파일에서만 함(패키지 안 모듈은 logging.getLogger만 씀).
 """
 
 from __future__ import annotations
@@ -20,10 +15,15 @@ import logging
 import sys
 from collections.abc import Sequence
 
-from ssaplash_ai.chart.config import DEFAULT_SEPARATION_CONFIG, DEFAULT_TRANSCRIPTION_CONFIG
+from ssaplash_ai.chart.config import (
+    DEFAULT_MUSIC_CHECK_CONFIG,
+    DEFAULT_SEPARATION_CONFIG,
+    DEFAULT_TRANSCRIPTION_CONFIG,
+)
 from ssaplash_ai.chart.errors import ChartModelError
 from ssaplash_ai.coach.llm_local import LocalServerGenerator
 from ssaplash_ai.worker.config import WorkerSettings
+from ssaplash_ai.worker.live_coach_job import LiveCoachApi, LiveCoachRunner, run_live_loop
 from ssaplash_ai.worker.loop import EXIT_CONFIG, EXIT_OK, WorkerLoop
 from ssaplash_ai.worker.narrative_job import NarrativeApi, NarrativeRunner
 
@@ -46,6 +46,7 @@ def _settings(args: argparse.Namespace) -> WorkerSettings | None:
         return WorkerSettings.from_env(
             separation_config=args.separation_config,
             transcription_config=args.transcription_config,
+            music_check_config=getattr(args, "music_check_config", None),
         )
     except ValueError as e:
         logger.error("설정 오류: %s", e)
@@ -92,6 +93,23 @@ def run_cmd(args: argparse.Namespace) -> int:
     return loop.run(once=args.once, max_jobs=args.max_jobs)
 
 
+def _music_check_line(loop: WorkerLoop) -> str:
+    """분리 전 음악 여부 검사 상태 한 줄. 켜짐·꺼짐·올리기 실패를 구분해 보여 줌."""
+    if loop.music_check is not None:
+        config = loop.music_check.config
+        return (
+            f"음악 여부 검사: 켜짐 ({config.model}, 장치 {config.device}, "
+            f"음악 확률 기준 {config.min_music_prob}, 말소리 확률 기준 {config.max_speech_prob}), "
+            f"올리기 {loop.music_check.load_sec:.1f}초"
+        )
+    if loop.music_check_error:
+        return (
+            f"음악 여부 검사: [주의] 모델을 올리지 못해 검사 없이 돎 ({loop.music_check_error}). "
+            "uv sync --extra music-check와 가중치 내려받기를 확인"
+        )
+    return "음악 여부 검사: 꺼짐"
+
+
 def check_cmd(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if settings is None:
@@ -113,9 +131,50 @@ def check_cmd(args: argparse.Namespace) -> int:
         print(
             f"모델 올리기: 분리 {loop.separation.load_sec:.1f}초, 채보 {loop.transcription.load_sec:.1f}초"
         )
+        print(_music_check_line(loop))
         print("설정 정상. BE 연결은 run에서 첫 claim으로 확인")
     finally:
         loop.close()
+    return EXIT_OK
+
+
+def live_run_cmd(args: argparse.Namespace) -> int:
+    """연주 중 LLM 구간 코칭 워커. 채보 모델을 올리지 않고 연주 코칭 큐만 짧은 주기로 본다."""
+    import threading
+
+    from ssaplash_ai.worker.api import ApiError
+    from ssaplash_ai.worker.loop import EXIT_AUTH
+
+    settings = _settings(args)
+    if settings is None:
+        return EXIT_CONFIG
+    if not settings.narrative_model:
+        logger.error("모델 이름이 없음: SSAPLASH_NARRATIVE_MODEL (총평과 같은 모델을 쓴다)")
+        return EXIT_CONFIG
+    generator = LocalServerGenerator(
+        settings.narrative_llm_url,
+        settings.narrative_model,
+        settings.narrative_llm_api,
+        timeout_sec=settings.live_llm_timeout_sec,
+        max_tokens=80,
+        json_output=True,
+    )
+    runner = LiveCoachRunner(LiveCoachApi(settings), generator, settings.narrative_model)
+    stop = threading.Event()
+    logger.info(
+        "연주 코칭 워커 시작: 모델 %s, %.1f초 주기",
+        settings.narrative_model,
+        settings.live_poll_sec,
+    )
+    try:
+        run_live_loop(runner, settings.live_poll_sec, stop, max_jobs=args.max_jobs)
+    except ApiError as e:
+        if e.status == 401:
+            logger.error("인증 실패(401). 토큰·workerId 설정 확인: %s", e)
+            return EXIT_AUTH
+        raise
+    except KeyboardInterrupt:
+        stop.set()
     return EXIT_OK
 
 
@@ -142,6 +201,12 @@ def _add_config_args(parser: argparse.ArgumentParser) -> None:
         default=str(DEFAULT_TRANSCRIPTION_CONFIG),
         help=f"채보 설정 yaml (기본 {DEFAULT_TRANSCRIPTION_CONFIG.as_posix()})",
     )
+    parser.add_argument(
+        "--music-check-config",
+        default=str(DEFAULT_MUSIC_CHECK_CONFIG),
+        help=f"분리 전 음악 여부 검사 설정 yaml (기본 {DEFAULT_MUSIC_CHECK_CONFIG.as_posix()}). "
+        "빈 문자열이면 검사 안 함",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -158,6 +223,13 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="환경 변수·설정 검사, 모델 올려 보기. BE는 부르지 않음")
     _add_config_args(check)
     check.set_defaults(func=check_cmd)
+
+    live = sub.add_parser(
+        "live-run", help="연주 중 LLM 구간 코칭 워커(채보 모델 없이, 연주 코칭 큐만)"
+    )
+    _add_config_args(live)
+    live.add_argument("--max-jobs", type=int, default=None, help="이만큼 처리하고 끝냄(시험용)")
+    live.set_defaults(func=live_run_cmd)
 
     fake = sub.add_parser("fake-be", help="테스트용 BE 대역 띄우기 (개발용)")
     fake.add_argument(

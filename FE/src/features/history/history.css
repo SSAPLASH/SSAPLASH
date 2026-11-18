@@ -1,0 +1,391 @@
+/* 연주 기록(/history) 화면 스타일. 접두사 history-. 토큰은 tokens.css의 새 이름만 쓴다.
+ * 모드·기간·정렬 단추는 ui/Segmented, 검색은 ui/Input(compact), 삭제된 곡 칩은 song/DeletedSongChip을 쓴다.
+ * 플레이 기록은 라이브러리 목록과 같은 행 목록이다(설계 COACH-연주-기록-화면-개편, 시안 v7). */
+
+.history-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+.history-page > * {
+  flex-shrink: 0;
+}
+/* 기록 탭 줄: 머리·도구 줄과 각각 24 간격(페이지 gap 16 + 8) */
+.history-tabs {
+  display: flex;
+  margin-block: var(--space-s);
+}
+.history-tabs .ui-seg {
+  width: 152px;
+}
+
+/* ---- 도구 줄: 검색 · 모드 · 기간 · (오른쪽 끝) 정렬. 좁으면 줄을 바꾼다 ---- */
+.history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  min-height: 44px;
+}
+.history-toolbar-end {
+  margin-left: auto;
+}
+.history-search {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 320px;
+}
+.history-count {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.history-count strong {
+  margin-right: 2px;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* ---- 날짜 묶음 ---- */
+.history-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+.history-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+  padding-inline: 2px;
+}
+.history-group-head h2 {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.history-group-head span {
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 행 목록(라이브러리 목록 행과 같은 골격). 행은 누르는 곳이 아니다 ---- */
+.history-list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 176px 152px;
+  align-items: center;
+  gap: var(--space-l);
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-1);
+}
+.history-row:last-child {
+  border-bottom: 0;
+}
+.history-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.history-row-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.history-row-title {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-row-title.is-muted {
+  color: var(--text-3);
+}
+.history-row-title-line > :not(.history-row-title) {
+  flex: none;
+}
+.history-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.history-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.history-row-sub > span + span::before {
+  margin-inline: 6px;
+  content: '·';
+}
+.history-num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 정확도: 큰 숫자 + 얇은 막대. 막대 색은 판정 색과 같은 뜻(90 이상 PERFECT · 70 이상 GOOD · 그 아래 MISS) */
+.history-acc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.history-acc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.history-acc-val {
+  font-family: var(--font-num);
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.history-acc-val small {
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+.history-score {
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.history-bar {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--fill-track);
+}
+.history-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+.history-bar-fill.is-perfect {
+  background: var(--perfect);
+}
+.history-bar-fill.is-good {
+  background: var(--good);
+}
+.history-bar-fill.is-miss {
+  background: var(--miss);
+}
+
+/* 오른쪽: 리포트·결과 링크(테두리 상자) 또는 저장 상태. 행은 누르는 곳이 아니고 이 상자만 눌린다 */
+.history-act {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.history-act-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* [다시 시도]가 좁은 칸에서 두 줄로 접히지 않게 */
+.history-act-pair .ui-btn {
+  flex: none;
+  white-space: nowrap;
+}
+.history-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 10px 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--brand-text);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.history-link:hover,
+.history-link:focus-visible {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  box-shadow: 0 0 12px var(--brand-glow-soft);
+}
+/* 서버에 없는 기록의 [결과]: 저장 상태 아래의 작은 상자 */
+.history-link.is-sub {
+  height: 30px;
+  padding: 0 6px 0 12px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.history-link.is-sub:hover,
+.history-link.is-sub:focus-visible {
+  color: var(--text-1);
+}
+.history-no-report {
+  color: var(--text-3);
+  font-size: 14px;
+}
+.history-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.history-save.is-saving {
+  color: var(--brand-text);
+}
+.history-save.is-failed {
+  color: var(--miss);
+}
+.history-save.is-unsaved {
+  color: var(--text-3);
+}
+.history-save-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: history-spin 0.8s linear infinite;
+}
+@keyframes history-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-save-spin {
+    animation: none;
+  }
+}
+
+/* 넓은 화면(901px 이상): 한 줄 행. 제목을 세로 가운데에 한 줄로 두고, 모드·시각·길이를 제목 바로 뒤에 이어 붙인다(11/12 팀 의견).
+ * 빈 자리는 정확도 왼쪽 한 곳으로 모인다. 제목이 길면 제목이 먼저 줄어든다(…). 녹음 행도 같은 규칙을 쓴다.
+ * 그보다 좁으면 위 기본 규칙대로 보조 줄이 제목 아래로 내려간다 */
+@media (min-width: 901px) {
+  .history-row {
+    min-height: 72px;
+    padding: 12px 20px;
+  }
+  /* 제목 칸은 내용만큼만 차지하다가 자리가 모자라면 줄어들고(…), 보조 정보는 줄어들지 않는다 */
+  .history-row-info {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) max-content;
+    align-items: center;
+    justify-content: start;
+    gap: 0 10px;
+  }
+  .history-row-sub {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+  /* 제목 덩어리와 보조 정보 사이의 구분점 */
+  .history-row-sub::before {
+    margin-right: 10px;
+    content: '·';
+  }
+}
+
+/* [더 보기] */
+.history-more {
+  display: flex;
+  justify-content: center;
+}
+.history-more-count {
+  margin-left: 6px;
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 좁은 화면: 점수는 숨기고 정확도를 줄여 링크 칸을 남긴다 */
+@media (max-width: 720px) {
+  .history-row {
+    grid-template-columns: minmax(0, 1fr) 64px auto;
+    gap: 10px;
+    min-height: 72px;
+    padding: 12px;
+  }
+  .history-row-title {
+    font-size: 15px;
+  }
+  .history-row-sub {
+    font-size: 12px;
+  }
+  .history-acc-val {
+    font-size: 17px;
+  }
+  .history-acc-val small {
+    font-size: 12px;
+  }
+  .history-bar {
+    height: 6px;
+  }
+  .history-link {
+    height: 34px;
+    padding: 0 6px 0 12px;
+    font-size: 14px;
+  }
+  .history-score {
+    display: none;
+  }
+  .history-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .history-toolbar-end {
+    margin-left: 0;
+  }
+}
+
+.history-filter-empty {
+  margin: 0;
+  padding: var(--space-l) var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+}

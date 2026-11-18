@@ -1,0 +1,36 @@
+/* 페이지 제목 머리 (ui/PageHeader) */
+.ui-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-width: 0;
+}
+.ui-page-head-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.ui-page-title {
+  margin: 0;
+  color: var(--text-1);
+}
+.ui-page-meta {
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.ui-page-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+@media (max-width: 560px) {
+  .ui-page-head {
+    flex-wrap: wrap;
+  }
+}

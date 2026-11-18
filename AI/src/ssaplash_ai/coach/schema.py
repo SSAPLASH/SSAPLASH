@@ -86,6 +86,8 @@ class AnalysisRequest(BaseModel):
     difficulty: str | None = None
     mode: Literal["RHYTHM", "SHEET"]
     timingWindows: TimingWindows
+    # 연습 배율(느리게 치면 1 미만). `tMs`는 곡 시각, `deltaMs`·판정 폭은 실제 시간이다
+    playbackRate: float = Field(default=1.0, gt=0, le=4)
     hits: list[Hit] = Field(max_length=MAX_HITS)
 
 

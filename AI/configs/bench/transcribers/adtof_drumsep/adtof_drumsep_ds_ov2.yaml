@@ -1,0 +1,39 @@
+# 서비스 채보 모델. adtof_drumsep.yaml과 규칙·가중치가 같고 드럼 킷 분리(MDX23C DrumSep)의 조각 겹침만 4 → 2.
+# 곡을 2.96초 조각으로 잘라 분리할 때 조각을 0.74초가 아니라 1.48초씩 밀어 가며 돌려 계산량이 절반.
+# 11/10 GPU 서버 fake BE 전체 흐름 실제 발매곡 10곡: 채보 시간 중앙값 34.5 → 18.7초, 곡당 전체 49.6 → 37.1초,
+# 노트 일치 F1 0.979~1.000. 11/09 로컬 정답 채점: 시험 31곡 +0.003, ENST 원곡 분리 −0.000, PDO +0.000.
+# 벤치마크 기준값은 그대로 adtof_drumsep.yaml을 씀
+name: adtof_drumsep_ds_ov2
+adapter: adtof_drumsep
+velocity: false
+input_sample_rate: 44100
+drumsep_config: configs/bench/models/msst/mdx23c_drumsep_ov2.yaml
+rules:
+  window_ms: 120
+  cymbal_window_ms: 80
+  tom_fmin: 50
+  tom_fmax: 400
+  tom_bands: [113, 142]
+  tom_gate_ratio: 0.10
+  tom_peak_mode: raw
+  tom_mode: relative
+  tom_relative_method: peaks
+  tom_relative_naming: hybrid
+  tom_relative_min_gap: 3.0
+  cymbal_crash_weight: 0.7
+  stems:
+    toms: toms
+    crash: crash
+    ride: ride
+license_code: CC BY-NC-SA 4.0 (ADTOF) + MIT (msst)
+license_weights: CC BY-NC-SA 4.0 (ADTOF 가중치) + 미명시 (MDX23C DrumSep 가중치, aufr33·jarredou 공개)
+source_url: https://github.com/xavriley/ADTOF-pytorch
+labels:
+  KICK: KICK
+  SNARE: SNARE
+  HIHAT: HIHAT
+  SMALL_TOM: SMALL_TOM
+  MID_TOM: MID_TOM
+  FLOOR_TOM: FLOOR_TOM
+  CRASH: CRASH
+  RIDE: RIDE

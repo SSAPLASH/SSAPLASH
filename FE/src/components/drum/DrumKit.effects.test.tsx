@@ -4,11 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { DrumKit } from './DrumKit';
 
 describe('DrumKit effects', () => {
-  it('기본은 hit-effects 레이어가 없다', () => {
-    expect(renderToStaticMarkup(<DrumKit />)).not.toContain('hit-effects');
+  it('기본은 이펙트 캔버스가 없고 마크업이 그대로다', () => {
+    const html = renderToStaticMarkup(<DrumKit />);
+    expect(html).not.toContain('fx-canvas');
+    expect(html).not.toContain('drum-kit-fx');
   });
-  it('effects를 켜면 레이어가 있다', () => {
-    // useReducedMotion은 SSR에서 false라 레이어를 그린다
-    expect(renderToStaticMarkup(<DrumKit effects />)).toContain('hit-effects');
+  it('effects를 켜면 SVG 위에 겹치는 캔버스가 있다', () => {
+    const html = renderToStaticMarkup(<DrumKit effects />);
+    expect(html).toContain('<canvas');
+    expect(html).toContain('fx-canvas');
+    expect(html).toContain('data-fx-theme="auto"');
+  });
+  it('fxTheme를 넘기면 설정값 대신 그 테마를 쓴다', () => {
+    expect(renderToStaticMarkup(<DrumKit effects fxTheme="electric" />)).toContain('data-fx-theme="electric"');
   });
 });

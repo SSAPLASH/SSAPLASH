@@ -1,0 +1,195 @@
+/* 설정 화면(Figma 03 Screens / 설정 223:3444) */
+.settings-head {
+  margin-bottom: var(--space-l);
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-xl);
+  row-gap: var(--space-xl);
+  align-items: start;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--line-strong);
+}
+.settings-section-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+/* 한 열에 쌓는 구역 묶음. 왼쪽 소리·메트로놈·판정·진행, 오른쪽 화면 표시·꾸미기. 계정·데이터 활용은 그 아래 줄에 놓인다 */
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 계정 */
+.settings-account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+.settings-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  object-fit: cover;
+}
+.settings-avatar-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings-account-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings-account-sub {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* 행 */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-height: 48px;
+}
+.settings-row + .settings-row {
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--line);
+}
+.settings-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.settings-row.stacked .settings-row-control {
+  flex: 1;
+  display: block;
+}
+.settings-row-label {
+  color: var(--text-1);
+  font-size: 16px;
+}
+.settings-row-help {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.settings-row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+.settings-row-control.wide {
+  width: min(260px, 50%);
+  min-width: 0;
+}
+.settings-row-control.wide .ui-slider {
+  flex: 1;
+  min-width: 0;
+}
+/* 슬라이더 라벨은 행 라벨과 겹치므로 화면에서만 숨긴다(접근 이름은 유지) */
+.settings-row-control .ui-slider-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.settings-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.settings-help {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.settings-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.settings-withdraw {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-m);
+  margin-top: var(--space-xl);
+  padding-top: var(--space-m);
+  border-top: 1px solid var(--line);
+}
+.settings-withdraw-button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--space-m);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-withdraw-button:hover { color: var(--miss); }
+.settings-withdraw-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .settings-row:not(.stacked) { flex-wrap: wrap; }
+  .settings-row-control.wide { width: 100%; }
+}
+
+/* 동의 저장 결과 알림 위치 */
+.settings-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-l);
+  z-index: 60;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}

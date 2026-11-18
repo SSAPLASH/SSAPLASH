@@ -1,11 +1,11 @@
 // 리듬 게임 세션(설계 4-2 판정 절차) 규칙 검증. 가짜 시각(ms)만 넣고 performance.now는 쓰지 않는다.
 import { describe, expect, it } from 'vitest';
-import { RhythmSession, type RhythmOptions } from './RhythmSession';
-import type { Chart, ChartNote } from '@/domain/chart';
+import { RhythmSession, type RhythmOptions, type StrayHitEvent } from './RhythmSession';
+import type { Chart, ChartNote } from '@/domain/song/chart';
 import type { ResolvedHit } from '@/domain/events';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 
-const OPTS: RhythmOptions = { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0 };
+const OPTS: RhythmOptions = { windows: { perfectMs: 25, goodMs: 60 }, countInBars: 1, audioOffsetMs: 0, kickOffsetMs: 0 };
 
 /** 120BPM(박 500ms, 1마디 2000ms) 테스트 채보 */
 function chart(notes: ChartNote[], durationMs = 2500): Chart {
@@ -57,11 +57,20 @@ function playing(notes = NOTES, opts = OPTS): RhythmSession {
 }
 
 describe('시작·카운트인', () => {
-  it('idle일 때 곡 시각은 −카운트인으로 고정된다', () => {
+  it('idle일 때 곡 시각은 −preRollMs(5000)로 고정된다', () => {
     const s = new RhythmSession(chart(NOTES), OPTS);
     expect(s.countInMs).toBe(2000);
-    expect(s.songTime(5000)).toBe(-2000);
-    expect(s.songTime(99999)).toBe(-2000);
+    expect(s.songTime(5000)).toBe(-5000);
+    expect(s.songTime(99999)).toBe(-5000);
+  });
+
+  it('preRollMs: 카운트다운 끔이면 0, 켬이면 3000 + 1마디', () => {
+    expect(new RhythmSession(chart(NOTES), { ...OPTS, countInBars: 0 }).preRollMs).toBe(0);
+    expect(new RhythmSession(chart(NOTES), { ...OPTS, countInBars: 0 }).songTime(1)).toBe(0);
+    expect(new RhythmSession(chart(NOTES), OPTS).preRollMs).toBe(5000);
+    // 카운트다운 3초에 1마디(90bpm 4/4 = 2667ms, 40bpm 4/4 = 6000ms)를 더한다
+    expect(new RhythmSession({ ...chart(NOTES), bpm: 90 }, OPTS).preRollMs).toBeCloseTo(5666.67, 1);
+    expect(new RhythmSession({ ...chart(NOTES), bpm: 40 }, OPTS).preRollMs).toBe(9000);
   });
 
   it('start 후 카운트인, 곡 0ms부터 playing', () => {
@@ -125,21 +134,50 @@ describe('노트 배정과 판정', () => {
     expect(s2.snapshot(T0 + 1561).strayHits).toBe(1);
   });
 
-  it('점수: Perfect 100, Good 60, 만점 = 노트 수 × 100', () => {
+  it('점수: Perfect 100, Good 80(330번), 만점 = 노트 수 × 100', () => {
     const s = playing();
     s.handleHit(hit('HIHAT', T0 + 1000));
     s.handleHit(hit('SNARE', T0 + 1040));
     const snap = s.snapshot(T0 + 1100);
-    expect(snap.score).toBe(160);
+    expect(snap.score).toBe(180);
     expect(snap.maxScore).toBe(500);
     expect(snap.counts).toEqual({ PERFECT: 1, GOOD: 1, MISS: 0 });
     expect(snap.judgedCount).toBe(2);
   });
 
   it('오디오 오프셋은 타격 시각에서 뺀다', () => {
-    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10 });
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
     const ev = s.handleHit(hit('HIHAT', T0 + 1010));
     expect(ev?.deltaMs).toBe(0);
+  });
+
+  it('발 타격은 킥 오프셋, 손 타격은 스틱 오프셋으로 곡 시각을 계산한다', () => {
+    const opts = { ...OPTS, audioOffsetMs: -65, kickOffsetMs: -40 };
+    const footHit = { ...hit('KICK', T0 + 1500 - 40), foot: 3 } as ResolvedHit;
+    const handHit = hit('SNARE', T0 + 1000 - 65);
+    // 킥 값을 쓰면 발 타격은 0ms, 스틱 값을 쓴다면 25ms 늦게 판정된다
+    expect(playing(NOTES, opts).handleHit(footHit)?.deltaMs).toBe(0);
+    expect(playing(NOTES, opts).handleHit(handHit)?.deltaMs).toBe(0);
+    // 같은 tHit라도 값 차이(25ms)만큼 delta가 다르다
+    const same = { ...opts, kickOffsetMs: -65 };
+    expect(playing(NOTES, same).handleHit(footHit)?.deltaMs).toBe(25);
+    const s = playing(NOTES, opts);
+    expect(s.hitSongTimeMs(T0 + 1000, true)).toBe(1040);
+    expect(s.hitSongTimeMs(T0 + 1000)).toBe(1065);
+    expect(s.kickOffsetMs).toBe(-40);
+  });
+
+  it('두 값이 같으면 발 타격도 손 타격과 같은 곡 시각이다', () => {
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
+    expect(s.hitSongTimeMs(T0 + 1010, true)).toBe(s.hitSongTimeMs(T0 + 1010));
+  });
+
+  it('IMU 후보 패드 계산은 스틱 오프셋을 쓴다', () => {
+    // 곡 시각 1000 근처: 스틱 값이면 1000(SNARE·HIHAT 후보), 킥 값이면 1500 근처로 밀려 KICK이 후보에 든다
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 0, kickOffsetMs: 450 });
+    const c = s.candidates(T0 + 1000) ?? [];
+    expect(c).toContain('SNARE');
+    expect(c).not.toContain('CRASH');
   });
 
   it('채보에 없는 패드는 감점·콤보 영향 없이 채보 외 타격만 센다', () => {
@@ -150,6 +188,33 @@ describe('노트 배정과 판정', () => {
     expect(snap.strayHits).toBe(1);
     expect(snap.score).toBe(100);
     expect(snap.combo).toBe(1);
+  });
+
+  it('채보 밖 타격을 패드·곡 시각과 함께 알리고, 받는 쪽 오류는 세션에 전하지 않는다', () => {
+    const s = playing(NOTES, { ...OPTS, audioOffsetMs: 10, kickOffsetMs: 10 });
+    const got: StrayHitEvent[] = [];
+    s.onStray(() => {
+      throw new Error('코칭 오류');
+    });
+    const off = s.onStray((e) => got.push(e));
+    expect(() => s.handleHit(hit('RIDE', T0 + 1010))).not.toThrow();
+    // 키보드 타격은 손·방향이 없다
+    expect(got).toEqual([{ pad: 'RIDE', songTimeMs: 1000, nearDeltaMs: null, stickId: null, pose: null }]);
+    expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
+    off();
+    s.handleHit(hit('RIDE', T0 + 1020));
+    expect(got).toHaveLength(1);
+  });
+
+  it('센서 타격이면 판정·채보 밖 타격에 손과 스틱 끝 방향을 싣는다(연주 중 코칭 aim)', () => {
+    const s = playing(NOTES, OPTS);
+    const strays: StrayHitEvent[] = [];
+    s.onStray((e) => strays.push(e));
+    const sensor = (pad: PadId, t: number): ResolvedHit => ({ ...hit(pad, t), source: 'stick', stickId: 1, pose: { pitch: -32, yaw: 4 } });
+    const j = s.handleHit(sensor('SNARE', T0 + 1005));
+    expect(j).toMatchObject({ stickId: 1, pose: { pitch: -32, yaw: 4 } });
+    s.handleHit(sensor('RIDE', T0 + 1010));
+    expect(strays[0]).toMatchObject({ pad: 'RIDE', stickId: 1, pose: { pitch: -32, yaw: 4 } });
   });
 
   it('pad가 없는 타격은 무시한다', () => {
@@ -163,6 +228,47 @@ describe('노트 배정과 판정', () => {
     s.handleHit(hit('HIHAT', T0 + 1000));
     expect(s.handleHit(hit('HIHAT', T0 + 1010))).toBeNull();
     expect(s.snapshot(T0 + 1010).strayHits).toBe(1);
+  });
+});
+
+describe('채보 밖 타격의 가까운 노트 차(nearDeltaMs, 설계 MODE-003-timing-bar-miss-dot)', () => {
+  // 스네어 1000·1100, 킥 1500. goodMs 60 → 판정 범위 ±60, 찾는 범위 ±120
+  const near = (s: RhythmSession) => {
+    const got: (number | null)[] = [];
+    s.onStray((e) => got.push(e.nearDeltaMs));
+    return got;
+  };
+
+  it('범위 밖으로 빠르게 치면 음수(가장 가까운 같은 패드 노트 기준)', () => {
+    const s = playing();
+    const got = near(s);
+    s.handleHit(hit('KICK', T0 + 1420));
+    expect(got).toEqual([-80]);
+  });
+
+  it('놓친(MISS) 노트 뒤에 늦게 치면 양수', () => {
+    const s = playing();
+    const got = near(s);
+    s.tick(T0 + 1570); // 킥 1500이 MISS가 된다
+    s.handleHit(hit('KICK', T0 + 1590));
+    expect(got).toEqual([90]);
+  });
+
+  it('이미 친 노트 옆 추가 타격, 찾는 범위 밖, 다른 패드는 null', () => {
+    const s = playing();
+    const got = near(s);
+    s.handleHit(hit('KICK', T0 + 1500)); // PERFECT
+    s.handleHit(hit('KICK', T0 + 1580)); // 친 노트 옆 → null
+    s.handleHit(hit('CRASH', T0 + 1850)); // 크래시 2000까지 −150, 범위 밖 → null
+    s.handleHit(hit('RIDE', T0 + 1930)); // 라이드 노트 없음 → null
+    expect(got).toEqual([null, null, null]);
+  });
+
+  it('노트가 없는 채보에서도 터지지 않는다', () => {
+    const s = playing([]);
+    const got = near(s);
+    s.handleHit(hit('SNARE', T0 + 100));
+    expect(got).toEqual([null]);
   });
 });
 
@@ -373,4 +479,17 @@ describe('촘촘한 같은 패드 노트 매칭 (MODE-001-judge-window 3-1)', ()
     expect(s.snapshot().contestedHits).toBe(0);
     expect(s.lastContestedMatch).toBeNull();
   });
+});
+
+it('열린 하이햇 속성은 같은 채보의 판정·점수·콤보를 바꾸지 않는다', () => {
+  const run = (opened: boolean) => {
+    const notes: ChartNote[] = [{ timeMs: 1000, pad: 'HIHAT', ...(opened ? { hihatOpen: true as const } : {}) }, { timeMs: 1500, pad: 'SNARE' }];
+    const ss = playing(notes);
+    const first = ss.handleHit({ ...hit('HIHAT', T0 + 1000), hihatClosed: true });
+    const second = ss.handleHit(hit('SNARE', T0 + 1540));
+    const snap = ss.snapshot(T0 + 1600);
+    return { judgements: [first?.judgement, second?.judgement], score: snap.score, combo: snap.combo, maxCombo: snap.maxCombo, counts: snap.counts };
+  };
+  expect(run(true)).toEqual(run(false));
+  expect(run(true)).toMatchObject({ judgements: ['PERFECT', 'GOOD'], score: 180, maxCombo: 2 });
 });

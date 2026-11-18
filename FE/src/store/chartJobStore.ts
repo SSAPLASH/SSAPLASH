@@ -1,8 +1,9 @@
 // 곡 작업실 작업 store (설계 3-6·4-1~4-3). 음원 업로드 실행, 활성 작업 보관·복원(localStorage), 곡 상태 폴링.
-// 화면 문구 조립·라우팅은 하지 않는다. 폴링 대상은 `getSong` 하나이고 진행 WebSocket(BE 161)은 후속에서 같은 JobProgress로 매핑한다.
+// jobId가 있으면 작업 스냅샷을 조회하고, 없으면 곡 상태로 복원한다.
 import { create } from 'zustand';
 import { ApiError } from '@/api/http';
-import { getSong, listSongs, uploadAudio } from '@/api/songs';
+import { getJob } from '@/api/song/jobs';
+import { getSong, listAllSongs, uploadAudio } from '@/api/song/songs';
 import {
   ACTIVE_JOB_KEY,
   PRECHECK_TEXT,
@@ -11,11 +12,12 @@ import {
   newIdempotencyKey,
   precheckAudio,
   songStatusToProgress,
+  jobSnapshotToProgress,
   uploadErrorText,
   type ActiveJob,
   type JobProgress,
   type UploadDraft,
-} from '@/domain/chartJob';
+} from '@/domain/song/chartJob';
 
 export type ChartJobPhase = 'idle' | 'uploading' | 'polling' | 'done' | 'failed';
 
@@ -121,6 +123,8 @@ let inflightGen = -1;
 let listening = false;
 /** resume·recoverFromMine 직후 첫 응답을 아직 받지 못했으면 true. 그 응답의 끝 상태는 restored로 본다 */
 let restoredPending = false;
+/** 현재 폴링 수명에서 반영한 작업 스냅샷의 revision */
+let lastRevision: number | null = null;
 
 const hasDocument = (): boolean => typeof document !== 'undefined';
 const isHidden = (): boolean => hasDocument() && document.visibilityState === 'hidden';
@@ -176,11 +180,24 @@ async function poll(my: number): Promise<void> {
   if (my !== gen || !job || inflightGen === my) return;
   inflightGen = my;
   try {
-    const song = await getSong(job.songId);
-    if (my !== gen) return;
+    let progress: JobProgress | null;
+    if (job.jobId !== null) {
+      const snapshot = await getJob(job.jobId);
+      if (my !== gen) return;
+      if (snapshot.jobId !== job.jobId || snapshot.songId !== job.songId || (lastRevision !== null && snapshot.revision <= lastRevision)) {
+        schedule(my);
+        return;
+      }
+      progress = jobSnapshotToProgress(snapshot);
+      if (!progress) { schedule(my); return; }
+      lastRevision = snapshot.revision;
+    } else {
+      const song = await getSong(job.songId);
+      if (my !== gen) return;
+      progress = songStatusToProgress(song.status);
+    }
     const doneSource: DoneSource = restoredPending ? 'restored' : 'live';
     restoredPending = false;
-    const progress = songStatusToProgress(song.status);
     if (progress.stage === 'DONE') {
       useChartJob.setState({ progress, phase: 'done', error: null, doneSource });
       stopLoop();
@@ -190,7 +207,7 @@ async function poll(my: number): Promise<void> {
       useChartJob.setState({
         progress,
         phase: 'failed',
-        error: { code: 'JOB_FAILED', detail: '채보를 만들지 못했습니다.', retryable: false },
+        error: { code: 'JOB_FAILED', detail: progress.failReason || '채보를 만들지 못했습니다.', retryable: false },
         doneSource,
       });
       stopLoop();
@@ -200,10 +217,16 @@ async function poll(my: number): Promise<void> {
   } catch (e) {
     if (my !== gen) return;
     if (e instanceof ApiError && e.status === 404) {
+      removeActive();
       useChartJob.setState({
         phase: 'failed',
         error: { code: 'AUDIO_NOT_FOUND', detail: UPLOAD_ERROR_TEXT.AUDIO_NOT_FOUND, retryable: false },
       });
+      stopLoop();
+      return;
+    }
+    if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+      useChartJob.setState({ phase: 'failed', error: { code: 'JOB_AUTH', detail: '작업 상태를 확인할 권한이 없습니다. 다시 로그인해 주세요.', retryable: false } });
       stopLoop();
       return;
     }
@@ -218,6 +241,7 @@ async function poll(my: number): Promise<void> {
 function startPolling(immediate: boolean): void {
   stopLoop();
   const my = gen;
+  lastRevision = null;
   addListener();
   if (immediate && !isHidden()) void poll(my);
   else schedule(my);
@@ -266,7 +290,9 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
     ...INITIAL,
 
     upload: async (draft) => {
+      if (get().phase === 'uploading' || get().phase === 'polling') return;
       stopLoop();
+      removeActive();
       restoredPending = false;
       set({ ...INITIAL, draft });
       const check = precheckAudio(draft.file);
@@ -283,8 +309,9 @@ export const useChartJob = create<ChartJobState>()((set, get) => {
 
     recoverFromMine: async () => {
       try {
-        const page = await listSongs({ source: 'MINE', size: 50 });
-        const song = page.items.find((s) => s.status === 'PROCESSING');
+        // 내 곡이 한 페이지를 넘어도 PROCESSING 곡을 찾도록 전부 읽는다(Jira 363)
+        const mine = await listAllSongs({ source: 'MINE' });
+        const song = mine.find((s) => s.status === 'PROCESSING');
         if (song) {
           const active: ActiveJob = {
             jobId: null,

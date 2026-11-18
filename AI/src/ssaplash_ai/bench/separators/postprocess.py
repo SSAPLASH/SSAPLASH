@@ -1,4 +1,4 @@
-"""분리 결과 후처리 (S15P31A307-165).
+"""분리 결과 후처리.
 
 split_high_sustain (후보 E): 드럼 트랙의 고음 대역에서 타격음이 아닌 지속음 성분을 골라냄. 드럼 트랙에 딸려 온
 보컬 "ㅅ" 소리·신스 고음은 시간 방향으로 이어지고, 하이햇·심벌 타격은 순간적이라는 성질로 나눔 (librosa HPSS의
@@ -20,7 +20,7 @@ from scipy.ndimage import minimum_filter1d, uniform_filter1d
 N_FFT = 2048
 HOP_LENGTH = 512
 HPSS_MARGIN = 2.0
-# 리미터 상한(dBFS)·미리 줄이는 시간·되돌리는 시간 상수 (설계 v0.4 4장 리미터 표)
+# 리미터 상한(dBFS)·미리 줄이는 시간·되돌리는 시간 상수
 LIMIT_DBFS = -1.0
 LOOKAHEAD_MS = 5.0
 RELEASE_MS = 100.0

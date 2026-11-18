@@ -1,4 +1,4 @@
-"""실제 녹음 학습 확인 실험 채점표 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 3-4·4-5절).
+"""실제 녹음 학습 확인 실험 채점표 (설계 CHART-003-real-drum-data-check 3-4·4-5절).
 
 드러머 하나·MDB 묶음 하나를 빼고 학습한 모델 셋의 rule-eval `by_song.csv`에서, 학습마다 안 본 곡
 (ENST 그 드러머의 반주 곡·MDB 그 묶음)만 골라 합침. 합친 결과는 ENST 64곡·MDB 23곡 전부를 학습에
@@ -32,7 +32,7 @@ MDB = "mdb_drums"
 REAL_DATASETS = (ENST, MDB)
 # 곡별로 모으는 값. tom·pedal은 [tp, fp, fn], false는 rule-eval tomFalseKept(정답에 없는 탐)
 KEYS = ("tom", "pedal", "false")
-# 판정 기준 (설계 4-5절, U1)
+# 판정 기준
 H_GAIN, H_NOT, FALSE_RATIO, GUARD_DROP, PEDAL_PREC = 0.10, 0.05, 0.5, 0.02, 0.6
 
 # {데이터셋: {곡: {키: [a, b, c]}}}
@@ -127,7 +127,7 @@ def main() -> int:
     ap.add_argument("--candidate", default="pk_gap30")
     ap.add_argument("--name", default="real_heldout", help="합친 결과의 이름")
     ap.add_argument("--ref", default="tom_6cls", help="H1·H2 비교 기준")
-    ap.add_argument("--base", default="base", help="서비스 개선 판정의 기본 가중치")
+    ap.add_argument("--base", default="base", help="개선 판정 기준인 ADTOF 원래 가중치")
     ap.add_argument("--plain", default="tom_6cls_plain", help="H2 설정 대조")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
