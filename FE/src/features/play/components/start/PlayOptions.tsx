@@ -15,7 +15,7 @@ import './play-options.css';
 export type PlayOptionRow = 'metronome' | 'padCount' | 'accompaniment' | 'recording';
 
 /** 악보 연습이 보이는 줄 전부 */
-export const ALL_PLAY_OPTION_ROWS: readonly PlayOptionRow[] = ['metronome', 'padCount', 'accompaniment', 'recording'];
+const ALL_PLAY_OPTION_ROWS: readonly PlayOptionRow[] = ['metronome', 'padCount', 'accompaniment', 'recording'];
 
 interface Props {
   /** 보일 줄. 기본은 네 줄 전부 */
