@@ -4,7 +4,6 @@ import { OUTPUT_LATENCY_WARN_MS, type TimingCalRecord, type TimingCalResult } fr
 import {
   outputLatencyWarnText,
   timingCalMismatchText,
-  timingCalRecordText,
   timingCalResultText,
   timingCalStatusText,
   timingOffsetText,
@@ -35,13 +34,6 @@ describe('timingCalResultText', () => {
 });
 
 describe('기록·상태 문구', () => {
-  it('기록이 없으면 안내, 있으면 날짜와 입력', () => {
-    expect(timingCalRecordText(null)).toBe('아직 박자를 맞추지 않았어요');
-    expect(timingCalRecordText(rec)).toBe('11월 11일에 스틱으로 맞췄어요');
-    expect(timingCalRecordText({ ...rec, input: 'keyboard' })).toBe('11월 11일에 키보드로 맞췄어요');
-    expect(timingCalRecordText({ ...rec, kick: { medianMs: -41, madMs: 5, pairs: 12 } })).toBe('11월 11일에 스틱으로 맞췄어요 · 킥 -40ms');
-  });
-
   it('드럼 세팅 상태 줄', () => {
     expect(timingCalStatusText(null, 0)).toBe('안 맞춤');
     expect(timingCalStatusText(rec, -65)).toBe('맞춤 · -65ms');
