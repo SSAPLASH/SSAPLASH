@@ -11,7 +11,7 @@ import { ApiError } from '@/api/http';
 import { getSong, retryMidiAccompaniment } from '@/api/song/songs';
 import { queryClient } from '@/runtime/queryClient';
 import { useApiQuery } from '@/runtime/useApiQuery';
-import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED } from '@/config/features';
+import { SHEET_RELINK_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
@@ -128,7 +128,7 @@ export function StudioPage() {
   const [justDoneId, setJustDoneId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   // 악보 보관(설계 CHART-001 악보 보관): 악보 목록은 곡 목록과 따로 읽고, 둘 중 하나만 실패해도 나머지는 보인다
-  const sheetList = useApiQuery({ ...sheetListQuery(), enabled: SHEET_ARCHIVE_ENABLED });
+  const sheetList = useApiQuery(sheetListQuery());
   const sheets: SheetSummary[] = useMemo(() => sheetList.data?.items ?? [], [sheetList.data]);
   const sheetsStatus = sheetList.status;
   const [section, setSection] = useState<UploadSection>(loadSection);
@@ -161,7 +161,6 @@ export function StudioPage() {
   }, [resume, stopPolling]);
 
   const loadSheets = useCallback(async () => {
-    if (!SHEET_ARCHIVE_ENABLED) return;
     await queryClient.invalidateQueries({ queryKey: sheetKeys.all });
   }, []);
 
@@ -193,7 +192,7 @@ export function StudioPage() {
   // 뷰어에서 악보를 지우고 돌아오면(라우터 state) 토스트를 보이고 state를 비운다(새로고침해도 다시 뜨지 않게)
   const sheetDeletedFlag = (location.state as { sheetDeleted?: boolean } | null)?.sheetDeleted === true;
   useEffect(() => {
-    if (!SHEET_ARCHIVE_ENABLED || !sheetDeletedFlag) return;
+    if (!sheetDeletedFlag) return;
     queueMicrotask(() => showToast('악보를 지웠어요'));
     navigate(location.pathname, { replace: true, state: null });
   }, [sheetDeletedFlag, navigate, location.pathname, showToast]);
@@ -466,7 +465,7 @@ export function StudioPage() {
   const jobLookupError = phase === 'failed' && active !== null && (error?.code === 'AUDIO_NOT_FOUND' || error?.code === 'JOB_AUTH');
   const displayedActive = jobLookupError ? null : active;
   // 빈 안내는 악보까지 없을 때만. 악보 목록을 읽는 동안에는 판단을 미룬다(안내가 잠깐 떴다 사라지지 않게)
-  const sheetsEmpty = !SHEET_ARCHIVE_ENABLED || sheetsStatus === 'error' || (sheetsStatus === 'ready' && sheets.length === 0);
+  const sheetsEmpty = sheetsStatus === 'error' || (sheetsStatus === 'ready' && sheets.length === 0);
   const libraryEmpty = status === 'ready' && items.length === 0 && displayedActive === null && sheetsEmpty;
   const audioBusyTitle = phase === 'polling' && active ? active.title : null;
 
@@ -509,7 +508,7 @@ export function StudioPage() {
   else if (status === 'error') summary = '목록을 불러오지 못했어요';
   else {
     summary = processing > 0 ? `곡 ${total}개 · 생성 중 ${processing}` : `곡 ${total}개`;
-    if (SHEET_ARCHIVE_ENABLED && sheets.length > 0) summary += ` · 악보 ${sheets.length}개`;
+    if (sheets.length > 0) summary += ` · 악보 ${sheets.length}개`;
   }
 
   // 카드·목록 보기 모두 본문 전체 폭(안내 패널은 없앴다, 설계 QA-363). 카드 보기는 제목 아래 간격만 넓다
@@ -523,7 +522,7 @@ export function StudioPage() {
         meta={summary}
         actions={
           <Button variant="primary" size="md" className="studio-upload-btn" leadingIcon={<PlusIcon />} onClick={openUpload}>
-            {SHEET_ARCHIVE_ENABLED ? '올리기' : '곡 올리기'}
+            올리기
           </Button>
         }
       />
@@ -563,13 +562,13 @@ export function StudioPage() {
             view={view}
             onEdit={openEdit}
             onCoverError={onCoverError}
-            sheets={SHEET_ARCHIVE_ENABLED ? sheets : undefined}
-            sheetsFailed={SHEET_ARCHIVE_ENABLED && sheetsStatus === 'error'}
+            sheets={sheets}
+            sheetsFailed={sheetsStatus === 'error'}
             onSheetsRetry={() => void loadSheets()}
             onSheetMenu={onSheetMenu}
             onSheetCoverError={() => void loadSheets()}
-            onSongSheet={SHEET_ARCHIVE_ENABLED ? onSongSheet : undefined}
-            onUploadSong={SHEET_ARCHIVE_ENABLED && SHEET_RELINK_ENABLED ? onUploadSong : undefined}
+            onSongSheet={onSongSheet}
+            onUploadSong={SHEET_RELINK_ENABLED ? onUploadSong : undefined}
             empty={libraryEmpty}
             playback={listenAvailable ? playback : undefined}
           />
@@ -634,11 +633,11 @@ export function StudioPage() {
         open={dialogOpen}
         locked={locked}
         onClose={closeDialog}
-        section={SHEET_ARCHIVE_ENABLED && !linkTarget ? { value: section, onChange: changeSection } : undefined}
+        section={!linkTarget ? { value: section, onChange: changeSection } : undefined}
         title={linkTarget ? '곡 올리기' : undefined}
         notice={linkTarget ? `「${linkTarget.title}」 악보에 연결돼요` : undefined}
       >
-        {SHEET_ARCHIVE_ENABLED && !linkTarget && section === 'SHEET' ? (
+        {!linkTarget && section === 'SHEET' ? (
           <SheetUploadForm
             key={sheetTarget?.id ?? 'none'}
             target={sheetTarget ? { id: sheetTarget.id, title: sheetTarget.title } : null}
