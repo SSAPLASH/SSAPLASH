@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RECORDING_ENABLED } from '@/config/features';
 import { HistoryPage } from './HistoryPage';
 
 vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
@@ -66,8 +65,7 @@ describe('HistoryPage', () => {
     expect(radios[2]).toContain('>악보 연습<');
   });
 
-  it('RECORDING_ENABLED 기본값은 켜짐이라 탭 줄이 있고 기본 탭은 플레이 기록이다', () => {
-    expect(RECORDING_ENABLED).toBe(true);
+  it('탭 줄이 있고 기본 탭은 플레이 기록이다', () => {
     stubLogs([saved(1)]);
     const html = render();
     expect(html).toContain('history-tabs');

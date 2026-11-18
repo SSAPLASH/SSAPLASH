@@ -1,4 +1,5 @@
 // 자유 연습 반주 화면 상태 계산 (설계 MODE-002 3-4·3-5·3-6). React·오디오·네트워크를 모르는 순수 함수.
+import { formatClock } from '@/domain/time/formatTime';
 import type { AccompanimentStatus } from './songCatalog';
 import type { SongSummary } from './songCatalog';
 
@@ -49,16 +50,6 @@ export interface AccompanimentBarInput {
 }
 
 const num = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0);
-
-/** 밀리초 → `m:ss`(1시간 이상은 `h:mm:ss`). 음수·NaN은 `0:00` */
-export function formatClock(ms: number): string {
-  const total = Math.floor(num(ms) / 1000);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const ss = String(s).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
-}
 
 /** 밀리초 → 「1분 12초」(스크린리더용). 1시간 이상은 「1시간 2분 3초」 */
 export function formatSpoken(ms: number): string {

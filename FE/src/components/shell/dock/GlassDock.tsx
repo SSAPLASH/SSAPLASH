@@ -8,7 +8,6 @@ import * as Popover from '@radix-ui/react-popover';
 import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RECORDING_ENABLED } from '@/config/features';
 import { useRecordingStore } from '@/runtime/recordingStore';
 import { BPM_STEP } from '@/domain/time/metronome';
 import { metronome } from '@/engine/Metronome';
@@ -95,7 +94,7 @@ export function GlassDock() {
   const { pathname } = useLocation();
   // 접힘 Dock의 녹음 점: 자유 녹음 중, 또는 악보에서 녹음을 켠 채 연주 중(리듬 게임은 녹음하지 않는다)
   const recordingDot = useRecordingStore(
-    (s) => RECORDING_ENABLED && (s.phase === 'recording' || (s.phase === 'armed' && s.locked && recordButtonVisible(pathname))),
+    (s) => s.phase === 'recording' || (s.phase === 'armed' && s.locked && recordButtonVisible(pathname)),
   );
 
   const mode = immersive ? 'play' : 'shell';
@@ -139,7 +138,7 @@ export function GlassDock() {
   const panelOpen = dockPanel === 'metronome';
   const pause = () => useLive.setState({ pauseRequested: 'menu' });
   // 접힌 Dock의 녹음 상태: 녹음 버튼이 있는 화면이면 늘 보이고(꺼진 원), 녹음 중이면 빨간 원
-  const recStatusShown = recordingDot || (RECORDING_ENABLED && recordButtonVisible(pathname));
+  const recStatusShown = recordingDot || recordButtonVisible(pathname);
   const metroLabel = gameNoMetro ? '리듬 게임에서는 메트로놈을 쓰지 않아요' : locked ? (clickOn ? '메트로놈 클릭 끄기' : '메트로놈 클릭 켜기') : met.playing ? '메트로놈 정지' : '메트로놈 재생';
 
   return (
@@ -208,7 +207,7 @@ export function GlassDock() {
                     <path d="M6 12h12M12 6v12" />
                   </svg>
                 </IconButton>
-                {RECORDING_ENABLED && recordButtonVisible(pathname) && (
+                {recordButtonVisible(pathname) && (
                   <>
                     <span className="dock-divider" />
                     <RecordButton />

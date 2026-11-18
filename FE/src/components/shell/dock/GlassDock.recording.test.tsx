@@ -1,15 +1,10 @@
-// 녹음 기능 스위치를 켠 GlassDock. 기존 GlassDock.test.tsx(스위치 꺼짐)와 모듈 목이 섞이지 않게 파일을 나눴다.
+// 녹음 버튼·상태 표시가 있는 GlassDock. 기존 GlassDock.test.tsx와 모듈 목이 섞이지 않게 파일을 나눴다.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetRecordingForTest, useRecordingStore } from '@/runtime/recordingStore';
 import { useSettings } from '@/store/settingsStore';
 import { GlassDock } from './GlassDock';
-
-vi.mock('@/config/features', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/config/features')>()),
-  RECORDING_ENABLED: true,
-}));
 
 // renderToStaticMarkup은 zustand의 서버 스냅샷(초기 상태)을 읽으므로, 훅이 현재 상태를 읽도록 바꾼다
 vi.mock('@/runtime/recordingStore', async (importOriginal) => {
@@ -36,7 +31,7 @@ beforeEach(() => {
   useSettings.setState({ dockCollapsed: false });
 });
 
-describe('GlassDock 녹음 슬롯(스위치 켜짐)', () => {
+describe('GlassDock 녹음 슬롯', () => {
   it('/free에서 [BPM +] 다음에 구분선과 녹음 버튼', () => {
     const html = render('/free');
     expect(html).toMatch(/aria-label="BPM 5 증가".*?<span class="dock-divider"><\/span><button[^>]*class="rec-btn idle"/s);

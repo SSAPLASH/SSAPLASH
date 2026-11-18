@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRecordingTitle, type RecordingHit, type RecordingMode } from './recording';
 import {
-  formatElapsed,
   formatHitCount,
-  formatRecordingLength,
   pendingDurationMs,
   RECORDING_QUOTA,
   recordingCountLabel,
@@ -32,33 +30,6 @@ describe('formatHitCount', () => {
     expect(formatHitCount(1000)).toBe('1,000타');
     expect(formatHitCount(1904)).toBe('1,904타');
     expect(formatHitCount(50000)).toBe('50,000타');
-  });
-});
-
-describe('formatElapsed', () => {
-  it('mm:ss 내림, 음수는 0', () => {
-    expect(formatElapsed(0)).toBe('00:00');
-    expect(formatElapsed(-500)).toBe('00:00');
-    expect(formatElapsed(999)).toBe('00:00');
-    expect(formatElapsed(59_999)).toBe('00:59');
-    expect(formatElapsed(60_000)).toBe('01:00');
-    expect(formatElapsed(83_000)).toBe('01:23');
-  });
-
-  it('100분 이상이면 자리수가 늘어난다', () => {
-    expect(formatElapsed((123 * 60 + 45) * 1000)).toBe('123:45');
-  });
-});
-
-describe('formatRecordingLength', () => {
-  it('m:ss 반올림', () => {
-    expect(formatRecordingLength(0)).toBe('0:00');
-    expect(formatRecordingLength(499)).toBe('0:00');
-    expect(formatRecordingLength(500)).toBe('0:01');
-    expect(formatRecordingLength(59_400)).toBe('0:59');
-    expect(formatRecordingLength(59_500)).toBe('1:00');
-    expect(formatRecordingLength(60_000)).toBe('1:00');
-    expect(formatRecordingLength(135_000)).toBe('2:15');
   });
 });
 

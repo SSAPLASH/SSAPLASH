@@ -7,7 +7,7 @@
 // 재생기는 모른다. 페이지가 만든 SongPlayback(`domain/songPlayback`)의 view를 그리고 조작은 콜백으로만 알린다.
 import { SeekBar } from '@/components/song/SeekBar';
 import { PlaybackTransport } from '@/components/song/PlaybackTransport';
-import { formatClock } from '@/domain/song/freeAccompaniment';
+import { formatClock } from '@/domain/time/formatTime';
 import type { SongSummary } from '@/domain/song/songCatalog';
 import { isListening, type SongPlayback } from '@/features/studio/domain/songPlayback';
 import '@/features/studio/components/studio.css';

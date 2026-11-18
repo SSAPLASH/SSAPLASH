@@ -28,9 +28,9 @@ interface Props {
   onReupload: (song: SongSummary) => void;
   onRetryAccompaniment?: (song: SongSummary) => void;
   retryingAccompaniment?: boolean;
-  /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
+  /** 없으면 ⋯ 메뉴를 그리지 않는다 */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
-  /** 있으면 ⋯ 메뉴와 맨 아래 버튼에 [악보 보기 | 악보 올리기]를 넣는다(악보-곡 연결 스위치 켜짐). 없으면 맨 아래 버튼은 비활성 [악보 보기] */
+  /** 있으면 ⋯ 메뉴와 맨 아래 버튼에 [악보 보기 | 악보 올리기]를 넣는다. 없으면 맨 아래 버튼은 비활성 [악보 보기] */
   onSheet?: (kind: SongSheetKind, song: SongSummary) => void;
   /** 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
   onCoverError?: () => void;
