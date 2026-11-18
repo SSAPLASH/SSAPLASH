@@ -11,7 +11,6 @@ import { ApiError } from '@/api/http';
 import { getSong, retryMidiAccompaniment } from '@/api/song/songs';
 import { queryClient } from '@/runtime/queryClient';
 import { useApiQuery } from '@/runtime/useApiQuery';
-import { SHEET_RELINK_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
@@ -527,7 +526,7 @@ export function StudioPage() {
         }
       />
       {jobLookupError && <p className="notice error" role="alert">{errorText}</p>}
-      {SHEET_RELINK_ENABLED && linkPending !== null && (
+      {linkPending !== null && (
         <p className="notice error" role="alert">
           곡은 올렸지만 악보를 연결하지 못했어요
           <Button variant="text" size="sm" disabled={linkPhase === 'linking'} onClick={retryLink}>
@@ -568,7 +567,7 @@ export function StudioPage() {
             onSheetMenu={onSheetMenu}
             onSheetCoverError={() => void loadSheets()}
             onSongSheet={onSongSheet}
-            onUploadSong={SHEET_RELINK_ENABLED ? onUploadSong : undefined}
+            onUploadSong={onUploadSong}
             empty={libraryEmpty}
             playback={listenAvailable ? playback : undefined}
           />
