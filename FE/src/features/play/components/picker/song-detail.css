@@ -40,39 +40,8 @@
   color: var(--text-1);
   font-size: 16px;
 }
-.play-sd-best {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 14px;
-}
-.play-sd-best strong {
-  color: var(--text-1);
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
-.play-sd-line {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-2);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .play-sd-error {
   font-size: 12px;
-}
-/* [프리셋 · 준비] 한 줄(Figma 126:3582, 11/03): 위 여백 8, [준비] 폭 120 */
-.play-sd-ready {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-m);
-  margin-top: var(--space-s);
-}
-.play-sd .play-sd-prepare {
-  flex: none;
-  width: 120px;
 }
 /* 비슷한 곡 한 줄(Figma 666:33646·666:33647): 구분선 → 위·아래 8, 글 묶음과 [이 곡 보기] 사이 12, 글 줄 사이 2 */
 .play-sd-divider {

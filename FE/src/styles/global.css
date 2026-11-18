@@ -95,11 +95,6 @@ a:focus-visible {
 .btn-primary:hover {
   background: var(--brand-text);
 }
-.btn-lg {
-  padding: 14px 24px;
-  font-size: 17px;
-  border-radius: var(--radius-control);
-}
 .btn-ghost {
   background: transparent;
 }
@@ -601,16 +596,6 @@ p {
   flex-direction: column;
   gap: 10px;
 }
-.grid-2 {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
-  gap: 20px;
-}
-@media (max-width: 900px) {
-  .grid-2 {
-    grid-template-columns: 1fr;
-  }
-}
 .field {
   display: flex;
   flex-direction: column;
@@ -709,128 +694,8 @@ p {
 .step .status.ok {
   color: #67d58a;
 }
-.keyhelp {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-}
-.keyhelp div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  font-size: 13px;
-}
-
-/* ---- 키트 캔버스 ---- */
-.kit-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  border-radius: var(--radius-panel);
-  overflow: hidden;
-  background: radial-gradient(600px 300px at 50% 110%, #2a3652 0%, var(--bg-canvas) 70%);
-  border: 1px solid var(--line);
-  user-select: none;
-  touch-action: none;
-}
-.kit-wrap canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-/* 드럼 세팅: 아래 캔버스(바닥) → 드럼 킷 SVG → 위 캔버스(판정 범위·L·R 표식)를 겹친다. 포인터는 래퍼가 받는다 */
-.kit-stack > canvas,
-.kit-stack > .drum-kit {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-/* ---- 세팅 ---- */
-.keymap-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.keymap-row {
-  display: grid;
-  grid-template-columns: 14px 1fr auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: var(--radius-control);
-  border: 1px solid transparent;
-}
-.keymap-row.active {
-  border-color: var(--brand);
-  background: rgba(230, 184, 92, 0.08);
-}
-.keymap-row .swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-}
-.keymap-row .keys {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.keymap-row .keys button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
 
 /* ---- 캘리브레이션 ---- */
-.cal-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 320px;
-  gap: 20px;
-}
-@media (max-width: 960px) {
-  .cal-layout {
-    grid-template-columns: 1fr;
-  }
-}
-.cal-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.cal-step {
-  display: grid;
-  grid-template-columns: 14px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border-radius: var(--radius-control);
-  border: 1px solid transparent;
-  color: var(--text-2);
-}
-.cal-step.current {
-  border-color: var(--brand);
-  color: var(--text-1);
-  background: rgba(230, 184, 92, 0.08);
-}
-.cal-step.done {
-  color: var(--text-1);
-}
-.cal-step .swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-}
-.cal-step .meta {
-  font-size: 12px;
-  color: var(--text-3);
-}
-.cal-instruction {
-  font-size: 20px;
-  font-weight: 700;
-}
 .progress {
   height: 10px;
   border-radius: 999px;
@@ -844,36 +709,6 @@ p {
   transition: width var(--motion-press) linear; /* 진행률 추종 */
 }
 
-.chart-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  max-width: 420px;
-}
-.chart-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-align: left;
-  padding: 12px 14px;
-}
-.chart-item.active {
-  border-color: var(--brand);
-  background: rgba(230, 184, 92, 0.1);
-}
-/* 곡 선택 창 "내 곡" 탭: 처리 중·실패 곡은 흐리게, 눌리지 않는다(설계 CHART-003 D6) */
-.chart-item.disabled,
-.chart-item.disabled:hover {
-  opacity: 0.5;
-  cursor: default;
-  border-color: var(--line);
-  background: transparent;
-}
-.chart-item strong .my-badge {
-  margin-left: 8px;
-  vertical-align: middle;
-}
 .diff {
   font-size: 12px;
   padding: 2px 8px;
@@ -883,11 +718,6 @@ p {
 }
 
 /* ---- 결과 ---- */
-.result-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
 .stat {
   display: flex;
   flex-direction: column;
@@ -1167,24 +997,6 @@ a.btn-ghost.as-button {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-/* ---- 곡 상태 배지(내 곡 카드·행) ---- */
-.my-badge {
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--text-2);
-}
-.my-badge.active {
-  border-color: var(--brand);
-  color: var(--brand);
-}
-.my-badge.danger {
-  border-color: var(--miss);
-  color: var(--miss);
 }
 
 /* ---- 준비 조건 안내 ---- */
