@@ -6,7 +6,7 @@ import { HistoryPage } from './HistoryPage';
 
 vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
 
-vi.mock('@/config/features', () => ({ RECORDING_ENABLED: true, SONG_EDIT_ENABLED: true }));
+vi.mock('@/config/features', () => ({ RECORDING_ENABLED: true }));
 
 afterEach(() => vi.unstubAllGlobals());
 
