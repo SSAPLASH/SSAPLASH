@@ -90,12 +90,6 @@ export function summaryBadge(level: string): { text: string; tone: 'perfect' | '
   }
 }
 
-/** ms → 「m:ss」(초 내림). 음수·NaN은 「0:00」 */
-export function formatClock(ms: number): string {
-  const total = Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
-
 /** 판정 수 합이 분석 최소 노트 수 미만인지 */
 export function isTooShortForAnalysis(counts: Record<Judgement, number>): boolean {
   return counts.PERFECT + counts.GOOD + counts.MISS < MIN_NOTES_FOR_ANALYSIS;
