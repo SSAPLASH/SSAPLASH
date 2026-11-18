@@ -3,7 +3,6 @@
 // 줄 어디를 눌러도 그 줄의 스위치가 바뀐다. 메트로놈을 켜면 그 아래 박 분할 선택(자동·4분·8분)이 펼쳐진다.
 // 반주가 꺼져 있거나 없는 곡이면 반주 줄 아래에 연습 속도(50~100 %, −/+ 5 % 단위)가 펼쳐진다(설계 MODE-003-practice-speed).
 // 메트로놈·박 분할·패드 번호·반주·연습 속도는 props만 받고(설정 스토어 연결·예시 소리는 페이지), 녹음 줄만 녹음 스토어의 arm(`toggleArm`)을 직접 쓴다.
-import { RECORDING_ENABLED } from '@/config/features';
 import { toggleArm, useRecordingStore } from '@/runtime/recordingStore';
 import { SubdivisionPicker } from '@/components/metronome/SubdivisionPicker';
 import { Toggle } from '@/components/ui/form/Toggle';
@@ -63,7 +62,7 @@ export function PlayOptions({
 }: Props) {
   // READY인데 아직 못 불러온 경우도 비활성 문구가 비지 않게 「반주 없음」으로 둔다
   const missingText = accompanimentOptionText(accompanimentStatus) || '반주 없음';
-  const showRecording = rows.includes('recording') && RECORDING_ENABLED;
+  const showRecording = rows.includes('recording');
   // 연습 속도는 반주가 울리지 않을 때만 고른다(느린 반주는 음정이 내려간다)
   const rateOpen = !hasAccompaniment || !accompaniment;
   return (
