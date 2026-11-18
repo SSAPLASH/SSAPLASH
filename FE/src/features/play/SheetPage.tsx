@@ -58,6 +58,7 @@ import { appliedWindows, type Judgement } from '@/domain/play/judgement';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import '@/components/lesson/lesson.css';
 import { isBeginnerChart, lessonOfChart, trimLessonTail } from '@/domain/play/lesson';
+import { ACCOMPANIMENT_OVERRIDE } from '@/config/accompaniment';
 import { GO_MS, NO_LESSONS, parseId } from '@/features/play/domain/playShared';
 import { useLessons } from '@/store/lessonStore';
 import { RhythmSession, type SessionSnapshot } from '@/engine/RhythmSession';
@@ -94,9 +95,6 @@ import { diagTap } from '@/engine/diagTap';
 
 // 단계는 URL 파라미터 상태·세션에서 렌더 중 파생한다. paused는 pauseReason으로 표시
 type Stage = PlayStageName;
-
-/** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
-const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
 
 /** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';

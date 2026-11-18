@@ -55,6 +55,7 @@ import type { PadId } from '@/domain/kit/pads';
 import { isSensorSource, type InputSourceKind } from '@/domain/events';
 import { appliedWindows } from '@/domain/play/judgement';
 import { isBeginnerChart } from '@/domain/play/lesson';
+import { ACCOMPANIMENT_OVERRIDE } from '@/config/accompaniment';
 import { GO_MS, NO_LESSONS, parseId } from '@/features/play/domain/playShared';
 import { useLessons } from '@/store/lessonStore';
 import { KEY_MAP } from '@/domain/kit/keyMap';
@@ -92,9 +93,6 @@ import { useSongs, type LoadedChart } from '@/store/songStore';
 type Stage = PlayStageName;
 /** 하이웨이 위에 겹쳐 뜨는 HUD가 덮는 높이(px, PlayStage.css의 HUD 위 여백 8 + 높이 96). 레인 이름·콤보를 그 아래로 내린다 */
 const GAME_HUD_INSET = 104;
-
-/** 개발용: 설정하면 모든 곡에 이 반주 URL을 쓴다(로컬 BE에 S3가 없을 때) */
-const ACCOMPANIMENT_OVERRIDE: string | undefined = import.meta.env.VITE_ACCOMPANIMENT_OVERRIDE || undefined;
 
 /** 진단 빌드(VITE_MONITOR)에서만 코칭 그림자 평가를 켠다. 상수 분기라 미설정 빌드에는 코드가 남지 않는다 */
 const MONITOR_ENABLED = import.meta.env.VITE_MONITOR === 'true';
