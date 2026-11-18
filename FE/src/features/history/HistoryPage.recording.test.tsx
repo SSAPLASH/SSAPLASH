@@ -1,12 +1,10 @@
-// RECORDING_ENABLED를 켠 경우의 탭 구조. 기능 스위치는 빌드 상수라 모듈을 모의해 켠다.
+// 연주 기록의 [플레이 기록 | 녹음] 탭 구조.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HistoryPage } from './HistoryPage';
 
 vi.mock('@/store/authStore', () => ({ useAuth: (select: (s: { status: string; user: null }) => unknown) => select({ status: 'anonymous', user: null }) }));
-
-vi.mock('@/config/features', () => ({ RECORDING_ENABLED: true }));
 
 afterEach(() => vi.unstubAllGlobals());
 
