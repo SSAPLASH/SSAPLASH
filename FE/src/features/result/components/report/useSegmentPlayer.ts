@@ -1,6 +1,6 @@
 // 약점 구간 재생 상태 (COACH-003 설계 3-3·D8). 페이지 하나에 플레이어 하나 — 한 번에 한 구간만 재생한다.
 // React 밖에서도 테스트할 수 있게 상태 로직은 SegmentPlaybackController에 두고, 훅은 이를 구독만 한다.
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Accompaniment } from '@/audio/Accompaniment';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { SegmentPlayer, type SegmentPlayerOptions } from '@/features/result/audio/SegmentPlayer';
@@ -74,12 +74,11 @@ export interface UseSegmentPlayer extends SegmentPlayerSnapshot {
 }
 
 export function useSegmentPlayer(engine: AudioEngine, deps: SegmentPlayerDeps = {}): UseSegmentPlayer {
-  const ref = useRef<SegmentPlaybackController | null>(null);
-  if (ref.current === null) {
+  // 생성자는 필드 대입만 하므로 StrictMode에서 초기화 함수가 두 번 불려도 부수효과가 없다
+  const [c] = useState(() => {
     const create = deps.createPlayer ?? ((e: AudioEngine) => new SegmentPlayer(e, new Accompaniment(e)));
-    ref.current = new SegmentPlaybackController(create(engine));
-  }
-  const c = ref.current;
+    return new SegmentPlaybackController(create(engine));
+  });
   const snap = useSyncExternalStore(c.subscribe, c.getSnapshot, c.getSnapshot);
   // 페이지를 떠나면 멈춘다(D8)
   useEffect(() => () => c.stop(), [c]);
