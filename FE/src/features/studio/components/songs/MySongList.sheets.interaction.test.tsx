@@ -139,7 +139,7 @@ describe('악보 목록 실패·연결', () => {
   });
 
   it('곡에 붙은 악보는 따로 안 나온다', () => {
-    renderList('card', { sheets: [sheet({ songId: 1 })], linkEnabled: true });
+    renderList('card', { sheets: [sheet({ songId: 1 })] });
     expect(screen.queryByText('합주 악보')).toBeNull();
   });
 

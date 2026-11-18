@@ -11,7 +11,7 @@ import { ApiError } from '@/api/http';
 import { getSong, retryMidiAccompaniment } from '@/api/song/songs';
 import { queryClient } from '@/runtime/queryClient';
 import { useApiQuery } from '@/runtime/useApiQuery';
-import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED, SHEET_SONG_LINK_ENABLED } from '@/config/features';
+import { SHEET_ARCHIVE_ENABLED, SHEET_RELINK_ENABLED } from '@/config/features';
 import { SheetDeleteDialog } from '@/features/studio/components/sheet/SheetDeleteDialog';
 import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleDialog';
 import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
@@ -566,10 +566,9 @@ export function StudioPage() {
             sheets={SHEET_ARCHIVE_ENABLED ? sheets : undefined}
             sheetsFailed={SHEET_ARCHIVE_ENABLED && sheetsStatus === 'error'}
             onSheetsRetry={() => void loadSheets()}
-            linkEnabled={SHEET_SONG_LINK_ENABLED}
             onSheetMenu={onSheetMenu}
             onSheetCoverError={() => void loadSheets()}
-            onSongSheet={SHEET_ARCHIVE_ENABLED && SHEET_SONG_LINK_ENABLED ? onSongSheet : undefined}
+            onSongSheet={SHEET_ARCHIVE_ENABLED ? onSongSheet : undefined}
             onUploadSong={SHEET_ARCHIVE_ENABLED && SHEET_RELINK_ENABLED ? onUploadSong : undefined}
             empty={libraryEmpty}
             playback={listenAvailable ? playback : undefined}
