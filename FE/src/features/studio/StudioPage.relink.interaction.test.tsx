@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// 악보 나중 연결(D14~D17, 스위치 켜짐): 악보만 항목의 [곡 올리기] → 곡 등록 직후 PATCH 1회 → 목록 재조회·토스트, 실패 알림·[다시 연결]
+// 악보 나중 연결(D14~D17): 악보만 항목의 [곡 올리기] → 곡 등록 직후 PATCH 1회 → 목록 재조회·토스트, 실패 알림·[다시 연결]
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -15,7 +15,6 @@ import { useSongs } from '@/store/songStore';
 import { queryClient } from '@/runtime/queryClient';
 import { StudioPage } from './StudioPage';
 
-vi.mock('@/config/features', async (orig) => ({ ...(await orig<typeof import('@/config/features')>()), SHEET_RELINK_ENABLED: true }));
 vi.mock('@/features/studio/api/sheets', () => ({ listSheets: vi.fn(), linkSheetToSong: vi.fn(), deleteSheet: vi.fn(), updateSheetTitle: vi.fn() }));
 vi.mock('@/api/song/songs', async (orig) => ({ ...(await orig<typeof import('@/api/song/songs')>()), listAllSongs: vi.fn(), uploadMidi: vi.fn(), uploadMusicXml: vi.fn() }));
 

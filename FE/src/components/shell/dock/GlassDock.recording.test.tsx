@@ -31,7 +31,7 @@ beforeEach(() => {
   useSettings.setState({ dockCollapsed: false });
 });
 
-describe('GlassDock 녹음 슬롯(스위치 켜짐)', () => {
+describe('GlassDock 녹음 슬롯', () => {
   it('/free에서 [BPM +] 다음에 구분선과 녹음 버튼', () => {
     const html = render('/free');
     expect(html).toMatch(/aria-label="BPM 5 증가".*?<span class="dock-divider"><\/span><button[^>]*class="rec-btn idle"/s);
