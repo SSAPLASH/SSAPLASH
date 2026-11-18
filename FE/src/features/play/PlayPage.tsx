@@ -120,7 +120,6 @@ function PlayPageBody() {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useSettings();
-  // 작은 킷: 실물 스킨은 위에서 본 그림, 전자·네온은 기존 크기
   // 킷은 설정의 드럼 모양과 무관하게 네온이다(레인 색과 같은 3색). 배율은 화면 높이에 따라 0.6 / 0.7
   const kitScale = useGameKitScale();
   const [searchParams] = useSearchParams();

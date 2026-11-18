@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { act } from 'react';
+import { act, useEffect } from 'react';
 import { AppShell } from './AppShell';
 import { metronome } from '@/engine/Metronome';
 import { useLive } from '@/store/liveStore';
@@ -35,7 +35,11 @@ vi.mock('@/components/shell/DebugOverlay', () => ({ DebugOverlay: () => null }))
 
 let go: (to: string) => void = () => {};
 function Nav() {
-  go = useNavigate();
+  const navigate = useNavigate();
+  // 렌더 중에 바깥 변수를 바꾸지 않도록 effect에서 넘겨 준다
+  useEffect(() => {
+    go = navigate;
+  }, [navigate]);
   return null;
 }
 

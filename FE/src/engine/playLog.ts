@@ -208,18 +208,6 @@ export function toLoggedHit(h: ResolvedHit): LoggedHit {
   };
 }
 
-/** 같은 곡의 가장 최근 악보 연주 로그(없으면 null). logs는 최신순(loadPlayLogs) */
-export function latestSheetLog(logs: PlayLog[], key: { songNumericId?: number | null; songId?: string }): PlayLog | null {
-  return (
-    logs.find(
-      (l) =>
-        l.mode === 'SHEET' &&
-        ((key.songNumericId != null && l.songNumericId === key.songNumericId) ||
-          (key.songNumericId == null && key.songId !== undefined && l.songId === key.songId)),
-    ) ?? null
-  );
-}
-
 /** 정확도(0~1) → "84.5%" */
 export function formatAccuracy(a: number): string {
   return `${(a * 100).toFixed(1)}%`;

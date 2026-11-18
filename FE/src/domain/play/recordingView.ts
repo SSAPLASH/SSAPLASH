@@ -32,7 +32,7 @@ export function formatElapsed(ms: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/** 보관함 길이 m:ss (반올림). components/formatTime의 formatDuration과 같은 규칙(domain은 components를 import하지 않는다) */
+/** 보관함 길이 m:ss (반올림). domain/time/formatTime의 formatDuration과 같은 규칙 */
 export function formatRecordingLength(ms: number): string {
   const s = Math.round(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

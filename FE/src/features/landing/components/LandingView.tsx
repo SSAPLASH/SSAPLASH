@@ -1,4 +1,4 @@
-// 랜딩 전체 화면(표시 전용). 라우트·로그인 팝업은 이 컴포넌트를 쓰는 쪽(pages/LandingPage)이 맡는다.
+// 랜딩 전체 화면(표시 전용). 라우트·로그인 팝업은 이 컴포넌트를 쓰는 쪽(features/landing/LandingPage)이 맡는다.
 import { useCallback, useEffect, useRef } from 'react';
 import './landing.css';
 import { ChartScene } from './scene/ChartScene';

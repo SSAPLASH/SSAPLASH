@@ -17,22 +17,12 @@
   }
 }
 /* 본문이 화면보다 길어도 카드가 줄어들지 않게(페이지가 스크롤된다) */
-.setup-page > *,
-.setup-steps > * {
+.setup-page > * {
   flex-shrink: 0;
 }
 .setup-progress {
   color: var(--text-3);
   font-size: 12px;
-}
-.setup-steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-}
-/* 상단바(sticky)와 복귀 띠 아래로 스크롤 위치를 잡는다 */
-.setup-step {
-  scroll-margin-top: 148px;
 }
 
 /* ---- 복귀 띠(Figma 236:1306) ---- */
@@ -79,42 +69,10 @@
   width: 160px;
 }
 
-/* ---- 단계 카드(Figma StepHeader 236:1287) ---- */
-.setup-step {
-  gap: var(--space-s);
-}
-.setup-step.is-needed {
-  border-color: var(--miss);
-}
 .setup-step-head {
   display: flex;
   align-items: center;
   gap: var(--space-m);
-}
-.setup-step-mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  color: var(--text-3);
-  font-family: var(--font-num);
-  font-size: 14px;
-  font-weight: 500;
-}
-.setup-step.is-done .setup-step-mark {
-  border-color: var(--good);
-  color: var(--good);
-}
-.setup-step.is-progress .setup-step-mark {
-  border-color: var(--brand-text);
-  color: var(--brand-text);
-}
-.setup-step.is-needed .setup-step-mark {
-  border-color: var(--miss);
-  color: var(--miss);
 }
 .setup-step-main {
   flex: 1;
@@ -122,21 +80,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-}
-.setup-step-title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-}
-.setup-step-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-.setup-step-summary {
-  color: var(--text-2);
-  font-size: 14px;
 }
 .setup-step-body {
   display: flex;
@@ -265,38 +208,6 @@
 .setup-progress-bar > div {
   height: 100%;
   background: var(--brand);
-}
-
-/* ③ 프리셋 */
-.setup-preset-list {
-  display: flex;
-  flex-direction: column;
-}
-.setup-preset-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-s);
-  flex-wrap: wrap;
-  padding: var(--space-s) 0;
-  border-top: 1px solid var(--line);
-}
-.setup-preset-name {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-s);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.setup-preset-star {
-  color: var(--brand-sub);
-}
-.setup-preset-state {
-  color: var(--text-3);
-  font-size: 12px;
-}
-.setup-preset-state.on {
-  color: var(--brand-text);
 }
 
 /* ---- 카드 제목·설명 ---- */
