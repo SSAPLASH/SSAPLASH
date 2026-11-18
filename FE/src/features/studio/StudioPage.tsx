@@ -337,7 +337,7 @@ export function StudioPage() {
     showToast('악보를 올렸어요');
   }, [reloadSongs, loadSheets, showToast]);
 
-  // 곡 ⋯ 메뉴의 악보 항목(악보-곡 연결 스위치 켜짐)
+  // 곡 ⋯ 메뉴의 악보 항목
   const onSongSheet = useCallback(
     (kind: SongSheetKind, song: SongSummary) => {
       if (kind === 'sheetView') {
