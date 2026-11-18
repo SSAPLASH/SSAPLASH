@@ -569,7 +569,7 @@ function SheetPageBody() {
     const llmMode = st.liveCoach ? model.llm : null;
     let llm: LlmCoach | null = null;
     const coach = new LiveCoach({
-      goodMs: st.timing.goodMs,
+      goodMs: ss.windows.goodMs,
       enabled: st.liveCoach,
       setupHints: isStickSensor(st.sensorKind),
       noteGapMedianMs: chartCoachContext(ss.chart.notes).noteGapMedianMs,
