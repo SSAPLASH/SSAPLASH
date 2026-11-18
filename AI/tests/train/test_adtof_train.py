@@ -1,4 +1,4 @@
-"""ADTOF 파인튜닝 모듈 테스트 (S15P31A307-164). 합성 데이터로 CPU에서 몇 스텝만.
+"""ADTOF 파인튜닝 모듈 테스트. 합성 데이터로 CPU에서 몇 스텝만.
 
 torch·adtof_pytorch(extra transcribers)가 없으면 건너뜀. 실제 학습은 GPU 서버에서.
 """

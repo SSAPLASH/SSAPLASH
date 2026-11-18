@@ -1,0 +1,27 @@
+{
+  "task": "cause",
+  "modelVersion": "coach-cause-0.1",
+  "featureVersion": 1,
+  "inputNames": [
+    "strength:WRONG_PAD",
+    "strength:TRANSITION",
+    "strength:DENSE",
+    "strength:DRIFT_LATE",
+    "stage3",
+    "padMiss"
+  ],
+  "runtime": [
+    {
+      "kind": "json",
+      "path": "coachCause.json"
+    }
+  ],
+  "classes": [
+    "WRONG_PAD",
+    "TRANSITION",
+    "DENSE",
+    "DRIFT_LATE",
+    "UNKNOWN"
+  ],
+  "trainedOn": "SYNTHETIC"
+}

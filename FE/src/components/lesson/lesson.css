@@ -1,0 +1,539 @@
+/* 학습 코스(입문·중급) (Jira 331, 설계 SETUP-학습-코스-중급). 색·간격은 tokens.css만 쓴다 */
+.lesson-course {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-l);
+}
+
+/* 코스 칸: 입문·중급을 나란히, 좁으면 한 줄에 하나 */
+.lesson-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  max-width: 860px;
+}
+.lesson-course-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lesson-course-pick:hover {
+  border-color: var(--line-strong);
+}
+.lesson-course-pick[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--surface-2);
+}
+.lesson-course-pick:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+}
+.lesson-course-pick-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-s);
+}
+.lesson-course-pick-top b {
+  font-size: 16px;
+  font-weight: 600;
+}
+.lesson-course-pick-count,
+.lesson-course-pick-done {
+  margin-left: auto;
+  font-size: 13px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.lesson-course-pick-done {
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--brand-text);
+}
+.lesson-course-pick-summary {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lesson-course-pick-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.lesson-course-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.lesson-progress-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.lesson-progress-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+  transition: width var(--motion-move) var(--ease-out);
+}
+
+.lesson-course-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--space-l);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .lesson-course-grid {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .lesson-course-grid .lesson-card {
+    order: -1;
+    width: 100%;
+  }
+}
+
+/* 스테이지 맵 */
+.lesson-map-wrap {
+  max-width: 100%;
+}
+/* 맵(320px)보다 좁은 화면에서만 맵 안에서 가로로 스크롤한다 */
+@media (max-width: 400px) {
+  .lesson-map-wrap {
+    overflow-x: auto;
+  }
+}
+/* 버튼·이름표가 px 좌표라 줄이지 않는다. 좁은 화면에서는 감싼 상자 안에서 가로로 스크롤한다 */
+.lesson-map {
+  position: relative;
+  width: 320px;
+  min-width: 320px;
+}
+.lesson-map-path {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.lesson-map-path-all {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 2 14;
+}
+.lesson-map-path-done {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lesson-map-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lesson-stage {
+  position: absolute;
+  width: 68px;
+  height: 68px;
+  margin: -34px 0 0 -34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-num);
+  font-size: 22px;
+  font-weight: 700;
+  border: 3px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: transform var(--motion-press) var(--ease-out);
+}
+.lesson-stage:active {
+  transform: scale(0.96);
+}
+.lesson-stage:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 4px;
+}
+.lesson-stage.is-passed {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-on);
+}
+.lesson-stage.is-open {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--brand-on);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 25%, transparent);
+}
+.lesson-stage.is-locked {
+  cursor: default;
+}
+.lesson-stage.is-selected {
+  outline: 3px solid var(--text-1);
+  outline-offset: 4px;
+}
+.lesson-stage-label {
+  position: absolute;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  /* 긴 레슨 이름(중급 「크래시·라이드 음표 알아보기」)이 낱말 중간에서 끊기지 않게 띄어쓰기에서 줄을 바꾼다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.lesson-stage-label b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.lesson-stage-label.is-dim,
+.lesson-stage-label.is-dim b {
+  color: var(--text-3);
+}
+.lesson-map-goal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.lesson-map-goal.is-reached {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+/* 레슨 카드 */
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  min-width: 0;
+}
+@media (min-width: 901px) {
+  .lesson-card {
+    position: sticky;
+    top: calc(56px + var(--space-m));
+  }
+}
+.lesson-card-eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--good);
+}
+.lesson-card.is-passed .lesson-card-eyebrow {
+  color: var(--brand-text);
+}
+.lesson-card.is-locked .lesson-card-eyebrow {
+  color: var(--text-3);
+}
+.lesson-card-title {
+  margin: 0;
+  font-size: 20px;
+  text-wrap: balance;
+}
+.lesson-card-summary {
+  margin: 0;
+  color: var(--text-2);
+}
+.lesson-card-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+/* 악보는 카드 가운데, 그 아래에 드럼 그림 */
+.lesson-card-figures {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-m);
+}
+/* 음표가 4개를 넘으면 오선을 줄로 나눠 가운데 맞춰 쌓는다(PadNotation.notationRows).
+   그래도 카드보다 넓으면(좁은 화면) 비율을 지킨 채 줄인다. 가로 스크롤을 만들지 않는다 */
+.lesson-card-figures .lesson-staff {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow: visible;
+}
+.lesson-card-figures .lesson-staff svg {
+  max-width: 100%;
+  height: auto;
+}
+.lesson-card-kit {
+  width: 100%;
+  /* 실물 킷(원근 그림)이 세로로 길어 폭 440이면 높이 약 282. 고정(sticky) 카드가 화면에 들어오게 한다 */
+  max-width: 440px;
+}
+.lesson-card-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.lesson-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-s);
+  margin-top: auto;
+}
+
+/* 이 레슨의 음표 */
+.lesson-staff {
+  overflow-x: auto;
+}
+.lesson-staff svg {
+  display: block;
+  color: var(--text-1);
+}
+.lesson-staff-line {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+.lesson-note {
+  fill: currentColor;
+  stroke: currentColor;
+}
+.lesson-note-cross {
+  fill: none;
+}
+.lesson-staff-name {
+  fill: var(--text-1);
+  font-size: 13px;
+}
+.lesson-staff-limb {
+  fill: var(--text-2);
+  font-size: 12px;
+}
+
+/* 결과 화면 띠·권유 카드 */
+.lesson-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s) var(--space-m);
+  padding: 12px 16px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--brand-sub);
+  background: color-mix(in srgb, var(--brand-sub) 10%, transparent);
+}
+.lesson-band.is-pass {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+}
+.lesson-band-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lesson-band-text small {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.lesson-band-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+}
+.lesson-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px var(--space-m);
+  margin: 0 0 var(--space-m);
+  padding: 14px 16px;
+  border: 1px solid var(--brand);
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+}
+.lesson-invite-text {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lesson-invite-text span {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.lesson-invite-actions {
+  display: flex;
+  gap: var(--space-s);
+}
+.main.lesson-invite-wrap {
+  flex: 0 0 auto;
+  padding-bottom: 0;
+}
+.lesson-invite-wrap .lesson-invite {
+  margin: 0;
+}
+
+/* 알아보기 화면: 한 화면(상단 바 56px·본문 위아래 여백 제외)에 들어오게 가운데로 모은다 */
+.lesson-read {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: calc(100dvh - 56px - 56px);
+  text-align: center;
+}
+.lesson-read-main {
+  position: relative;
+}
+/* 「← 입문 코스」는 내용과 상관없이 왼쪽 위에 고정 */
+.lesson-read-back {
+  position: absolute;
+  top: 16px;
+  left: max(16px, var(--space-xl));
+  z-index: 1;
+}
+.lesson-read .lesson-card-title {
+  margin: 0;
+}
+.lesson-read-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  width: min(900px, 100%);
+  /* 진행 중 카드와 완료 카드가 같은 크기(완료로 바뀔 때 화면이 들썩이지 않게) */
+  height: clamp(420px, calc(100dvh - 56px - 56px - 80px), 820px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* 틀렸을 때 안내가 흔들린다. 모션 줄이기면 끈다 */
+.lesson-read-prompt.is-miss {
+  animation: lesson-shake 320ms var(--ease-out);
+}
+@keyframes lesson-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson-read-prompt.is-miss {
+    animation: none;
+  }
+}
+.lesson-read-card .lesson-staff {
+  max-width: 100%;
+}
+/* 음표가 많아(섞어서 읽기 8개) 카드보다 넓으면 비율을 지킨 채 줄인다. 가로 스크롤을 만들지 않는다 */
+.lesson-read-staff {
+  overflow: visible;
+}
+.lesson-read-staff svg {
+  max-width: 100%;
+  height: auto;
+}
+.lesson-read-prompt {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.lesson-read-prompt.is-miss {
+  color: var(--brand-sub);
+}
+.lesson-read-steps {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.lesson-read-kit {
+  /* 드럼 그림(760×300)이 남는 높이에 들어오는 폭. 위쪽(제목·안내·악보·여백)을 약 520px로 잡는다 */
+  width: min(720px, 100%, max(300px, calc((100dvh - 520px) * 2.53)));
+}
+.lesson-read-note.is-done {
+  /* 친 음표는 통과 색(파랑)으로. 입문 코스의 통과 표시와 같은 색이다 */
+  color: var(--brand-text);
+}
+.lesson-read-note.is-wait {
+  color: var(--text-3);
+}
+.lesson-read-cursor {
+  fill: color-mix(in srgb, var(--brand) 22%, transparent);
+  stroke: var(--brand);
+  stroke-width: 1.5;
+}
+.lesson-read-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-s);
+}
+/* 레슨 완료 팝업 */
+.lesson-done-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.lesson-done-title {
+  margin: 0;
+  font-size: 24px;
+}
+.lesson-done-text {
+  margin: 0;
+  color: var(--text-2);
+}
+/* 자동 넘김 카운트다운: [머무르기] 왼쪽에 글자만 둔다(결과 띠·완료 팝업 공통) */
+.lesson-auto-text {
+  align-self: center;
+  color: var(--text-2);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.lesson-band-actions,
+.lesson-done-actions {
+  align-items: center;
+}
+.lesson-done-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-s);
+  margin-top: 8px;
+}
+/* 완료 창의 저장 실패 줄(ui/InlineError) — 가운데 정렬된 창 안에서 가운데에 둔다 */
+.lesson-done-dialog .ui-inline-error {
+  align-self: center;
+}
+/* 실물 스킨(원근 그림 760×486.9)은 세로가 길다(가로세로 비 1.56). 카드가 높이 고정에 overflow hidden이라 폭을 더 줄여 잘리지 않게 한다 */
+.lesson-read-kit[data-skin='acoustic'] {
+  width: min(720px, 100%, max(300px, calc((100dvh - 520px) * 1.56)));
+}

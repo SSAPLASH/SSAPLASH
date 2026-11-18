@@ -1,7 +1,7 @@
 // BE 호출 공통 래퍼 (설계 3-4). Bearer 부착, JSON 직렬화, problem+json 해석, 401 → refresh 1회 → 같은 요청 재시도.
 // 화면·store는 이 함수만 쓰고 401을 직접 처리하지 않는다.
-import { getAccessToken, refreshAccessToken } from './auth';
-import { SIGNUP_INCOMPLETE } from '@/domain/signupGate';
+import { getAccessToken, refreshAccessToken } from '@/api/account/auth';
+import { SIGNUP_INCOMPLETE } from '@/domain/account/signupGate';
 import { errorFromResponse, networkError } from './error';
 
 export { ApiError } from './error';

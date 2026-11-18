@@ -1,4 +1,4 @@
-"""실제 녹음 학습 확인 채점표 스크립트 테스트 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 3-4절)."""
+"""실제 녹음 학습 확인 채점표 스크립트 테스트."""
 
 from __future__ import annotations
 

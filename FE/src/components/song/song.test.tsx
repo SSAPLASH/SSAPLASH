@@ -2,7 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { LevelBadge } from "./LevelBadge";
 import { SongCover } from "./SongCover";
-import { SongMeta } from "./SongMeta";
+import { SongMeta } from "@/features/play/components/picker/SongMeta";
+import { RecommendRow } from "@/features/result/components/RecommendRow";
+import { cardOf, type RecommendationItem } from "@/domain/song/recommendation";
 
 describe("LevelBadge", () => {
   it.each([
@@ -43,19 +45,19 @@ describe("SongMeta", () => {
     const html = renderToStaticMarkup(
       <SongMeta artist="밴드" bpm={120} durationSec={185} />,
     );
-    expect(html).toContain("밴드 · 120 BPM · 3:05");
+    expect(html).toContain("밴드 · BPM 120 · 3:05");
     expect(html).toContain('class="song-meta"');
   });
 
   it("없는 값은 건너뛴다", () => {
-    expect(renderToStaticMarkup(<SongMeta bpm={90} />)).toContain(">90 BPM<");
+    expect(renderToStaticMarkup(<SongMeta bpm={90} />)).toContain(">BPM 90<");
     expect(
       renderToStaticMarkup(<SongMeta artist="a" durationSec={60} />),
     ).toContain(">a · 1:00<");
   });
 
   it("BPM은 반올림한다", () => {
-    expect(renderToStaticMarkup(<SongMeta bpm={120.6} />)).toContain("121 BPM");
+    expect(renderToStaticMarkup(<SongMeta bpm={120.6} />)).toContain("BPM 121");
   });
 
   it("모두 없으면 빈 출력", () => {
@@ -84,5 +86,39 @@ describe("SongCover", () => {
     const html = renderToStaticMarkup(<SongCover coverUrl="https://x/c.jpg" />);
     expect(html).toContain('src="https://x/c.jpg"');
     expect(html).not.toContain("song-cover-disc");
+  });
+});
+
+describe("RecommendRow", () => {
+  const item = (id: number, code: string, text = "BE 문구"): RecommendationItem => ({
+    song: {
+      id, title: `곡${id}`, artist: `가수${id}`, source: "BUILTIN", status: "READY", bpm: 100, timeSignature: "4/4", durationMs: null,
+      hasAccompaniment: false, accompanimentStatus: "NONE", songLevel: null, difficulties: [], createdAt: "", coverUrl: null, sheetId: null,
+    },
+    chartId: id * 10, difficulty: "HARD", reasons: [{ code, text }, { code: "RETRY", text: "둘째" }],
+  });
+
+  it("카드 수·제목·아티스트·배지·첫 이유 문구를 그린다", () => {
+    const html = renderToStaticMarkup(<RecommendRow items={[cardOf(item(1, "STARTER")), cardOf(item(2, "NEW_CODE", "BE 문구"))]} onPick={() => {}} />);
+    expect(html).toContain('aria-label="추천곡"');
+    expect(html.match(/<button type="button" class="song-reco-card"/g)?.length).toBe(2);
+    expect(html).toContain(">곡1<");
+    expect(html).toContain(">가수2<");
+    expect(html).toContain("song-level-hard song-level-sm");
+    expect(html).toContain("처음 시작하기 좋은 쉬운 곡이에요");
+    expect(html).toContain(">BE 문구<");
+    expect(html).not.toContain("둘째");
+  });
+
+  it("caption을 제목·aria-label로 쓰고, line이 비면 문구 줄을 그리지 않는다", () => {
+    const card = { ...cardOf(item(1, "STARTER")), line: "" };
+    const html = renderToStaticMarkup(<RecommendRow items={[card]} onPick={() => {}} caption="AI 추천 연습곡" />);
+    expect(html).toContain('aria-label="AI 추천 연습곡"');
+    expect(html).toContain(">AI 추천 연습곡<");
+    expect(html).not.toContain("song-reco-reason");
+  });
+
+  it("빈 목록이면 아무것도 그리지 않는다", () => {
+    expect(renderToStaticMarkup(<RecommendRow items={[]} onPick={() => {}} />)).toBe("");
   });
 });

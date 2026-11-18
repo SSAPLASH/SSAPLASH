@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bindPlayLogOwner, bootstrapAuth } from './authBootstrap';
-import { loadPlayLogs, savePlayLog, setPlayLogOwner, type PlayLog } from '@/engine/playLog';
+import { loadPlayLogs, savePlayLog, setPlayLogOwner } from '@/engine/playLog';
+import type { PlayLog } from '@/domain/play/playLog';
 import { resetAuthStoreForTest, useAuth } from '@/store/authStore';
-import { REFRESH_RETRY_DELAY_MS, refreshAccessToken, resetForTest } from '@/api/auth';
-import type { UserMe } from '@/domain/auth';
+import { REFRESH_RETRY_DELAY_MS, refreshAccessToken, resetForTest } from '@/api/account/auth';
+import type { UserMe } from '@/domain/account/auth';
 
 function json(status: number, body: unknown, type = 'application/json'): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': type } });

@@ -1,0 +1,358 @@
+/* 결과 화면(/result/:playId) 스타일. 접두사 result-. 토큰은 tokens.css의 새 이름만 쓴다.
+ * 카드는 ui/Card, 버튼은 ui/Button, 표 틀은 ui/table.css를 쓰고 여기서는 배치와 이 화면만의 값을 정한다. */
+
+.result-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-l);
+}
+.result-page > *,
+.result-fb-section > * {
+  flex-shrink: 0;
+}
+
+/* ---- 요약 카드 (126:3795) ---- */
+.result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-l);
+  min-height: 104px;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  /* 축하 캔버스(CelebrationFx)가 카드 안에 겹친다 */
+  position: relative;
+}
+.result-summary-song {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.result-summary-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.result-summary-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-summary-meta {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/* 오른쪽 지표 묶음(Figma 672:4132): 간격 48, 아래 정렬. 점수 칸 아래 여백 10으로 「92,400」과 「96.8%」 아래선을 맞춘다 */
+.result-summary-metrics {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 48px;
+}
+.result-summary-score {
+  padding-bottom: 10px;
+}
+.result-summary-divider {
+  flex: none;
+  width: 1px;
+  height: 48px;
+  background: var(--line);
+}
+.result-summary-block {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: var(--space-xs);
+}
+.result-summary-block:last-child {
+  gap: 0;
+}
+.result-summary-label {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.result-summary-accuracy {
+  color: var(--brand-text);
+}
+
+/* 최고 기록 칩: 갱신은 콤보 노랑, 첫 기록은 브랜드 */
+.result-record-chip {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--brand-text);
+}
+/* 연습 속도로 친 판(최고 기록과 비교하지 않는다) */
+.result-rate-chip {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-sub) 60%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-sub) 14%, transparent);
+  color: var(--brand-sub);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.result-record-chip[data-kind='new'] {
+  color: var(--fx-combo);
+}
+/* 축하 캔버스 래퍼: 카드 전체를 덮고 클릭을 막지 않는다 */
+.result-celebrate {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- 2열: 판정 분포 · 타이밍 분포 ---- */
+.result-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m);
+  align-items: stretch;
+}
+.result-panel {
+  gap: var(--space-s);
+  min-width: 0;
+}
+.result-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.result-panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.result-caption {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* 판정 막대 (126:3767) */
+.result-judge-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+.result-judge-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  height: 18px;
+  font-size: 12px;
+}
+.result-judge-label {
+  flex: none;
+  width: 76px;
+}
+.result-judge-perfect {
+  color: var(--perfect);
+}
+.result-judge-good {
+  color: var(--good);
+}
+.result-judge-miss {
+  color: var(--miss);
+}
+.result-judge-track {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+}
+.result-judge-fill {
+  height: 100%;
+}
+.result-judge-bg-perfect {
+  background: var(--perfect);
+}
+.result-judge-bg-good {
+  background: var(--good);
+}
+.result-judge-bg-miss {
+  background: var(--miss);
+}
+.result-judge-count {
+  flex: none;
+  min-width: 2ch;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 타이밍 분포 (126:4267) */
+.result-hist {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  height: 76px;
+}
+.result-hist-bar {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--good);
+}
+.result-hist-bar.perfect {
+  background: var(--perfect);
+}
+.result-hist-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* ---- 피드백 카드 (126:3809) ---- */
+.result-fb-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+.result-fb-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-m);
+  align-items: stretch;
+}
+.result-fb {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-s);
+  min-height: 70px;
+  padding: var(--space-s);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-family: var(--font);
+  text-align: left;
+}
+.result-fb-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--brand-text);
+}
+.result-fb-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.result-fb-title {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.result-fb-desc {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+button.result-fb {
+  height: auto;
+}
+.result-fb-click {
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast);
+}
+.result-fb-click:hover {
+  border-color: var(--line-strong);
+}
+.result-fb-click.active {
+  border-color: var(--brand);
+  background: var(--surface-2);
+}
+
+/* ---- 패드별 표 (134:2686 + 126:4143) ---- */
+.result-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+}
+.result-table {
+  font-size: 12px;
+}
+.result-table thead th {
+  height: 32px;
+}
+.result-table tbody td {
+  height: 24px;
+  padding-block: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.result-table tbody td,
+.result-table thead th {
+  padding-inline: var(--space-m);
+}
+
+/* ---- 버튼 행 ---- */
+.result-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-m);
+}
+/* Figma 버튼 인스턴스 폭 128 */
+.result-actions .ui-btn {
+  min-width: 128px;
+}
+
+@media (max-width: 1024px) {
+  .result-col-timing {
+    display: none;
+  }
+}
+@media (max-width: 800px) {
+  .result-cols,
+  .result-fb-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .result-summary {
+    flex-wrap: wrap;
+  }
+}
+
+.result-open-hihat {
+  display: block;
+  word-break: keep-all;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: 11px;
+}
+.result-celebrate .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}

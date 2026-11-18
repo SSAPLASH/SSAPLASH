@@ -1,4 +1,4 @@
-"""드럼 분리 입력 채보 모델 비교표 스크립트 테스트 (S15P31A307-164, 설계 CHART-003-real-drum-data-check 작업 10)."""
+"""드럼 분리 입력 채보 모델 비교표 스크립트 테스트."""
 
 from __future__ import annotations
 

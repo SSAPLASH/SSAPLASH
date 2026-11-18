@@ -1,4 +1,4 @@
-"""테스트용 mock 채보 어댑터. 모델 없이 러너·CSV·보고서 파이프라인을 돌림 (인수 조건 7).
+"""테스트용 mock 채보 어댑터. 모델 없이 러너·CSV·보고서 파이프라인을 돌림.
 
 mock_mode
 - truth: `truth_dir/<song_id>.csv`(열 time_sec,label,velocity)를 그대로 돌려줌. 정답을 넣어 두면 F1 1.0.

@@ -1,11 +1,15 @@
-// 실시간 코칭 규칙. 지적 5종은 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 하고,
+// 실시간 코칭 규칙. 지적 6종은 지표(WindowMetrics)를 받아 "띄울 조건"과 "거둘 조건"을 평가만 하고,
 // 칭찬은 지금 연주 상태에 맞는 후보 하나를 고른다. 실제로 띄울지(간격·쿨다운)는 policy가 정한다.
 // 상태를 갖지 않는 순수 함수다.
-import { PAD_META, STICK_PADS, type PadId } from '@/domain/pads';
+import { STICK_PADS, type PadId } from '@/domain/kit/pads';
 import { LIVE_COACH_CONFIG, type LiveThresholds } from './config';
+import { coachPadName, objectParticle } from './padName';
 import type { WindowMetrics } from './window';
 
 export type LiveTag =
+  | 'LIVE_SETUP_OFFSET'
+  | 'LIVE_SETUP_PADS'
+  | 'LIVE_PAD_MISS'
   | 'LIVE_MISS_STREAK'
   | 'LIVE_LATE'
   | 'LIVE_EARLY'
@@ -15,7 +19,9 @@ export type LiveTag =
   | 'LIVE_UNSTEADY'
   | 'LIVE_GOOD_RECOVERED'
   | 'LIVE_GOOD_STEADY'
-  | 'LIVE_GOOD_KEEP';
+  | 'LIVE_GOOD_KEEP'
+  /** 연주 중 LLM 구간 코칭 문구(규칙이 아니라 LiveCoach.offerLlmTip이 만든다) */
+  | 'LIVE_LLM';
 
 /** 칭찬 태그인가. 효과 평가와 방식 비교는 지적 태그만 본다 */
 export function isPraiseTag(tag: string): boolean {
@@ -44,7 +50,8 @@ export interface RuleEvaluation {
   target: CoachTarget | null;
 }
 
-const PRIORITY = { miss: 0, trend: 1, pad: 2, hand: 3, unsteady: 4, praise: 5 } as const;
+// 놓침이 한 패드에 몰렸으면 전체 놓침보다 구체적인 안내를 먼저 띄운다
+const PRIORITY = { padMiss: 0, miss: 1, trend: 2, pad: 3, hand: 4, unsteady: 5, praise: 6 } as const;
 const HAND_NAME = ['왼', '오른'] as const;
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
@@ -73,6 +80,29 @@ export function evaluatePraise(m: WindowMetrics, th: LiveThresholds): RuleEvalua
 export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluation[] {
   const c = LIVE_COACH_CONFIG;
   const out: RuleEvaluation[] = [];
+
+  // 놓침이 한 패드에 몰림. 노트가 많은 패드가 우연히 많이 놓친 것처럼 보이지 않게 그 패드의 놓침 비율도 본다.
+  // 페달은 입력 기준이 정해지기 전이라 평가하지 않는다(STICK_PADS만)
+  for (const pad of STICK_PADS) {
+    const s = m.padMisses.find((p) => p.pad === pad);
+    const misses = s?.misses ?? 0;
+    const rate = s && s.notes > 0 ? misses / s.notes : 0;
+    const name = coachPadName(pad);
+    out.push({
+      key: `LIVE_PAD_MISS:${pad}`,
+      tag: 'LIVE_PAD_MISS',
+      priority: PRIORITY.padMiss,
+      trigger:
+        m.missInPadWindow >= c.padMiss.minTotalMisses &&
+        misses >= c.padMiss.minMisses &&
+        misses / m.missInPadWindow >= c.padMiss.share &&
+        rate >= c.padMiss.rate,
+      release: misses <= c.padMiss.releaseMax,
+      severity: clamp01(rate),
+      text: `${name}${objectParticle(name)} 자주 놓치고 있어요. ${name}에 집중해 보세요.`,
+      target: { kind: 'pad', pad },
+    });
+  }
 
   // 연속·집중 놓침
   const missRate = Math.max(m.missInRecent, m.trailingMisses) / c.window.missSize;
@@ -124,7 +154,7 @@ export function evaluateRules(m: WindowMetrics, th: LiveThresholds): RuleEvaluat
     const othersMean =
       s && mean !== null && othersCount >= c.pad.minPadHits ? (m.validCount * mean - s.count * s.meanDelta) / othersCount : null;
     const diff = s && s.count >= c.pad.minPadHits && othersMean !== null ? s.meanDelta - othersMean : null;
-    const label = PAD_META[pad].label;
+    const label = coachPadName(pad);
     const severity = s ? clamp01(Math.abs(s.meanDelta) / (1.2 * th.goodMs)) : 0;
     const release = diff !== null && Math.abs(diff) < th.padReleaseMs;
     out.push({

@@ -1,0 +1,2132 @@
+/* 드럼 세팅(/setup) 화면 스타일. 토큰은 tokens.css의 새 이름만 쓴다.
+ * 접두사 setup-. 버튼·카드·알약·입력은 components/ui/* 를 쓰고 여기서는 배치와 이 화면만의 색을 정한다. */
+
+/* ---- 페이지 ---- */
+.setup-page {
+  --setup-px: var(--space-xl);
+  --setup-py: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding: var(--setup-py) var(--setup-px) 0;
+}
+@media (max-width: 1024px) {
+  .setup-page {
+    --setup-px: var(--space-l);
+    --setup-py: var(--space-l);
+  }
+}
+/* 본문이 화면보다 길어도 카드가 줄어들지 않게(페이지가 스크롤된다) */
+.setup-page > *,
+.setup-steps > * {
+  flex-shrink: 0;
+}
+.setup-progress {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+/* 상단바(sticky)와 복귀 띠 아래로 스크롤 위치를 잡는다 */
+.setup-step {
+  scroll-margin-top: 148px;
+}
+
+/* ---- 복귀 띠(Figma 236:1306) ---- */
+.setup-banner {
+  position: sticky;
+  top: 56px; /* TopBar 높이 */
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  padding: var(--space-s) var(--space-m);
+  border: 1px solid;
+  border-radius: var(--radius-panel);
+  /* 아래 카드가 비치지 않게 바탕을 먼저 깔고 그 위에 10% 색을 얹는다 */
+  background-color: var(--bg-base);
+}
+.setup-banner.blocked {
+  background-image: linear-gradient(color-mix(in srgb, var(--brand) 10%, transparent), color-mix(in srgb, var(--brand) 10%, transparent));
+  border-color: color-mix(in srgb, var(--brand) 60%, transparent);
+}
+.setup-banner.ready {
+  background-image: linear-gradient(color-mix(in srgb, var(--good) 10%, transparent), color-mix(in srgb, var(--good) 10%, transparent));
+  border-color: color-mix(in srgb, var(--good) 60%, transparent);
+}
+.setup-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.setup-banner-text strong {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+.setup-banner-text span {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.setup-banner-action,
+.setup-step-action {
+  flex: none;
+  width: 160px;
+}
+
+/* ---- 단계 카드(Figma StepHeader 236:1287) ---- */
+.setup-step {
+  gap: var(--space-s);
+}
+.setup-step.is-needed {
+  border-color: var(--miss);
+}
+.setup-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+}
+.setup-step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--text-3);
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-weight: 500;
+}
+.setup-step.is-done .setup-step-mark {
+  border-color: var(--good);
+  color: var(--good);
+}
+.setup-step.is-progress .setup-step-mark {
+  border-color: var(--brand-text);
+  color: var(--brand-text);
+}
+.setup-step.is-needed .setup-step-mark {
+  border-color: var(--miss);
+  color: var(--miss);
+}
+.setup-step-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.setup-step-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.setup-step-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.setup-step-summary {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.setup-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  padding-top: var(--space-m);
+}
+.setup-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+.setup-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+}
+.setup-note {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.setup-note.faint {
+  color: var(--text-3);
+}
+.setup-notice {
+  padding: var(--space-s) var(--space-m);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  font-size: 14px;
+}
+.setup-notice.error {
+  border-color: var(--miss);
+  color: var(--miss);
+}
+
+/* ① 스틱 연결 */
+.setup-dongle {
+  --stick-on: var(--good);
+  --stick-off: var(--miss);
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.setup-dongle .stick-dot {
+  box-shadow: none;
+}
+.setup-dongle-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-1);
+}
+.setup-dongle-text.dim {
+  color: var(--text-2);
+}
+.setup-stick-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m);
+}
+.stick-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+.stick-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  font-size: 16px;
+  font-weight: 500;
+}
+.stick-card-state {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.stick-card.on .stick-card-state {
+  color: var(--stick-on);
+}
+.stick-card.off .stick-card-state {
+  color: var(--stick-off);
+}
+.stick-card-battery {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.stick-card-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.setup-sensor-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-s);
+  cursor: pointer;
+}
+.setup-sensor-choice input {
+  margin-top: var(--space-xs);
+}
+.setup-sensor-choice strong {
+  font-weight: 500;
+}
+.setup-sensor-choice-text {
+  display: flex;
+  flex-direction: column;
+}
+.setup-sensor-choice-text span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.setup-progress-bar {
+  height: 8px;
+  border-radius: var(--radius-control);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.setup-progress-bar > div {
+  height: 100%;
+  background: var(--brand);
+}
+
+/* ③ 프리셋 */
+.setup-preset-list {
+  display: flex;
+  flex-direction: column;
+}
+.setup-preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+  padding: var(--space-s) 0;
+  border-top: 1px solid var(--line);
+}
+.setup-preset-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.setup-preset-star {
+  color: var(--brand-sub);
+}
+.setup-preset-state {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.setup-preset-state.on {
+  color: var(--brand-text);
+}
+
+/* ---- 카드 제목·설명 ---- */
+.setup-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.setup-card-desc {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.setup-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+
+/* ---- 내 드럼 무대(SETUP-fixed-kit-noir D4·D6): 머리 줄 · 칩 줄 · 드럼 그림 · 안내 한 줄. 카드 면 없음 ---- */
+.setup-kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+}
+/* 머리 줄: 자유 연습 .free-stage-head와 같은 모양(제목 15px + 보조 문구 + 오른쪽 버튼) */
+.setup-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-height: 36px;
+}
+.setup-stage-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.setup-stage-title h2 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.setup-stage-title span {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.setup-stage-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
+}
+/* 무대: 가로 컨테이너(cqw)다. 넓으면 타격 확인이 그림 왼쪽 아래에 떠 있고, 좁으면 그림 아래로 내려온다 */
+.setup-kit-stage {
+  position: relative;
+  container-type: inline-size;
+  width: 100%;
+}
+/* 그림 영역 높이 = 그림 비율(폭/1.6)과 가용 높이 중 작은 쪽, 260px 밑으로는 줄이지 않는다(그보다 낮은 화면은 스크롤).
+ * --setup-stage-maxh는 useStageFit이 측정해 넣고, 측정 전·jsdom의 폴백은 아래 추정값(상단바·머리·타일·머리 줄·칩 줄·안내·하단 바)이다 */
+.setup-kit-zone {
+  --setup-stage-maxh: max(calc(100dvh - 450px), min(calc(100dvh - 190px), 500px));
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: max(260px, min(var(--setup-stage-maxh), calc(100cqw / 1.6)));
+}
+.setup-page:has(.setup-banner) .setup-kit-zone {
+  --setup-stage-maxh: max(calc(100dvh - 530px), min(calc(100dvh - 190px), 500px));
+}
+/* 포인터 모의 IMU의 센서 면도 이 요소다. 킷은 남은 높이에 맞춰 줄어든다(fitContain) */
+.setup-kit-surface {
+  position: absolute;
+  inset: 0;
+}
+/* 바닥 빛(DrumKit underlay)이 SVG 뒤에 깔리도록 SVG를 위로 올린다 */
+.setup-kit-surface .drum-kit-fx > .drum-kit {
+  position: relative;
+}
+.setup-kit-guide {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---- 타격 확인 ---- */
+.setup-hit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding-top: var(--space-s);
+}
+.setup-hit-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+/* 연결 끊김 알림: 제목(큰 글씨) + 안내 한 줄 */
+.setup-hit-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.setup-hit-notice strong {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.setup-hit-notice span {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.setup-hitlog {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+.setup-hitlog-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.setup-hitlog-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1fr;
+  gap: var(--space-m);
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-m);
+  font-size: 14px;
+}
+.setup-hitlog-list .setup-hitlog-row {
+  border-top: 1px solid var(--line);
+}
+.setup-hitlog-row.head {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.setup-hitlog-num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.setup-hitlog-ago {
+  color: var(--text-3);
+}
+.setup-hitlog-empty {
+  padding: var(--space-m);
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+/* ---- 고급 설정 ---- */
+/* 묶음 둘을 한 줄에 나란히 둔다(1024px 이하는 위아래). 두 묶음의 줄 구성이 같아 제목·안내·슬라이더 높이가 맞는다 */
+.setup-adv-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-m);
+  padding-top: var(--space-s);
+  /* 펼칠 때 스크롤해 보이는 자리: 하단 고정 바에 가려지지 않게 여백을 둔다 */
+  scroll-margin-bottom: 120px;
+}
+@media (max-width: 1024px) {
+  .setup-adv-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* 묶음(판정 타이밍 / 패드 인식 범위): 얇은 테두리 안에 제목 + 안내 + 슬라이더 */
+.setup-adv-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.setup-adv-group-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.setup-adv-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.setup-adv-foot {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 14px;
+}
+/* 고급 설정은 글자를 키운다: 카드 제목·요약 */
+.setup-page .setup-adv .setup-card-title {
+  font-size: 24px;
+}
+.setup-page .setup-adv .setup-card-desc {
+  font-size: 16px;
+}
+/* 슬라이더: 이름(왼쪽)과 값(오른쪽)을 한 줄에, 막대는 그 아래 전체 폭 */
+.setup-adv .ui-slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--space-m);
+  row-gap: var(--space-s);
+  font-size: 19px;
+}
+.setup-adv .ui-slider-label {
+  font-weight: 600;
+}
+.setup-adv .ui-slider-value {
+  font-size: 24px;
+  font-weight: 600;
+  text-align: right;
+}
+.setup-adv .ui-slider-input {
+  grid-column: 1 / -1;
+}
+
+/* 고급 설정 움직임
+   펼침: 묶음이 차례로 떠오른다(apple-rise, 두 번째는 60ms 늦게).
+   묶음에 마우스를 올리거나 안의 슬라이더에 초점이 가면: 테두리가 메인 색으로 바뀌고 빛줄기가 한 번 지나간 뒤 네온 빛이 천천히 숨 쉰다.
+   조절하는 동안 값 읽기를 방해하지 않게 빛은 테두리와 바깥에만 두고 주기를 길게 잡는다 */
+.setup-adv-group {
+  position: relative;
+  overflow: hidden;
+  animation: apple-rise 220ms ease-out both;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.setup-adv-group + .setup-adv-group {
+  animation-delay: 60ms;
+}
+.setup-adv-group:hover,
+.setup-adv-group:focus-within {
+  border-color: var(--brand);
+  box-shadow:
+    0 0 0 1px var(--brand-tint-line),
+    0 0 18px var(--brand-glow-soft);
+  animation: adv-neon-breathe 2.6s ease-in-out 420ms infinite;
+}
+@keyframes adv-neon-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px var(--brand-glow),
+      0 0 30px var(--brand-glow),
+      inset 0 0 22px var(--brand-glow-soft);
+  }
+}
+/* 빛줄기: 묶음 위를 왼쪽에서 오른쪽으로 한 번 지나간다 */
+.setup-adv-group::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, var(--brand-glow-soft) 50%, transparent 60%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.setup-adv-group:hover::after,
+.setup-adv-group:focus-within::after {
+  animation: adv-sheen 520ms ease-out 1;
+}
+@keyframes adv-sheen {
+  0% {
+    opacity: 1;
+    background-position: 100% 0;
+  }
+  100% {
+    opacity: 1;
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-adv-group {
+    animation-name: apple-fade;
+    transition: none;
+  }
+  .setup-adv-group:hover,
+  .setup-adv-group:focus-within {
+    animation: none;
+  }
+  .setup-adv-group:hover::after,
+  .setup-adv-group:focus-within::after {
+    animation: none;
+  }
+}
+
+/* ---- 하단 고정 바(설계 4-5) ---- */
+.setup-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  margin: var(--space-m) calc(-1 * var(--setup-px)) 0;
+  padding: var(--space-m) var(--setup-px);
+  border-top: 1px solid var(--line);
+  background: var(--bg-base);
+}
+.setup-bar-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.setup-bar.changed .setup-bar-text {
+  color: var(--brand-sub);
+}
+.setup-bar.leaving .setup-bar-text {
+  color: var(--miss);
+}
+.setup-bar-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.setup-bar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  flex: none;
+}
+.setup-bar-saved {
+  color: var(--good);
+  font-size: 14px;
+}
+.setup-bar-action {
+  width: 160px;
+}
+.setup-bar-action.wide {
+  width: 200px;
+}
+
+/* ---- 대화상자(폭 560 · 400) ---- */
+.dialog.setup-leave-dialog {
+  max-width: 560px;
+}
+.dialog.setup-name-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  max-width: 400px;
+}
+.setup-name-dialog h2 {
+  margin: 0;
+}
+.setup-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-s);
+  margin-top: var(--space-m);
+}
+.setup-name-dialog .setup-dialog-actions {
+  margin-top: 0;
+}
+.setup-dialog-actions > .ui-btn {
+  min-width: 160px;
+}
+.setup-name-dialog .setup-dialog-actions > .ui-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 고급 설정 슬라이더: 값 칸 폭을 맞춰 줄이 어긋나지 않게 */
+
+/* ---- UX-64 프리셋 칩 줄(드럼 배치 카드). 수치는 디자인 MR에서 Figma로 ---- */
+.setup-preset-chips {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+  margin-bottom: 12px;
+}
+.setup-chips-row,
+.setup-chips-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  flex-wrap: wrap;
+}
+
+/* ---- 칩 줄 세부(Figma 765:33421): [+ 추가하기] 텍스트 버튼의 아이콘 ---- */
+.setup-chips-add {
+  gap: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.setup-chips-plus {
+  flex: none;
+}
+/* [프리셋 관리]: 칩 줄 오른쪽 끝. 추가하기보다 한 단계 낮은 색 */
+.setup-chips-manage {
+  color: var(--text-2);
+}
+
+/* ---- 상단 상태 타일(Figma Setup / StatusTile 505:2449, UX-44·UX-64·PLAY-004 D8): 3열 한 줄(스틱 연결·시작 위치 보정·박자 맞추기), 요약만 보이는 버튼 ---- */
+.setup-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-m);
+}
+.setup-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-s) var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+  text-align: left;
+  font-family: var(--font);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--motion-fast);
+}
+.setup-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.setup-tile.is-on {
+  border-color: var(--good);
+}
+.setup-tile.is-on::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  background: var(--good);
+  opacity: 0.1;
+  pointer-events: none;
+}
+.setup-tile.is-urgent {
+  border-color: var(--miss);
+}
+.setup-tile.is-attention {
+  border-color: var(--warn);
+}
+.setup-tile:not(:disabled):hover {
+  border-color: var(--line-strong);
+}
+.setup-tile.is-on:not(:disabled):hover {
+  border-color: var(--good);
+}
+.setup-tile > * {
+  position: relative;
+}
+/* 울림 링 층은 타일 전체를 덮어야 하므로 위 규칙에서 뺀다 */
+.setup-tile > .setup-strike-rings {
+  position: absolute;
+}
+.setup-tile-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 100%;
+}
+.setup-tile-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.setup-tile.is-on .setup-tile-dot {
+  background: var(--good);
+}
+.setup-tile.is-urgent .setup-tile-dot {
+  background: var(--miss);
+}
+.setup-tile.is-attention .setup-tile-dot {
+  background: var(--warn);
+}
+.setup-tile-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.setup-tile-status {
+  flex: none;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.setup-tile.is-on .setup-tile-status {
+  color: var(--good);
+}
+.setup-tile.is-urgent .setup-tile-status {
+  color: var(--miss);
+}
+.setup-tile.is-attention .setup-tile-status,
+.setup-tile.is-todo .setup-tile-status {
+  color: var(--warn);
+}
+.setup-tile-summary {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-1);
+}
+.setup-tile-reason {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.setup-tile-action {
+  flex: none;
+  margin-left: var(--space-s);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.setup-tile.is-urgent .setup-tile-action {
+  color: var(--miss);
+}
+.setup-tile.is-attention .setup-tile-action {
+  color: var(--warn);
+}
+@media (max-width: 1024px) {
+  .setup-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- 단계 팝업(StepDialog, PLAY-004 D8) ---- */
+.dialog.setup-step-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  max-width: 640px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.setup-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.setup-step-head h2 {
+  margin: 0;
+}
+.setup-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+}
+
+/* ---- 프리셋 슬롯 창(Figma 772:33828 · Setup / PresetSlot 505:2501): 3열, 드럼 무대 크기(폭 최대 1040, 슬롯 200) ----
+ * 애플 톤(아래 D12 블록과 같은 규칙): 테두리 대신 바탕 차이·머리카락 선, 모서리 20/28px, 72% 반투명 + blur, 알약형 버튼.
+ * 내용은 가운데 정렬. 적용 중 슬롯은 은은한 시안 네온(--brand)으로 빛나고, 호버·누름에는 울림 링(StrikeButton)이 퍼진다 */
+.dialog.setup-slot-dialog {
+  --slot-hair: rgba(255, 255, 255, 0.07);
+  --slot-hair-hover: rgba(255, 255, 255, 0.16);
+  --slot-fill: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --slot-fill-hover: color-mix(in srgb, var(--text-1) 7%, transparent);
+  --slot-neon: var(--brand);
+  --strike-neon: var(--slot-neon);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: min(1040px, calc(100vw - 48px));
+  padding: 40px 40px 32px;
+  border: 1px solid var(--slot-hair);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--bg-base) 82%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.setup-slot-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.setup-slot-head h2 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.setup-slot-head p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.setup-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.setup-slot {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 200px;
+  padding: 24px 20px;
+  border: 1px solid var(--slot-hair);
+  border-radius: 20px;
+  background: var(--slot-fill);
+  color: var(--text-1);
+  text-align: center;
+  font-family: var(--font);
+  cursor: pointer;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 200ms ease,
+    background 200ms ease,
+    box-shadow 320ms ease;
+}
+.setup-slot:hover:not(:disabled) {
+  transform: translateY(-3px);
+  border-color: var(--slot-hair-hover);
+  background: var(--slot-fill-hover);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+}
+.setup-slot:focus-visible {
+  outline: 2px solid var(--slot-neon);
+  outline-offset: 3px;
+}
+.setup-slot:disabled {
+  cursor: default;
+}
+/* 적용 중: 은은한 네온. 선 하나 + 바깥 번짐 + 안쪽 빛 + 위에서 내려오는 옅은 색 */
+.setup-slot.active {
+  border-color: color-mix(in srgb, var(--slot-neon) 55%, transparent);
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--slot-neon) 16%, transparent), transparent 70%),
+    var(--slot-fill);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--slot-neon) 22%, transparent),
+    0 0 28px color-mix(in srgb, var(--slot-neon) 22%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--slot-neon) 10%, transparent);
+  animation: slot-neon-breathe 3.6s ease-in-out infinite;
+}
+/* 적용 중 슬롯은 다시 누를 수 없어 disabled지만 흐리게 보이면 안 된다 */
+.setup-slot.active:disabled {
+  color: var(--text-1);
+  opacity: 1;
+}
+@keyframes slot-neon-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--slot-neon) 30%, transparent),
+      0 0 40px color-mix(in srgb, var(--slot-neon) 30%, transparent),
+      inset 0 0 28px color-mix(in srgb, var(--slot-neon) 14%, transparent);
+  }
+}
+.setup-slot.is-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: transparent;
+}
+.setup-slot.is-empty:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--slot-neon) 45%, transparent);
+  background: color-mix(in srgb, var(--slot-neon) 5%, transparent);
+}
+.setup-slot.is-empty:disabled {
+  opacity: 0.35;
+}
+.setup-slot:not(.active):not(.is-empty):disabled {
+  opacity: 0.45;
+}
+/* 슬롯 번호·적용 중: 카드 맨 위 가운데 */
+.setup-slot-top {
+  position: absolute;
+  top: 18px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+.setup-slot-label {
+  color: var(--text-3);
+}
+.setup-slot-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--slot-neon) 14%, transparent);
+  color: var(--brand-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.setup-slot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--slot-neon);
+  box-shadow: 0 0 8px var(--slot-neon);
+}
+.setup-slot-name {
+  margin-top: 28px;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-slot.active .setup-slot-name {
+  margin-top: 52px;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--slot-neon) 35%, transparent);
+}
+.setup-slot.is-empty .setup-slot-name {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--brand-text);
+}
+.setup-slot-meta {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-slot,
+  .setup-slot.active {
+    animation: none;
+    transition: none;
+  }
+  .setup-slot:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+.setup-slot-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.setup-slot-actions .ui-btn {
+  min-width: 96px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+.setup-slot-actions .ui-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+.setup-slot-count {
+  color: var(--text-3);
+  font-size: 14px;
+}
+.setup-slot-error {
+  margin: 0;
+  color: var(--miss);
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: center;
+}
+/* 저장 슬롯 감싸개: 적용 버튼(카드 전체) 위 오른쪽 구석에 휴지통을 겹친다(버튼 안에 버튼을 넣지 않기 위해) */
+.setup-slot-cell {
+  position: relative;
+  display: flex;
+}
+.setup-slot-cell > .setup-slot {
+  flex: 1;
+  min-width: 0;
+}
+/* 휴지통: 평소엔 숨어 있다가 카드에 올리거나 포커스가 오면 보인다(터치 화면은 늘 보인다) */
+.setup-slot-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    background 200ms ease,
+    color 200ms ease;
+}
+.setup-slot-cell:hover .setup-slot-delete,
+.setup-slot-delete:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .setup-slot-delete {
+    opacity: 1;
+  }
+}
+.setup-slot-delete:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--miss) 16%, transparent);
+  color: var(--miss);
+}
+.setup-slot-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* 삭제 확인: 카드 자리를 그대로 쓰고 안쪽만 질문·버튼으로 바꾼다 */
+.setup-slot.is-confirm {
+  justify-content: center;
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--miss) 55%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--miss) 14%, transparent);
+  cursor: default;
+  animation: none;
+}
+.setup-slot-question {
+  font-size: 17px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.setup-slot-question b {
+  font-weight: 600;
+}
+.setup-slot-confirm-note {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.setup-slot-confirm-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+.setup-slot-confirm-row > .ui-btn {
+  flex: 1;
+  min-width: 0;
+  border-radius: 999px;
+}
+
+/* 좁은 화면: 2열, 슬롯 낮게 */
+@media (max-width: 720px) {
+  .dialog.setup-slot-dialog {
+    padding: 28px 20px 20px;
+  }
+  .setup-slot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .setup-slot {
+    min-height: 160px;
+  }
+}
+
+/* ---- 울림(StrikeButton): 프리셋 슬롯 카드·상태 타일 공용 ----
+ * 호버는 가운데서 옅게, 누름은 누른 자리에서 진하게 시안 링이 퍼진다. 링은 버튼 내용 뒤에 깔린다(버튼에 isolation 필요).
+ * 누름은 살짝 눌렸다 튀어 오른다. 이름 둘을 번갈아 써서 연타에도 매번 다시 건다 */
+.setup-strike-rings {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.setup-strike-ring {
+  --strike-c: var(--strike-neon, var(--brand));
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--strike-c) 55%, transparent);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--strike-c) 30%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--strike-c) 20%, transparent);
+  opacity: 0;
+  animation: strike-ring 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.setup-strike-ring.strong {
+  border-width: 2px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--strike-c) 22%, transparent), transparent 70%);
+  animation-duration: 700ms;
+}
+@keyframes strike-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(9);
+  }
+}
+.is-struck[data-strike='0'] {
+  animation: strike-thump-a 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.is-struck[data-strike='1'] {
+  animation: strike-thump-b 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+/* 적용 중 슬롯은 숨쉬는 네온을 끊지 않는다 */
+.setup-slot.active.is-struck[data-strike] {
+  animation: slot-neon-breathe 3.6s ease-in-out infinite;
+}
+@keyframes strike-thump-a {
+  40% {
+    transform: scale(0.975);
+  }
+}
+@keyframes strike-thump-b {
+  40% {
+    transform: scale(0.975);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-strike-rings {
+    display: none;
+  }
+  .is-struck[data-strike] {
+    animation: none;
+  }
+}
+
+/* =====================================================================
+ * 애플 스타일(PLAY-004 D12, v0.2). 드럼 세팅 화면에만 적용한다.
+ * tokens.css·components/ui/*는 건드리지 않고 .setup-page(팝업은 .setup-step-dialog) 아래로 범위를 한정해 덮는다.
+ * 규칙: 카드는 테두리 없이 바탕 차이 + 모서리 20px / 떠 있는 요소는 72% 반투명 + blur / 버튼은 알약형 / 칩 줄은 세그먼트 컨트롤.
+ * 이 블록은 파일 맨 끝에 둔다(위의 같은 선택자 규칙을 덮어야 하므로 순서가 의미를 가진다).
+ * ===================================================================== */
+.setup-page,
+.dialog.setup-step-dialog {
+  /* 떠 있는 면: 바탕색 72%. 경고는 --warn 12%를 섞는다 */
+  --apple-float: color-mix(in srgb, var(--bg-base) 72%, transparent);
+  --apple-float-warn: color-mix(in srgb, var(--warn) 12%, color-mix(in srgb, var(--bg-base) 72%, transparent));
+  --apple-hair: rgba(255, 255, 255, 0.08);
+  --apple-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  --apple-fill: color-mix(in srgb, var(--text-1) 10%, transparent);
+  --apple-fill-hover: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+
+/* 떠 있는 요소 등장: 180ms 페이드 + 6px 위로. 모션 줄이기에서는 페이드만 */
+@keyframes apple-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes apple-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- 페이지 머리: 큰 제목과 옅은 보조 글자로 위계를 만든다 ---- */
+.setup-page {
+  --setup-py: 24px;
+  gap: var(--space-m);
+}
+.setup-page .ui-page-title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.setup-page .ui-page-meta {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.setup-progress {
+  font-size: 13px;
+}
+
+/* ---- 버튼: 알약형. 주 버튼은 채움, 보조는 옅은 채움(테두리 없음), 텍스트 버튼은 그대로 ---- */
+.setup-page .ui-btn,
+.dialog.setup-step-dialog .ui-btn {
+  border-radius: 999px;
+  border-color: transparent;
+}
+.setup-page .ui-btn-sm,
+.dialog.setup-step-dialog .ui-btn-sm {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.setup-page .ui-btn-secondary,
+.dialog.setup-step-dialog .ui-btn-secondary {
+  background: var(--apple-fill);
+}
+.setup-page .ui-btn-secondary:hover:not(:disabled),
+.dialog.setup-step-dialog .ui-btn-secondary:hover:not(:disabled) {
+  background: var(--apple-fill-hover);
+  border-color: transparent;
+}
+.setup-page .ui-btn-text:hover:not(:disabled),
+.dialog.setup-step-dialog .ui-btn-text:hover:not(:disabled) {
+  background: var(--apple-fill);
+}
+
+/* ---- 단계 타일: 테두리 없이 --surface-1, 모서리 20px, 안쪽 여백 24px ---- */
+.setup-page .setup-tiles {
+  gap: var(--space-m);
+}
+.setup-page .setup-tile {
+  gap: 2px;
+  padding: 18px var(--space-l);
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface-1);
+  isolation: isolate;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 200ms ease,
+    box-shadow 320ms ease;
+}
+/* 호버: 프리셋 슬롯 카드와 같은 떠오름 + 은은한 시안 테두리 빛(울림 링은 StrikeButton) */
+.setup-page .setup-tile:not(:disabled):hover,
+.setup-page .setup-tile.is-on:not(:disabled):hover {
+  transform: translateY(-3px);
+  background: var(--surface-2);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.35),
+    0 0 0 1px color-mix(in srgb, var(--brand) 22%, transparent),
+    0 0 24px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-page .setup-tile {
+    transition: none;
+  }
+  .setup-page .setup-tile:not(:disabled):hover {
+    transform: none;
+  }
+}
+/* 켜진 타일의 초록 면 대신 점·상태 글자로만 알린다 */
+.setup-page .setup-tile.is-on::before {
+  display: none;
+}
+.setup-page .setup-tile.is-urgent,
+.setup-page .setup-tile.is-attention {
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface-1));
+}
+.setup-page .setup-tile.is-urgent {
+  background: color-mix(in srgb, var(--miss) 8%, var(--surface-1));
+}
+.setup-page .setup-tile-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.setup-page .setup-tile-status {
+  font-size: 11px;
+}
+.setup-page .setup-tile-action {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--brand-text);
+}
+.setup-page .setup-tile.is-urgent .setup-tile-action {
+  color: var(--miss);
+}
+.setup-page .setup-tile.is-attention .setup-tile-action {
+  color: var(--warn);
+}
+.setup-page .setup-tile:disabled .setup-tile-action {
+  color: var(--text-3);
+}
+.setup-page .setup-tile-summary {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+/* ---- 카드 제목·설명(고급 설정 카드) ---- */
+.setup-page .setup-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.setup-page .setup-card-desc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.setup-page .setup-note {
+  line-height: 1.55;
+}
+.setup-page .setup-notice,
+.dialog.setup-step-dialog .setup-notice {
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.setup-page .setup-notice.error,
+.dialog.setup-step-dialog .setup-notice.error {
+  background: color-mix(in srgb, var(--miss) 12%, var(--surface-2));
+}
+
+/* ---- 프리셋 칩 줄: 세그먼트 컨트롤(한 판 안의 알약들, 선택만 떠 있는 바탕) ---- */
+.setup-page .setup-preset-chips {
+  margin: 4px 0 var(--space-s);
+}
+.setup-page .setup-chips-row {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 20px;
+  background: var(--surface-2);
+}
+.setup-page .setup-chips-row .ui-chip {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.setup-page .setup-chips-row .ui-chip:hover:not(:disabled) {
+  color: var(--text-1);
+}
+.setup-page .setup-chips-row .ui-chip.selected,
+.setup-page .setup-chips-row .ui-chip.selected:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 15%, var(--surface-2));
+  color: var(--text-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.setup-page .setup-chips-row .ui-chip.selected:disabled {
+  opacity: 1;
+}
+.setup-page .setup-chips-row .ui-btn {
+  height: 30px;
+  font-weight: 500;
+}
+
+/* ---- 떠 있는 배너(간격 경고)·보정 안내 ---- */
+.setup-page .cal-gap-banner {
+  border: 1px solid var(--apple-hair);
+  border-radius: 16px;
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--apple-shadow);
+  animation: apple-rise 180ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-page .cal-gap-banner {
+    animation-name: apple-fade;
+  }
+}
+.setup-page .cal-gap-banner {
+  border-color: var(--apple-hair);
+  gap: var(--space-m);
+  padding: 12px var(--space-m);
+  background: var(--apple-float-warn);
+}
+.setup-page .cal-gap-head {
+  font-size: 13px;
+  font-weight: 600;
+}
+.setup-page .cal-gap-advice,
+.setup-page .cal-overlap-line {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.setup-page .cal-hand-row {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.setup-page .cal-hit-dot {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+}
+/* 큰 안내: 굵기를 한 단계 낮추고 글자 사이를 조인다 */
+.setup-page .cal-stage-headline {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.setup-page .cal-stage-dot {
+  border: 0;
+  background: color-mix(in srgb, var(--text-1) 22%, transparent);
+}
+.setup-page .cal-stage-dot.done {
+  background: var(--good);
+}
+.setup-page .cal-stage-dot.now {
+  background: var(--brand);
+}
+
+/* ---- 보조 카드류(스틱 카드·타격 로그·프리셋 행): 테두리 없이 바탕 차이로 ---- */
+.setup-page .stick-card,
+.dialog.setup-step-dialog .stick-card {
+  border: 0;
+  border-radius: 16px;
+  padding: var(--space-m);
+}
+.setup-page .setup-hitlog {
+  border: 0;
+  border-radius: 16px;
+}
+.setup-page .setup-progress-bar,
+.dialog.setup-step-dialog .setup-progress-bar {
+  border-radius: 999px;
+}
+
+/* ---- 하단 바: 반투명 + 블러, 머리카락 윗선 ---- */
+.setup-page .setup-bar {
+  border-top: 1px solid var(--apple-hair);
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* ---- 단계 팝업: 같은 반투명·블러, 모서리 20px ---- */
+.dialog.setup-step-dialog {
+  padding: var(--space-l);
+  border: 1px solid var(--apple-hair);
+  border-radius: 20px;
+  background: var(--apple-float);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  gap: var(--space-m);
+}
+.dialog.setup-step-dialog .setup-step-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.dialog.setup-step-dialog .setup-note {
+  line-height: 1.55;
+}
+
+/* =====================================================================
+ * 느와르 톤(SETUP-fixed-kit-noir D8~D10·D13): 자유 연습 무대와 같은 재료로 맞춘다.
+ * 페이지 전체에 빛줄기(StageBeam)를 깔고, 드럼 카드·판은 면과 테두리를 없애 배경과 한 면으로 둔다.
+ * 조작부(상태 타일·칩·떠 있는 카드·고급 설정·하단 바)는 --surface-float + blur 14 + --line 글래스로 통일한다.
+ * 새 토큰 없이 tokens.css의 기존 이름만 쓴다. 위의 애플 스타일 블록을 덮어야 하므로 파일 맨 끝에 둔다.
+ * ===================================================================== */
+.main.setup-page {
+  position: relative;
+  /* 이펙트·빛줄기가 페이지 밖으로 나가 가로 스크롤을 만들지 않게 자른다(clip은 sticky 바를 깨지 않는다) */
+  overflow-x: clip;
+}
+/* 빛줄기(.free-lights, z 0) 위로 올린다. 복귀 띠·하단 바는 자기 sticky 위치와 z-index를 그대로 쓴다 */
+.setup-page > :not(.free-lights, .setup-banner, .setup-bar, .dialog-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+
+/* 내 드럼 무대(.setup-kit)는 카드 면·테두리가 없다(.free-stage와 같다). 제목 글자는 위 .setup-stage-title이 정한다 */
+
+/* 글래스 조작부: 반주 바·가이드 스위치(.free-accomp·.free-guide-sw)와 같은 재료 */
+.setup-page .setup-tile,
+.setup-page .setup-tile:not(:disabled):hover,
+.setup-page .setup-tile.is-on:not(:disabled):hover,
+.setup-page .setup-adv {
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+}
+.setup-page .setup-tile:not(:disabled):hover {
+  border-color: var(--line-strong);
+}
+/* 톤별 테두리색 유지(위 글래스 규칙이 border를 덮으므로 다시 정한다) */
+.setup-page .setup-tile.is-on,
+.setup-page .setup-tile.is-on:not(:disabled):hover {
+  border-color: var(--good);
+}
+.setup-page .setup-tile.is-urgent {
+  border-color: var(--miss);
+}
+.setup-page .setup-tile.is-attention {
+  border-color: var(--warn);
+}
+
+/* 타격 확인: 좁으면 그림 아래 목록, 무대가 720px 이상으로 넓으면 그림 가운데 위(킥 위 탐 사이 빈자리)에 떠 있는 글래스 카드(3행). 왼쪽 위는 크래시를 가려 옮겼다. 낮은 화면에서 무대 아래쪽은 스크롤해야 보이므로 위에 둔다.
+ * 떠 있는 카드는 포인터를 받지 않는다(아래 그림·센서 면을 가리지 않게) */
+.setup-kit-stage > .setup-hit {
+  margin-top: var(--space-s);
+}
+@container (min-width: 720px) {
+  .setup-kit-stage > .setup-hit {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    width: 220px;
+    transform: translateX(-50%);
+    gap: 4px;
+    margin: 0;
+    padding: 12px 14px 8px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface-float);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    pointer-events: none;
+  }
+  .setup-kit-stage > .setup-hit .setup-hit-title {
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .setup-kit-stage > .setup-hit .setup-hitlog {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .setup-kit-stage > .setup-hit .setup-hitlog-row.head,
+  .setup-kit-stage > .setup-hit .setup-hitlog-list > li:nth-child(n + 4) {
+    display: none;
+  }
+  .setup-kit-stage > .setup-hit .setup-hitlog-row {
+    grid-template-columns: 1.3fr 0.6fr 0.9fr;
+    gap: 8px;
+    min-height: 26px;
+    padding: 0;
+    font-size: 13px;
+  }
+  .setup-kit-stage > .setup-hit .setup-hitlog-list .setup-hitlog-row {
+    border-top: 0;
+  }
+  .setup-kit-stage > .setup-hit .setup-hitlog-empty {
+    padding: 4px 0 6px;
+    border-top: 0;
+    font-size: 13px;
+  }
+}
+
+/* 보정 팝업(CalibrationDialog): 큰 글래스 창. 바깥은 어두운 스크림 그대로, 폭 min(92vw, 1100px)·높이 최대 92vh */
+.dialog.cal-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  box-sizing: border-box;
+  width: min(92vw, 1100px);
+  max-width: none;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.cal-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+}
+.dialog.cal-dialog .cal-dialog-label {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cal-dialog .cal-stage-capture {
+  gap: var(--space-m);
+}
+/* 큰 안내 아래 진행 점. 안내는 한 줄로 크게, 패드 이름만 브랜드색 */
+.cal-dialog .cal-stage-top {
+  position: static;
+  transform: none;
+  max-width: none;
+}
+.cal-dialog .cal-stage-headline {
+  font-size: clamp(22px, 3vw, 36px);
+}
+.cal-dialog .cal-stage-pad {
+  color: var(--brand-text);
+  font-style: normal;
+}
+.cal-dialog .cal-stage-progress {
+  gap: 6px;
+}
+.cal-dialog .cal-stage-dot {
+  width: 10px;
+  height: 10px;
+}
+/* 드럼 그림: 남는 높이를 쓰되 300px 밑으로는 줄이지 않는다(1128×698에서 그림 300px 이상) */
+.cal-dialog .cal-stage-canvas {
+  position: relative;
+  height: clamp(300px, calc(100dvh - 340px), 560px);
+}
+/* 첫 안내(CaptureNotice): 드럼 그림 한가운데 큰 글씨 두 줄. 글자는 은은한 네온 화이트, 강조할 말만 은은한 네온 색.
+   뒤 그림이 비치지 않게 가운데만 어둡게 깔고, 사라질 때는 0.5초 페이드. 누를 것이 없으므로 포인터는 통과시킨다.
+   등장은 애플풍: 줄마다 흐림에서 또렷하게 올라오고(둘째 줄은 조금 늦게), 강조할 말 위로 빛이 한 번씩 지나간다 */
+.cal-dialog .cal-notice {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  padding: var(--space-l);
+  text-align: center;
+  pointer-events: none;
+  background: radial-gradient(62% 72% at 50% 50%, color-mix(in srgb, var(--bg-base) 86%, transparent) 0%, color-mix(in srgb, var(--bg-base) 60%, transparent) 55%, transparent 100%);
+  transition:
+    opacity 0.5s ease,
+    visibility 0s linear 0.5s;
+  animation: apple-fade 0.6s ease both;
+}
+.cal-dialog .cal-notice[data-open='false'] {
+  opacity: 0;
+  visibility: hidden;
+}
+.cal-dialog .cal-notice p {
+  margin: 0;
+  color: var(--text-1);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--text-1) 28%, transparent);
+  word-break: keep-all;
+  text-wrap: balance;
+  animation: cal-notice-line 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cal-dialog .cal-notice-main {
+  font-size: clamp(24px, 3.4vw, 42px);
+  font-weight: 700;
+  line-height: 1.3;
+  animation-delay: 0.1s;
+}
+.cal-dialog .cal-notice-sub {
+  font-size: clamp(17px, 2.2vw, 26px);
+  font-weight: 600;
+  line-height: 1.4;
+  animation-delay: 0.28s;
+}
+/* 강조할 말: 글자를 그라디언트로 칠해 밝은 띠가 지나가게 한다. 글자색이 투명이라 번짐은 text-shadow 대신 drop-shadow로 준다 */
+.cal-dialog .cal-notice em {
+  color: var(--brand-text);
+  font-style: normal;
+  text-shadow: none;
+  background: linear-gradient(100deg, var(--brand-text) 42%, #dff5ff 50%, var(--brand-text) 58%) 100% 0 / 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--brand) 45%, transparent));
+  animation: cal-notice-sheen 4.2s cubic-bezier(0.32, 0.72, 0, 1) 1.1s infinite;
+}
+@keyframes cal-notice-line {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes cal-notice-sheen {
+  0% {
+    background-position: 100% 0;
+  }
+  45%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-dialog .cal-notice {
+    transition: none;
+    animation: none;
+  }
+  .cal-dialog .cal-notice p,
+  .cal-dialog .cal-notice em {
+    animation: none;
+  }
+}
+.cal-stage-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+  text-align: center;
+}
+.cal-stage-bottom .cal-hands {
+  flex-direction: row;
+  gap: var(--space-xl);
+}
+/* 결과: 겹침 문구(--warn) · [◯◯ 다시] · [저장] */
+.cal-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-s);
+}
+.cal-result-overlaps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cal-dialog .cal-result-overlaps .cal-overlap-line {
+  color: var(--warn);
+  font-size: 14px;
+}
+.cal-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-xs);
+}
+
+/* 프리셋 칩: 세그먼트 판을 걷고 선택되지 않은 칩을 글래스 캡슐로. 선택 칩은 위 애플 스타일 그대로 */
+.setup-page .setup-chips-row {
+  gap: var(--space-xs);
+  padding: 0;
+  background: transparent;
+}
+.setup-page .setup-chips-row .ui-chip:not(.selected) {
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+}
+.setup-page .setup-chips-row .ui-chip:not(.selected):hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+/* 하단 고정 바: 윗선은 그대로 두고 면만 글래스로 */
+.setup-page .setup-bar {
+  border-top: 1px solid var(--line);
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* =====================================================================
+ * 세팅 팝업 키움·애플 톤 v2: 단계 팝업(StepDialog — 스틱 연결·시작 위치 보정)과 박자 맞추기(TimingCalDialog, 세팅에서만 .setup-timing-dialog).
+ * 프리셋 슬롯 창과 같은 재료: 82% 반투명 + blur 24, 머리카락 선, 모서리 28px, 큰 제목·넉넉한 본문, 알약형 큰 버튼, 진행 중인 것만 은은한 시안 네온.
+ * 박자 맞추기 팝업은 다른 화면(설정·결과·연주 권유)에서는 기본 모양 그대로다. 위 블록들을 덮어야 하므로 파일 맨 끝에 둔다.
+ * ===================================================================== */
+.dialog.setup-step-dialog,
+.dialog.setup-timing-dialog {
+  --pop-hair: rgba(255, 255, 255, 0.07);
+  --pop-fill: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --pop-neon: var(--brand);
+  border: 1px solid var(--pop-hair);
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--bg-base) 82%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+/* 버튼: 알약형으로 크게 */
+.dialog.setup-step-dialog .ui-btn:not(.ui-btn-sm),
+.dialog.setup-timing-dialog .ui-btn {
+  min-height: 46px;
+  padding: 0 24px;
+  border-color: transparent;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dialog.setup-timing-dialog .ui-btn-secondary {
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+.dialog.setup-timing-dialog .ui-btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+}
+/* 주 버튼에는 옅은 네온 번짐 */
+.dialog.setup-step-dialog .ui-btn-primary:not(:disabled),
+.dialog.setup-timing-dialog .ui-btn-primary:not(:disabled) {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--pop-neon) 30%, transparent);
+}
+
+/* ---- 단계 팝업: 폭 860, 제목 26px ---- */
+.dialog.setup-step-dialog {
+  gap: 24px;
+  max-width: min(860px, calc(100vw - 48px));
+  padding: 36px 40px 36px;
+}
+.dialog.setup-step-dialog .setup-step-head h2 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.dialog.setup-step-dialog .setup-step-body,
+.dialog.setup-step-dialog .setup-col {
+  gap: 20px;
+}
+.dialog.setup-step-dialog .setup-note {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.dialog.setup-step-dialog .setup-note.faint {
+  font-size: 14px;
+  color: var(--text-3);
+}
+.dialog.setup-step-dialog .setup-notice {
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-size: 15px;
+}
+/* 진행 막대: 굵고 둥글게, 채움은 시안 그라데이션 + 빛 */
+.dialog.setup-step-dialog .setup-progress-bar {
+  height: 10px;
+  background: color-mix(in srgb, var(--text-1) 8%, transparent);
+}
+.dialog.setup-step-dialog .setup-progress-bar > div {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pop-neon), var(--brand-text));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--pop-neon) 55%, transparent);
+  transition: width 120ms linear;
+}
+
+/* 시작 위치 보정 자세 안내: 그림 카드를 크게, 테두리 대신 바탕 차이 */
+.dialog.setup-step-dialog .pose-guide {
+  gap: 18px;
+}
+.dialog.setup-step-dialog .pose-guide-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.dialog.setup-step-dialog .pose-guide-figs {
+  gap: 16px;
+}
+.dialog.setup-step-dialog .pose-guide-fig {
+  border: 1px solid var(--pop-hair);
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 70%),
+    var(--pop-fill);
+  transition:
+    border-color 240ms ease,
+    box-shadow 320ms ease;
+}
+.dialog.setup-step-dialog .pose-guide-fig figcaption {
+  top: 14px;
+  left: 16px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+/* 잡는 중: 그림 카드에 은은한 시안 빛. 흔들림은 빨강, 끝나면 초록 */
+.dialog.setup-step-dialog .pose-guide[data-state='holding'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--pop-neon) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--pop-neon) 18%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide[data-state='shaky'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--miss) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--miss) 16%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide[data-state='done'] .pose-guide-fig {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--good) 16%, transparent);
+}
+.dialog.setup-step-dialog .pose-guide-steps {
+  gap: 16px;
+}
+.dialog.setup-step-dialog .pose-guide-steps li {
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.dialog.setup-step-dialog .pose-guide-steps li i {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+.dialog.setup-step-dialog .pose-guide-steps li.on i {
+  background: var(--pop-neon);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--pop-neon) 60%, transparent);
+}
+
+/* 스틱 연결 팝업: 센서 고르기 줄을 카드처럼 */
+.dialog.setup-step-dialog .setup-sensor-choice {
+  padding: 14px 16px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 16px;
+  background: var(--pop-fill);
+  font-size: 15px;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease;
+}
+.dialog.setup-step-dialog .setup-sensor-choice:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.dialog.setup-step-dialog .setup-sensor-choice:has(input:checked) {
+  border-color: color-mix(in srgb, var(--pop-neon) 50%, transparent);
+  background: color-mix(in srgb, var(--pop-neon) 7%, var(--pop-fill));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pop-neon) 14%, transparent);
+}
+
+/* ---- 박자 맞추기(세팅): 폭 680, 가운데 정렬, 큰 글자와 큰 박 점 ---- */
+.dialog.setup-timing-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: min(680px, calc(100vw - 48px));
+  padding: 44px 48px 36px;
+  text-align: center;
+}
+.dialog.setup-timing-dialog h2 {
+  margin: 0 0 18px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.dialog.setup-timing-dialog .timing-cal-text {
+  max-width: 560px;
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.dialog.setup-timing-dialog .timing-cal-sub {
+  max-width: 520px;
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.dialog.setup-timing-dialog .timing-cal-warn {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 15px;
+}
+.dialog.setup-timing-dialog .timing-cal-change {
+  margin: 0 0 20px;
+  font-size: 17px;
+}
+.dialog.setup-timing-dialog .timing-cal-change strong {
+  color: var(--brand-text);
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--pop-neon) 40%, transparent);
+}
+/* 박 점: 크게, 지금 박은 시안 네온이 울린다 */
+.dialog.setup-timing-dialog .timing-cal-beats {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0 24px;
+}
+.dialog.setup-timing-dialog .timing-cal-beat {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.dialog.setup-timing-dialog .timing-cal-beat.listen {
+  width: 10px;
+  height: 10px;
+}
+.dialog.setup-timing-dialog .timing-cal-beat.on {
+  background: color-mix(in srgb, var(--text-1) 38%, transparent);
+}
+.dialog.setup-timing-dialog .timing-cal-beat.now {
+  background: var(--pop-neon);
+  box-shadow:
+    0 0 10px var(--pop-neon),
+    0 0 26px color-mix(in srgb, var(--pop-neon) 50%, transparent);
+  animation: timing-beat-pop 360ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes timing-beat-pop {
+  0% {
+    transform: scale(1.6);
+  }
+}
+.dialog.setup-timing-dialog .dialog-actions {
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+.dialog.setup-timing-dialog .dialog-actions .ui-btn {
+  min-width: 120px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog.setup-timing-dialog .timing-cal-beat.now {
+    animation: none;
+  }
+}
+@media (max-width: 720px) {
+  .dialog.setup-step-dialog {
+    padding: 28px 20px 24px;
+  }
+  .dialog.setup-timing-dialog {
+    padding: 32px 20px 24px;
+  }
+}

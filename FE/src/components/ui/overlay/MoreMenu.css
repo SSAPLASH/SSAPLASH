@@ -1,0 +1,37 @@
+/* ⋯ 메뉴 (Figma Studio / MoreMenu 212:757) */
+.ui-more-menu {
+  position: relative;
+}
+.ui-more-menu-list {
+  /* 위치는 Radix가 정한다(body 끝 portal, 아래가 모자라면 위로 뒤집힘). 화면 위 셸·Dock보다 위에 둔다 */
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 180px;
+  padding: var(--space-xs) 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-dock);
+}
+.ui-more-menu-item {
+  min-height: 0;
+  padding: var(--space-s) var(--space-m);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+}
+.ui-more-menu-item:hover,
+.ui-more-menu-item:focus-visible {
+  background: var(--surface-3);
+}
+.ui-more-menu-item.danger {
+  color: var(--miss);
+}
+.ui-more-menu-item.danger:not(:first-child) {
+  border-top: 1px solid var(--line);
+}

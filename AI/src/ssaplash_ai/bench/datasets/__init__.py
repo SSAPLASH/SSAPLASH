@@ -38,6 +38,7 @@ from ssaplash_ai.bench.datasets.pads import (
     validate_hits,
     validate_pred_hits,
 )
+from ssaplash_ai.bench.datasets.songsterr import SongsterrDataset
 from ssaplash_ai.bench.datasets.star import StarDataset
 from ssaplash_ai.bench.datasets.synth import SynthDataset
 
@@ -49,6 +50,7 @@ LOADERS: dict[str, type[BaseDataset]] = {
     StarDataset.kind: StarDataset,
     EgmdDataset.kind: EgmdDataset,
     EnstDataset.kind: EnstDataset,
+    SongsterrDataset.kind: SongsterrDataset,
 }
 
 

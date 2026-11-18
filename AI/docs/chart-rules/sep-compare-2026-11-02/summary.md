@@ -45,7 +45,7 @@
 
 - 실제 녹음 학습 모델은 ENST·MDB로 학습해서 같은 곡으로 채점하면 점수가 부풂. 그래서 ENST 드러머 하나와 MDB 곡 묶음 하나를 빼고 학습한 버전 3개(`*_real_no_d1~3`)로 각자 안 본 곡만 채점해 합침. 묶음 표 `configs/train/real_check/folds.yaml`
 - 서비스용 가중치는 뺀 곡 없이 전체로 학습한 `*_real_full`. 합성 데이터 점수가 채점용 버전과 같은 수준인 것을 확인함(GMD 9가지 F1 0.906, 채점용 0.906~0.910)
-- 서버 예측 `notebooks/sep_compare_server.ipynb`, `notebooks/cym7_real_server.ipynb` · 채점 `scripts/score_sep_compare.py`
+- 서버 예측 `notebooks/cym7_real_server.ipynb` · 채점 `scripts/score_sep_compare.py`
 
 ## 4. 서비스 반영 시 필요한 것
 

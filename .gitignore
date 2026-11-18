@@ -10,6 +10,9 @@
 # 개발 도구와 생성 파일
 .idea/
 .vscode/
+!/.vscode/
+/.vscode/*
+!/.vscode/settings.json
 .gradle-cache/
 *.log
 

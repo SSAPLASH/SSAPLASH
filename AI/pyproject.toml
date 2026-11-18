@@ -25,7 +25,7 @@ dependencies = [
     "matplotlib>=3.9",
     "mlflow>=3.0",
     "pandas>=2.2",
-    # 곡 추천 그래프의 희소 행렬(recommend)과 분리 후처리(bench)가 직접 쓴다
+    # 곡 추천 그래프의 희소 행렬(recommend)과 분리 후처리·STRUM 피크 찾기(bench)가 직접 쓴다
     "scipy>=1.13",
     # AI 서버 (S15P31A307-125). mlflow가 이미 끌어오는 패키지라 설치 목록은 늘지 않는다
     "fastapi>=0.115",
@@ -51,13 +51,27 @@ models = [
 # Spleeter(spleeter==2.4.x)는 tensorflow 2.12·numpy<2·pandas<2 고정이라 이 환경과 충돌해 후보에서 제외 (ADR-014)
 # 채보 모델 중 지금 환경에 같이 들어가는 것 (S15P31A307-109). `uv sync --extra models --extra transcribers`
 # ADT_STR(torch 2.8 고정, 패키지 아님)·Inverse Drum Machine(numpy<2·librosa<0.10 고정)·Omnizart(TensorFlow)·
-# YourMT3+(transformers 4.45.1·numpy 1.26 고정, 코드는 HF Space)는
+# YourMT3+(transformers 4.45.1·numpy 1.26 고정, 코드는 HF Space)·drum2midi(저장소 setup_env.py로 설치)는
 # 별도 가상환경에서 scripts/transcribers_ext/ 스크립트로 돌린다 (README "채보 벤치마크" 절)
 transcribers = [
     "adtof-pytorch @ git+https://github.com/xavriley/ADTOF-pytorch",
     "pretty-midi>=0.2.10",
     # 채보 bpm 추정 (S15P31A307-169, 설계 U15). 코드·가중치 MIT
     "beat-this>=1.1.0",
+    # Beat This! DBN 후처리(설정 tempo.postprocess: dbn, S15P31A307-322). PyPI 0.16.1은 최신 파이썬에서
+    # 빌드가 안 돼 git 커밋 고정. 원곡 박 기준 마디 맞는 곡 88 → 102/131 (설계 CHART-003-variable-tempo-exp)
+    "madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae",
+]
+# 실시간 코칭 거름 모델 학습용. 서버 이미지에는 들어가지 않는다. `uv sync --extra coach-live`
+coach-live = [
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
+    "scikit-learn>=1.5",
+]
+# 분리 전 음악 여부 검사의 분류 모델 AST 실행용 (chart/music_check.py). torch는 models extra 것을 씀.
+# 채보 워커 환경에 `uv sync --extra models --extra transcribers --extra music-check`
+music-check = [
+    "transformers>=4.40",
 ]
 
 [project.scripts]
@@ -96,7 +110,8 @@ build-backend = "uv_build"
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["data", "notebooks"]
+# strum/drums_v13.py는 STRUM 저장소 원본 그대로 두는 파일
+extend-exclude = ["data", "notebooks", "src/ssaplash_ai/bench/transcribers/strum/drums_v13.py"]
 
 [tool.ruff.lint]
 # E/W: pycodestyle, F: pyflakes, I: import 정렬, B: 흔한 버그, UP: 최신 문법

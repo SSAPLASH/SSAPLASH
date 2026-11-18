@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import { JudgedWindow, type JudgedNote } from './window';
 
 let t = 0;
@@ -159,5 +159,19 @@ describe('JudgedWindow 손별 세기', () => {
     expect(m.validCount).toBe(12);
     expect(m.hands[1].count).toBe(4);
     expect(m.hands[0].count).toBe(12);
+  });
+});
+
+describe('패드별 놓침', () => {
+  it('최근 16개에서 패드별 놓침과 노트 수를 센다', () => {
+    const w = new JudgedWindow();
+    const note = (pad: 'SNARE' | 'SMALL_TOM', judgement: 'GOOD' | 'MISS') =>
+      w.push({ songTimeMs: 0, noteTimeMs: 0, judgement, deltaMs: judgement === 'MISS' ? null : 5, pad, stickId: null, velocity: null });
+    for (let i = 0; i < 4; i++) note('SNARE', 'MISS'); // 창 밖으로 밀려난다
+    for (let i = 0; i < 13; i++) note('SNARE', 'GOOD');
+    for (let i = 0; i < 3; i++) note('SMALL_TOM', 'MISS');
+    const m = w.metrics();
+    expect(m.missInPadWindow).toBe(3);
+    expect(m.padMisses).toEqual(expect.arrayContaining([{ pad: 'SNARE', misses: 0, notes: 13 }, { pad: 'SMALL_TOM', misses: 3, notes: 3 }]));
   });
 });

@@ -2,7 +2,7 @@
 // 평소에는 packetTap·diagTap을 구독하지 않는다(비용 0). 모니터 창이 보내는 watch가 있는 동안(마지막 watch 후 3초)만
 // 구독해 50ms 묶음으로 BroadcastChannel에 내보낸다. 판정 경로는 이 모듈을 모른다.
 import { diagTap, type DiagEvent } from '@/engine/diagTap';
-import type { TransportStats } from '@/input/InputSource';
+import type { TransportStats } from '@/input/source/InputSource';
 import { packetTap, type PacketRecord } from '@/input/packetTap';
 
 export const MONITOR_CHANNEL = 'ssaplash-monitor';

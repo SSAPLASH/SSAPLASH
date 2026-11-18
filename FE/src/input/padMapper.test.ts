@@ -2,8 +2,8 @@
 // 각각 keyMap / 캘리브레이션 프로필만으로 패드를 정하는지 확인한다.
 import { describe, expect, it } from 'vitest';
 import { mapHit, mapHitByKey, mapHitByPose, mapperFor } from './padMapper';
-import { KEY_MAP } from '@/domain/keyMap';
-import { computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/calibration';
+import { KEY_MAP } from '@/domain/kit/keyMap';
+import { angleBetween, computeBoundaries, createEmptyProfile, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import type { StickHitEvent } from '@/domain/events';
 
 function hit(partial: Partial<StickHitEvent> = {}): StickHitEvent {
@@ -78,9 +78,9 @@ describe('mapHitByPose', () => {
   it('반경 밖 → 패드 없음, 거리는 남긴다', () => {
     const r = mapHitByPose(hit({ pitch: 0, yaw: 0 }), profile2()); // 두 앵커 중간, 거리 20 > 반경 22? 아니 반경 = 40×0.55 = 22
     expect(r.pad).toBe('SNARE'); // 거리 20 ≤ 22 → 안
-    const far = mapHitByPose(hit({ pitch: 30, yaw: 0 }), profile2()); // 거리 √(900+400) ≈ 36 > 22
+    const far = mapHitByPose(hit({ pitch: 30, yaw: 0 }), profile2()); // 대원 각도 ≈ 35.5 > 22
     expect(far.pad).toBeNull();
-    expect(far.distanceDeg).toBeCloseTo(Math.hypot(30, 20));
+    expect(far.distanceDeg).toBeCloseTo(angleBetween({ pitch: 30, yaw: 0 }, { pitch: 0, yaw: -20 }));
   });
 
   it('후보 제한이 있으면 반경 밖이어도 가장 가까운 후보', () => {

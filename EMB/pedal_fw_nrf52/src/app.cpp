@@ -7,6 +7,7 @@
  * 채터링: 접점이 붙는 첫 순간 바로 보내고(지연 없음) LOCKOUT_US 동안 다시 안 받는다.
  *   떼짐은 RELEASE_US 동안 계속 떨어져 있어야 인정한다 (발을 걸쳐 둘 때 깜빡임 방지).
  * 시각: micros() 하나로 HIT·PEDAL·SYNC_ACK를 찍는다 (FE 시계 보정과 같은 기준).
+ * 전원 버튼·LED (FW 3.1): 박스 뚜껑의 불 들어오는 버튼. 아래 "전원 버튼 · LED" 참고.
  */
 #include "app.h"
 #include <Arduino.h>
@@ -22,8 +23,8 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 3                     /* 3 = 페달 보드 */
-#define FW_MINOR 0
-#define FW_TAG   "BOOT 3.0 pedal"
+#define FW_MINOR 2                     /* 1 = 박스 전원 버튼(D5)·LED(D6), 2 = 버튼 튐(1초 안 반복 짧은 누름)은 BAT 표시·로그 대신 10초마다 BTN noise 집계 */
+#define FW_TAG   "BOOT 3.2 pedal"
 #define BLE_NAME "SSAPLASH-PEDAL"
 
 #define ROLE_HIHAT   2                 /* 왼발 */
@@ -32,14 +33,12 @@ extern "C" {
 #define PAD_HH_PEDAL 8
 #define PEDAL_VEL    100               /* 페달 HIT 세기 고정 */
 
-/* 보드 USER 버튼 (Sense는 PIN_USER_SW, Express는 PIN_BUTTON1, 둘 다 7번 핀) */
-#if defined(PIN_USER_SW)
-#define WAKE_PIN PIN_USER_SW
-#elif defined(PIN_BUTTON1)
-#define WAKE_PIN PIN_BUTTON1
-#else
-#define WAKE_PIN 7
-#endif
+/* 전원 버튼·LED 핀 (D9·D6·D5 3핀 헤더 하나. 보드 GND 헤더는 풋스위치가 쓰고 있어 D9를 LOW로 두고 GND 대신 쓴다)
+ *   버튼(6mm 택트, LED 내장): 스위치 D5 ↔ D9, LED + → D6, LED − → D9 (빨간 칠 쪽이 LED −)
+ *   D5·D6·D9는 Feather nRF52840 Sense·Express 같은 자리 */
+#define PIN_PWR_BTN  5
+#define PIN_PWR_LED  6
+#define PIN_PWR_GND  9
 
 #define LOCKOUT_US   15000             /* 밟은 뒤 이 시간 동안 다시 안 받음 (빠른 더블 킥도 60ms 이상) */
 #define RELEASE_US   10000             /* 이만큼 계속 떨어져 있어야 뗌 */
@@ -77,6 +76,8 @@ static void send_log(const char *s)
 #define BAT_WARN_MV  3500
 #define BAT_OFF_MV   3300
 #define BAT_OFF_N    3
+
+static void power_off(const char *why);
 
 static uint16_t bat_mv = 0;
 static uint8_t  bat_pct = 0xFF;
@@ -117,10 +118,108 @@ static void bat_update()
     if (bat_mv < BAT_WARN_MV && !warned) { warned = true; send_log("BAT LOW"); }
     n_low = bat_mv < BAT_OFF_MV ? n_low + 1 : 0;
     if (n_low >= BAT_OFF_N) {
-        send_log("BAT OFF");
-        delay(200);
-        systemOff(WAKE_PIN, LOW);                    /* USER 버튼으로 다시 켬 */
+        power_off("BAT OFF");                        /* 박스 버튼(D5)으로 다시 켬 */
     }
+}
+
+/* ===================== 전원 버튼 · LED =====================
+ *   꺼진 상태에서 누름 → 깨어나 부팅 (LED 켜짐)
+ *   2초 누름          → 누르는 동안 LED 빠르게 깜빡 → 꺼짐 (손 떼면 깊은 잠)
+ *   한 번 누름         → 배터리 깜빡 1~4번 (25%씩)
+ *   LED: 동글 연결 찾는 중 1초 주기 깜빡, 연결되면 계속 켜짐
+ *   BLE·USB 시리얼 없이 10분 → 자동으로 꺼짐. 배터리 3.3V 아래 3번 연속 → 꺼짐
+ * D5는 부트로더가 보지 않아서 systemOff로 자도 깨어날 때 DFU로 빠지지 않는다 (스틱 USER 버튼과 다름).
+ * 잠든 동안 D9 LOW·D6 LOW 출력 상태는 유지된다 (nRF52 System OFF는 GPIO 설정을 그대로 둔다).
+ * 흰 LED(1mA에서 2.57V)라 저항 없이 기본 구동(standard drive)으로 켠다. 강한 구동으로 바꾸지 말 것 */
+#define LONG_PRESS_MS 2000
+#define AUTO_OFF_MS   (10UL * 60UL * 1000UL)
+
+static uint32_t ui_last_click = 0;    /* 직전 짧은 누름 시각 (튐 판별) */
+static uint16_t ui_noise = 0;         /* 10초 동안 모인 튐 수 */
+static uint32_t ui_noise_ms = 0;
+static bool     ui_armed = false;     /* 부팅을 깨운 누름이 떨어진 뒤부터 버튼을 받는다 */
+static uint32_t ui_t_down = 0;        /* 누르고 있는 중이면 누른 시각, 아니면 0 */
+static uint32_t ui_link_ms = 0, ui_blink_t0 = 0;
+static uint8_t  ui_blinks = 0;
+
+static void power_pins_init()
+{
+    pinMode(PIN_PWR_GND, OUTPUT);
+    digitalWrite(PIN_PWR_GND, LOW);
+    pinMode(PIN_PWR_LED, OUTPUT);
+    digitalWrite(PIN_PWR_LED, HIGH);
+    pinMode(PIN_PWR_BTN, INPUT_PULLUP);
+    ui_link_ms = millis();
+}
+
+static void power_off(const char *why)
+{
+    send_log(why);
+    for (int i = 0; i < 6; i++) { digitalWrite(PIN_PWR_LED, (i & 1) ? HIGH : LOW); delay(80); }
+    digitalWrite(PIN_PWR_LED, LOW);
+    digitalWrite(LED_RED, LOW);
+    while (!digitalRead(PIN_PWR_BTN)) delay(10);        /* 누른 채로 자면 바로 다시 깨어난다 */
+    delay(100);
+    Bluefruit.Advertising.restartOnDisconnect(false);
+    Bluefruit.Advertising.stop();
+    for (uint16_t h = 0; h < BLE_MAX_CONNECTION; h++)
+        if (Bluefruit.connected(h)) Bluefruit.disconnect(h);
+    delay(50);
+    systemOff(PIN_PWR_BTN, LOW);                        /* D5가 LOW(눌림)면 깨어나 리셋 → 앱 부팅 */
+}
+
+static void ui_update()
+{
+    uint32_t now = millis();
+    bool down = !digitalRead(PIN_PWR_BTN);
+
+    if (!ui_armed) {
+        if (!down) ui_armed = true;
+    } else if (down) {
+        if (!ui_t_down) ui_t_down = now ? now : 1;
+        else if (now - ui_t_down >= LONG_PRESS_MS) power_off("OFF (btn)");
+    } else if (ui_t_down) {
+        uint32_t held = now - ui_t_down;
+        ui_t_down = 0;
+        if (held >= 30 && ui_last_click && now - ui_last_click < 1000) {
+            ui_noise++;                                 /* 1초 안에 또 짧게 눌림 = 배선 튐으로 본다 (11/11 0.3초마다 BTN BAT 297건) */
+            ui_last_click = now;
+        } else if (held >= 30) {                        /* 30ms 미만은 튐 */
+            ui_last_click = now;
+            ui_blinks = bat_pct == 0xFF ? 1 : bat_pct > 75 ? 4 : bat_pct > 50 ? 3 : bat_pct > 25 ? 2 : 1;
+            ui_blink_t0 = now;
+            char s[19];
+            snprintf(s, sizeof s, "BTN BAT %u%%", bat_pct);
+            send_log(s);
+        }
+    }
+
+    if (ui_noise && now - ui_noise_ms >= 10000) {        /* 튐은 10초에 한 번만 알린다 */
+        char s[19];
+        snprintf(s, sizeof s, "BTN noise %u", ui_noise);
+        send_log(s);
+        ui_noise = 0;
+        ui_noise_ms = now;
+    }
+
+    if (ble_connected || Serial) ui_link_ms = now;
+    if (now - ui_link_ms > AUTO_OFF_MS) power_off("OFF (idle 10min)");
+
+    bool on;
+    if (ui_t_down && now - ui_t_down > 300) {
+        on = ((now - ui_t_down) / 100) & 1;             /* 길게 누르는 중: 빠르게 깜빡 */
+    } else if (ui_blinks) {
+        uint32_t ph = now - ui_blink_t0;
+        if (ph < 400) on = false;                       /* 잠깐 끄고 */
+        else {
+            uint32_t k = (ph - 400) / 200;              /* 켜짐 200 · 꺼짐 200 반복 */
+            if (k >= 2u * ui_blinks + 1) { ui_blinks = 0; on = true; }
+            else on = !(k & 1);
+        }
+    } else {
+        on = ble_connected ? true : ((now / 500) & 1);
+    }
+    digitalWrite(PIN_PWR_LED, on ? HIGH : LOW);
 }
 
 /* ===================== 페달 입력 ===================== */
@@ -289,6 +388,7 @@ void app_setup()
 
     pinMode(LED_RED, OUTPUT);
     digitalWrite(LED_RED, LOW);
+    power_pins_init();
     ble_init();
     send_log(FW_TAG);
     pedals_init();
@@ -304,6 +404,7 @@ void app_loop()
     if (!dfr_init) { deframer_init(&dfr); dfr_init = true; }
 
     pedals_poll();
+    ui_update();
 
     while (cq_tail != cq_head) { handle_cmd(&cmdq[cq_tail]); cq_tail = (uint8_t)((cq_tail + 1) % CMDQ); }
 #if SERIAL_MODE == SERIAL_BINARY

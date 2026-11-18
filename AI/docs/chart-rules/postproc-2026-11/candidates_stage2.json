@@ -1,0 +1,20 @@
+[
+ {
+  "name": "current"
+ },
+ {
+  "name": "thr_m0.85_c1",
+  "thr_m": 0.85,
+  "thr_c": 1.0
+ },
+ {
+  "name": "hh2sn_s0.7",
+  "hh2sn": 0.7
+ },
+ {
+  "name": "combo_thr_m0.85_c1+hh2sn_s0.7",
+  "thr_m": 0.85,
+  "thr_c": 1.0,
+  "hh2sn": 0.7
+ }
+]

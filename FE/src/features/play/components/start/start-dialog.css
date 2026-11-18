@@ -1,0 +1,106 @@
+/* 시작 확인 창 (Figma 905:4457). 일시정지 창(PauseOverlay.css)과 같은 톤 — 같은 스크림·면·모서리 32·캡슐 버튼.
+   창 폭은 480 그대로이고 글자를 키우고 굵게 했다(설계 MODE-002-MODE-003-metronome-subdivision D13·D16). 토큰은 tokens.css의 새 이름만 */
+.dialog-backdrop.start-dialog-backdrop {
+  background: var(--overlay-scrim);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+/* 배경 흐림을 못 쓰는 브라우저는 뒤 화면이 또렷해 글자가 겹쳐 보이므로 스크림을 진하게 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dialog-backdrop.start-dialog-backdrop {
+    background: color-mix(in srgb, var(--bg-canvas) 70%, transparent);
+  }
+}
+.dialog.start-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px;
+  /* 테두리 1px만큼 뺀 28·24 (일시정지 창과 같다) */
+  padding: 27px 23px;
+  box-sizing: border-box;
+  border-radius: 32px;
+  box-shadow:
+    var(--shadow-dock),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.start-dialog-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.dialog .start-dialog-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.start-dialog-song {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.start-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.start-dialog-caption {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+}
+.start-dialog-notice,
+.start-dialog-guide {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.start-dialog-guide {
+  text-align: center;
+}
+.start-dialog-guide.need,
+.start-dialog-error {
+  color: var(--brand-sub);
+}
+.start-dialog-error {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+}
+/* 버튼 줄: 같은 폭 캡슐(2칸, 기기 준비 창은 최대 3칸) */
+.start-dialog-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.start-dialog-actions > .ui-btn {
+  min-width: 0;
+  height: 52px;
+  padding: 0 var(--space-s);
+  border-radius: 26px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.start-dialog-setup .play-rp-check {
+  padding: 0;
+  border: 0;
+  background: none;
+}

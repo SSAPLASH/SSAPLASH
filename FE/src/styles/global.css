@@ -202,7 +202,7 @@ p {
   width: 240px;
   height: 100vh;
   box-sizing: border-box;
-  padding: var(--space-l);
+  padding: 0 var(--space-l) var(--space-l);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -210,7 +210,6 @@ p {
   background: var(--bg-base);
   overflow-x: hidden; /* 접는 동안 라벨이 줄바꿈·삐져나오지 않게 */
   overflow-y: auto;
-  container-type: inline-size; /* 헤더 배치를 폭 기준으로 바꾸기 위해(.side-header 아래 @container) */
   z-index: 20;
   transition:
     width var(--motion-move) var(--ease-in-out),
@@ -218,28 +217,29 @@ p {
 }
 .sidebar.collapsed {
   width: 80px;
-  padding: var(--space-m) 14px; /* 안쪽 52px = 아이콘(20) 양옆 16 — 항목 padding을 그대로 두고 아이콘이 가운데에 오게 */
+  padding: 0 14px var(--space-m); /* 안쪽 52px = 아이콘(20) 양옆 16 */
 }
 .side-header {
   width: 100%;
-  height: 32px;
+  height: 56px;
+  margin-bottom: calc(var(--space-m) - var(--space-xl)); /* 헤더와 첫 메뉴 사이 16px */
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
-  transition: height var(--motion-move) var(--ease-in-out); /* 세로 배치로 바뀌어도 아래 메뉴가 튀지 않게 높이를 폭 전환과 함께 옮긴다 */
 }
 .sidebar.collapsed .side-header {
-  height: 68px; /* 로고 28 + 간격 8 + 토글 32 */
+  justify-content: center;
 }
-.sidebar.collapsed .side-header:not(:has(.side-toggle)) {
-  height: 28px; /* 태블릿: 토글 없이 로고만 */
-}
-/* 가로 ↔ 세로 배치는 사이드바 폭이 거의 접혔을 때만 세로로 둔다 — 접을 땐 폭 전환 끝에, 펼칠 땐 시작에 바뀐다 */
-@container (max-width: 60px) {
-  .side-header {
-    flex-direction: column;
-    justify-content: flex-start;
+/* 태블릿은 강제 접힘과 기존 헤더 높이를 유지한다. */
+@media (max-width: 1024px) {
+  .sidebar.collapsed {
+    padding-top: var(--space-m);
+  }
+  .sidebar.collapsed .side-header {
+    height: 28px;
+    margin-bottom: 0;
   }
 }
 .side-toggle {
@@ -279,50 +279,24 @@ p {
 .sidebar.collapsed .side-toggle:hover .side-toggle-arrow {
   translate: 2px 0;
 }
-/* 로고: SSAPLASH와 S를 같은 칸에 겹쳐 두고 교차 페이드한다. 접을 땐 SSAPLASH가 먼저 사라지고 S는 폭 전환 끝에 나타난다.
- * 시간은 라벨과 같은 규칙(숨김은 즉시, 나타남은 --motion-fast 지연 뒤 --motion-press) */
-.side-logo {
-  flex: 1;
+/* S 심벌은 페이지 제목 왼쪽에 표시한다. */
+.brand-symbol {
+  flex: none;
+  display: block;
+  width: auto;
+}
+/* 워드마크 이미지. 접고 펼치는 동안에는 줄어들지 않고 칸 밖이 잘린다 */
+.side-wordmark {
   min-width: 0;
-  display: grid;
+  display: flex;
+  align-items: center;
   overflow: hidden;
-  line-height: 28px;
-  text-decoration: none;
 }
-.side-logo-full,
-.side-logo-short {
-  grid-area: 1 / 1;
-  white-space: nowrap;
-}
-.side-logo-full {
-  font-family: var(--font-num);
-  font-size: 20px;
-  font-weight: 500;
-  color: var(--text-1);
-  transition: opacity var(--motion-press) var(--ease-out) var(--motion-fast);
-}
-.side-logo-short {
-  justify-self: center;
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 400;
-  color: var(--brand-text);
-  opacity: 0;
-  transition: opacity var(--motion-press) var(--ease-out) 0s;
-}
-.sidebar.collapsed .side-logo-full {
-  opacity: 0;
-  transition-delay: 0s;
-}
-.sidebar.collapsed .side-logo-short {
-  opacity: 1;
-  transition-delay: var(--motion-fast);
-}
-@container (max-width: 60px) {
-  .side-logo {
-    flex: none;
-    width: 100%;
-  }
+.side-wordmark img {
+  flex: none;
+  display: block;
+  width: auto;
+  height: 18px;
 }
 .side-menu {
   width: 100%;
@@ -343,7 +317,7 @@ p {
   font-size: 14px;
   text-decoration: none;
   white-space: nowrap;
-  overflow: hidden; /* 접힌 동안 숨은 라벨이 항목 밖으로 나가지 않게 */
+  /* overflow는 열어 둔다 — 현재 위치 표시(.side-active-mark)가 이전 항목에서 미끄러져 오는 동안 잘리지 않게. 라벨 넘침은 .side-label이 막는다 */
 }
 .side-item:hover {
   color: var(--text-1);
@@ -352,18 +326,21 @@ p {
   background: var(--surface-3);
   color: var(--text-1);
 }
-.side-item.active::before {
-  content: '';
+.side-active-mark {
   position: absolute;
   left: 0;
   top: 0;
   width: 3px;
   height: 46px;
+  /* 예전 ::before가 항목 둥근 모서리(--radius-control 8px)에 잘리던 모양을 그대로: 가로 3px·세로 8px 타원 모서리 */
+  border-radius: 3px 0 0 3px / var(--radius-control) 0 0 var(--radius-control);
   background: var(--brand);
 }
 /* 라벨: 항상 그리고 opacity로 숨긴다(aria-hidden은 마크업). 펼칠 땐 폭이 먼저 늘고 라벨이 --motion-fast 뒤에 --motion-press 동안 나타나며,
  * 접을 땐 지연 없이 곧바로 사라진다. 시간이 이동 계열 토큰이라 모션 줄이기에서는 즉시 바뀐다 */
 .side-label {
+  min-width: 0;
+  overflow: hidden; /* 접힌 동안 숨은 라벨이 항목 밖으로 나가지 않게(예전 .side-item overflow 대신) */
   transition: opacity var(--motion-press) var(--ease-out) var(--motion-fast);
 }
 .sidebar.collapsed .side-label {
@@ -372,6 +349,38 @@ p {
 }
 .side-icon {
   flex: none;
+}
+/* 「악보 연습」 하위 메뉴 (설계 MODE-003-악보-연습-하위-메뉴, 시안 v4). 세로 선·활성 막대·숫자 없이 들여쓰기와 배경색으로만 구분한다.
+ * 상자는 부모 항목과 좌우 끝을 맞추고 글자만 24px에서 시작한다(부모 라벨은 44px). 현재 위치 표시(.side-active-mark)는 부모에만 둔다 */
+.side-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 메뉴 간격(--space-s)을 줄여 부모 바로 아래에 붙인다 */
+  margin: calc(2px - var(--space-s)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.side-sub-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-m) 0 24px;
+  box-sizing: border-box;
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.side-sub-item:hover {
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.side-sub-item[aria-current='page'] {
+  background: var(--brand-tint);
+  color: var(--brand-text);
+  font-weight: 600;
 }
 .side-badge {
   position: absolute;
@@ -431,6 +440,14 @@ p {
   gap: 12px;
   background: var(--bg-base);
 }
+.topbar-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-logo {
+  height: 24px;
+}
 .topbar-title {
   margin: 0;
   letter-spacing: 0;
@@ -457,6 +474,10 @@ p {
 }
 .shell.immersive .shell-dock {
   top: 12px;
+}
+/* 일시정지·끊김 팝업(스크림 z 50)이 떠 있는 동안 Dock을 위로 올려 마우스로 누를 수 있게 한다(QA 352 Q9) */
+.shell-dock.raised {
+  z-index: 55;
 }
 .shell-right {
   position: fixed;
@@ -509,6 +530,11 @@ p {
 .stick-dot.on {
   background: var(--stick-on);
   box-shadow: 0 0 8px var(--stick-on);
+}
+.stick-dot.on.warn {
+  /* 기기 사이 시각 차이 경고(PLAY-006): 배터리 부족과 같은 주황 */
+  background: var(--stick-low);
+  box-shadow: none;
 }
 .stick-status {
   display: inline-flex;
@@ -715,6 +741,13 @@ p {
   height: 100%;
   display: block;
 }
+/* 드럼 세팅: 아래 캔버스(바닥) → 드럼 킷 SVG → 위 캔버스(판정 범위·L·R 표식)를 겹친다. 포인터는 래퍼가 받는다 */
+.kit-stack > canvas,
+.kit-stack > .drum-kit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 
 /* ---- 세팅 ---- */
 .keymap-list {
@@ -912,51 +945,6 @@ a.btn-ghost.as-button {
 a.btn-ghost.as-button {
   border-color: var(--line);
 }
-/* 상세 분석: 패드별 정확도 막대 */
-.pad-acc {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.pad-acc-row {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 56px;
-  align-items: center;
-  column-gap: 10px;
-}
-.pad-acc-name {
-  font-size: 14px;
-}
-.pad-acc-bar {
-  height: 10px;
-  border-radius: 999px;
-  background: var(--bg-canvas);
-  overflow: hidden;
-}
-.pad-acc-bar > div {
-  height: 100%;
-  border-radius: 999px;
-}
-.pad-acc-v {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-.pad-acc-meta {
-  grid-column: 2 / 4;
-}
-/* 상세 분석: 노트 타임라인 */
-.timeline svg {
-  display: block;
-  width: 100%;
-}
-.timeline .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  vertical-align: middle;
-}
 /* ---- 디버그 오버레이 ---- */
 .debug {
   position: fixed;
@@ -1020,87 +1008,6 @@ a.btn-ghost.as-button {
   text-align: center;
   padding: 0 20px 20px;
 }
-.login {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 32px;
-  width: 100%;
-  max-width: 1100px;
-  align-items: center;
-  justify-items: center;
-}
-.login-brand {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 10px;
-}
-.login-wordmark {
-  font-size: 40px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--brand);
-}
-.login-slogan {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 17px;
-}
-.login-kit {
-  display: none;
-  width: 100%;
-  max-width: 520px;
-  margin-top: 20px;
-  opacity: 0.55;
-  pointer-events: none;
-}
-.login-card {
-  width: 100%;
-  max-width: 400px;
-  background: var(--surface-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  padding: 28px 24px 22px;
-}
-.login-card h1 {
-  font-size: 24px;
-  margin: 0 0 8px;
-}
-.login-card .dim {
-  margin: 0 0 18px;
-  font-size: 14px;
-}
-.login-card .notice {
-  margin: 0 0 14px;
-}
-.login-buttons {
-  gap: 10px;
-}
-.login-caption {
-  margin: 16px 0 0;
-  font-size: 12px;
-  color: var(--text-3);
-  text-align: center;
-}
-@media (min-width: 960px) {
-  .login {
-    grid-template-columns: 1fr 400px;
-    gap: 64px;
-  }
-  .login-brand {
-    align-items: flex-start;
-    text-align: left;
-  }
-  .login-wordmark {
-    font-size: 56px;
-  }
-  .login-kit {
-    display: block;
-  }
-}
-
 /* 인증 확인·처리 중 안내 */
 .auth-wait {
   display: flex;
@@ -1167,10 +1074,8 @@ a.btn-ghost.as-button {
   text-transform: uppercase;
 }
 .profile-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
+  /* 위치는 Radix가 정한다(ui/Menu) */
+  z-index: 40;
   min-width: 180px;
   display: flex;
   flex-direction: column;
@@ -1331,19 +1236,27 @@ a.btn-ghost.as-button {
   width: 100%;
   height: 100%;
 }
+/* 판정 이펙트 캔버스: 악보 위에 같은 크기로 겹친다 */
+.sheet-pager .fx-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+/* 타이밍 막대: 악보 영역 안쪽 아래 가운데(박 번호 바로 아래). 아래 여백 8은 sheetPagerMath OVERLAY_RESERVE_PX와 맞춘다 */
+.sheet-pager-overlay {
+  position: absolute;
+  left: 50%;
+  /* 칸이 악보보다 높으면 SheetPager가 --sheet-overlay-lift로 박 번호 아래까지 올린다 */
+  bottom: calc(8px + var(--sheet-overlay-lift, 0px));
+  transform: translateX(-50%);
+  /* left 50%라 가용 폭이 절반으로 줄지 않게 내용 폭(타이밍 막대 624 + 양 끝 글자)을 그대로 쓰고, 영역보다 넓으면 영역 폭까지 */
+  width: max-content;
+  max-width: 100%;
+  pointer-events: none;
+}
 
 /* ---- 리포트 약점 구간 (COACH-003) ---- */
-.weak-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.weak-card { display: flex; gap: 24px; padding: 18px 22px; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--radius-control); background: var(--bg-canvas); }
-.weak-card.level-high { border-left-color: var(--miss); }
-.weak-card.level-medium { border-left-color: var(--warn); }
-.weak-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.weak-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.weak-range { font-size: 20px; font-weight: 600; }
-.weak-desc { margin: 0; font-size: 16px; }
-.weak-detail { margin: 0; font-size: 14px; color: var(--text-2); }
-.weak-tip { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.5; }
-.weak-tip-label { color: var(--brand-text); font-weight: 500; margin-right: 8px; }
 .weak-badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); color: var(--text-2); }
 .weak-badge.tone-miss { border-color: var(--miss); color: var(--miss); }
 .weak-badge.tone-warn { border-color: var(--warn); color: var(--warn); }
@@ -1352,17 +1265,6 @@ a.btn-ghost.as-button {
 .coach-summary { gap: 8px; margin-bottom: 16px; padding: 16px; background: var(--surface-1); border-radius: 14px; }
 .coach-summary-head { display: flex; align-items: center; gap: 8px; }
 .coach-summary-text { margin: 0; font-size: 14px; color: var(--text-1); white-space: pre-line; }
-.seg-play { width: 543px; flex: none; background: var(--surface-1); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; }
-.seg-play p { margin: 0; }
-.seg-play-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.seg-play-bar { height: 6px; border-radius: 3px; background: var(--surface-2); position: relative; }
-.seg-play-range { position: absolute; top: 0; height: 100%; border-radius: 3px; background: var(--brand); }
-.seg-play-controls { display: flex; flex-wrap: wrap; gap: 8px; }
-.seg-play-controls .ui-btn.active { border-color: var(--brand); color: var(--brand-text); }
-@media (max-width: 1024px) {
-  .weak-card { flex-direction: column; }
-  .seg-play { width: auto; }
-}
 .weak-spinner { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: weak-spin 0.9s linear infinite; }
 @keyframes weak-spin { to { transform: rotate(360deg); } }
 

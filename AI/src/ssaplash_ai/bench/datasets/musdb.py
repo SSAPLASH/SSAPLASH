@@ -2,7 +2,7 @@
 
 폴더 규칙은 `{root}/{subset}/{곡 이름}/{mixture,drums,bass,other,vocals}.wav`,
 44.1kHz 스테레오 16비트. musdb 패키지 없이 soundfile로 직접 읽음.
-정답 반주는 원곡 − 정답 드럼 (설계 1장 핵심 결정).
+정답 반주는 원곡 − 정답 드럼.
 """
 
 from __future__ import annotations

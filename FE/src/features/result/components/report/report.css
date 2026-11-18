@@ -1,0 +1,735 @@
+/* 연주 상세 리포트 (설계 COACH-002 리포트 화면 개편). 구성·치수는 HTML 목업 「연주 리포트」를 따르고, 색·글꼴은 프로젝트 토큰을 쓴다(D2).
+   모든 클래스는 rp- 접두사. 판정 색: 정확 --perfect · 빠름·늦음 --good · 놓침 --miss. 강조 --brand-text, 옅은 강조 바탕 --rp-soft. */
+.rp {
+  --rp-soft: color-mix(in srgb, var(--brand) 16%, transparent);
+  --rp-track: var(--surface-3);
+  max-width: 1100px;
+  color: var(--text-1);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.rp h1,
+.rp h2,
+.rp h3,
+.rp p {
+  margin: 0;
+}
+.rp button {
+  min-height: 0;
+  font: inherit;
+}
+.rp-small {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* ---- 머리말 · 요약 수치 ---- */
+.rp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.rp-header h1 {
+  font-size: 23px;
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+}
+.rp-header-meta {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.rp-header-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+.rp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin-top: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.rp-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.rp-stat-label {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.rp-stat strong {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* 코치의 한마디: 카드 틀 없이 단락으로 */
+.rp .coach-summary {
+  margin: 0;
+  padding: 18px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ---- 전체 노트 흐름 ---- */
+.rp-flow {
+  margin-top: 32px;
+}
+.rp-flow-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* 제목과 느린 연주 안내(「시각은 원래 빠르기 기준이에요」)를 한 줄에 둔다 */
+.rp-flow-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.rp-flow-note {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.rp-flow-header h2,
+.rp-observations h2,
+.rp-block h2 {
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+.rp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.rp-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 2px;
+  background: var(--rp-mark);
+}
+.rp-legend .p {
+  --rp-mark: var(--perfect);
+}
+.rp-legend .g {
+  --rp-mark: var(--good);
+}
+.rp-legend .m {
+  --rp-mark: var(--miss);
+}
+.rp-overview {
+  position: relative;
+  margin-top: 16px;
+}
+.rp-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--rp-gap, 3px);
+  height: 105px;
+}
+.rp-bin {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transform-origin: bottom;
+  animation: rp-bin-grow 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--rp-delay, 0ms);
+}
+.rp-bin span {
+  width: 100%;
+  min-height: 0;
+}
+.rp-bin .p {
+  background: var(--perfect);
+}
+.rp-bin .g {
+  background: var(--good);
+}
+.rp-bin .m {
+  background: var(--miss);
+}
+.rp-bin:hover {
+  background: color-mix(in srgb, var(--text-1) 5%, transparent);
+}
+.rp-bin:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+@keyframes rp-bin-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+/* 놓친 구간 테두리 · 지금 확대 중인 구간 띠 */
+.rp-range-outline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid color-mix(in srgb, var(--brand-text) 55%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--brand-text) 55%, transparent);
+  pointer-events: none;
+}
+.rp-band {
+  position: absolute;
+  bottom: 0;
+  height: 100%;
+  border-bottom: 3px solid var(--brand-text);
+  background: color-mix(in srgb, var(--brand-text) 11%, transparent);
+  pointer-events: none;
+}
+.rp-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* 놓친 구간 버튼 줄: 버튼 왼쪽 끝을 구간 시작 위치에 맞추고 한 줄에 하나씩 쌓는다 */
+.rp-markers {
+  position: relative;
+  margin-top: 2px;
+}
+.rp-stem {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: var(--line-strong);
+  pointer-events: none;
+}
+.rp-marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rp-marker:hover {
+  background: var(--surface-2);
+}
+.rp-marker[aria-pressed='true'] {
+  border-color: var(--brand-text);
+  background: var(--rp-soft);
+}
+.rp-marker[aria-pressed='true']::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-text);
+}
+.rp-marker-count {
+  color: var(--miss);
+}
+.rp-tip {
+  position: fixed;
+  z-index: 30;
+  min-width: 136px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.55;
+  pointer-events: none;
+  transform: translateY(-100%);
+}
+.rp-tip strong {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+.rp-tip span {
+  display: block;
+}
+.rp-tip .total {
+  margin-bottom: 3px;
+  color: var(--text-2);
+}
+.rp-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.rp-notice.error {
+  color: var(--miss);
+}
+
+/* ---- 선택 구간 확대 ---- */
+/* 화면 이동 목적지. 상단 바(sticky 56px) 아래로 16px 띄운다 */
+.rp-focus-anchor {
+  scroll-margin-top: 72px;
+}
+.rp-focus {
+  min-width: 0;
+  margin-top: 20px;
+  animation: rp-change 0.12s ease-out;
+}
+@keyframes rp-change {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.rp-lead {
+  padding: 0 0 23px;
+}
+.rp-lead h2 {
+  max-width: 800px;
+  font-size: clamp(29px, 3.5vw, 39px);
+  font-weight: 700;
+  line-height: 1.32;
+  letter-spacing: -0.03em;
+}
+.rp-basis {
+  margin-top: 11px;
+  color: var(--text-2);
+  font-size: 16px;
+}
+.rp-basis strong {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+.rp-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+.rp-ai-desc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rp-ai-detail,
+.rp-ai-tip {
+  color: var(--text-2);
+}
+.rp-ai-tip-label {
+  margin-right: 8px;
+  color: var(--brand-text);
+  font-weight: 500;
+}
+.rp-detail {
+  padding: 20px 0 24px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.rp-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+.rp-detail-header h3 {
+  font-size: 16px;
+}
+.rp-detail-summary {
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.rp-lanes {
+  margin-top: 17px;
+}
+.rp-lane {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+.rp-lane-name {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.rp-lane-name.related {
+  color: var(--text-1);
+  font-weight: 700;
+}
+.rp-plot {
+  position: relative;
+  height: 34px;
+  border-bottom: 1px solid var(--line);
+}
+/* 노트 표시: 정확 ● · 빠름 ◀ · 늦음 ▶ · 놓침 ×. 누르는 자리는 21px, 그림은 그 안의 9~12px.
+   시간축이 왼쪽에서 오른쪽이라 ◀는 박보다 앞(빠름), ▶는 박보다 뒤(늦음)로 읽힌다. 색은 둘 다 --good이고 자리는 노트 시각 그대로다 */
+.rp-mark {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 21px;
+  height: 21px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: none;
+}
+/* 전역 button:hover(바탕색)·button:active(scale 0.98)를 되돌린다.
+   눌림 때 transform이 scale로 바뀌면 가운데 맞춤(translate)이 풀려 표시가 옆으로 밀리고, 손을 뗄 때 표시 밖이 되어 클릭이 무시된다 */
+.rp .rp-mark:hover {
+  background: transparent;
+}
+.rp .rp-mark:active:not(:disabled) {
+  transform: translate(-50%, -50%);
+}
+.rp-mark::before,
+.rp-mark::after {
+  content: '';
+  position: absolute;
+  display: block;
+}
+.rp-mark.perfect::before {
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--perfect);
+}
+.rp-mark.early::before,
+.rp-mark.late::before {
+  inset: 5px;
+  background: var(--good);
+}
+.rp-mark.early::before {
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.rp-mark.late::before {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.rp-mark.miss::before,
+.rp-mark.miss::after {
+  top: 9.5px;
+  left: 4.5px;
+  width: 12px;
+  height: 2px;
+  background: var(--miss);
+  transform: rotate(45deg);
+}
+.rp-mark.miss::after {
+  transform: rotate(-45deg);
+}
+.rp-mark:hover::before,
+.rp-mark:hover::after {
+  filter: brightness(1.25);
+}
+.rp-mark.current {
+  z-index: 2;
+  outline: 2px solid var(--text-1);
+  outline-offset: -2px;
+}
+.rp-detail-axis {
+  position: relative;
+  height: 18px;
+  margin: 6px 0 0 78px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rp-detail-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.rp-detail-axis span:first-child {
+  transform: none;
+}
+.rp-detail-axis span:last-child {
+  transform: translateX(-100%);
+}
+.rp-note-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+}
+.rp-step,
+.rp-control {
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+.rp .rp-step {
+  min-height: 34px;
+  padding: 4px 10px;
+  color: var(--text-2);
+}
+.rp-step:hover:not(:disabled),
+.rp-control:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+.rp-step:disabled,
+.rp-control:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.rp-note-number {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rp-note-readout {
+  min-height: 22px;
+  font-size: 13px;
+}
+.rp-note-key {
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.rp-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.rp .rp-control {
+  min-height: 38px;
+  padding: 7px 12px;
+}
+.rp-control[aria-pressed='true'],
+.rp-control[aria-pressed='true']:hover:not(:disabled) {
+  border-color: var(--brand-text);
+  background: var(--rp-soft);
+  color: var(--brand-text);
+}
+.rp-player-note {
+  margin-top: 9px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* ---- 관찰 목록 ---- */
+.rp-observations {
+  margin-top: 36px;
+}
+.rp-observations h2 {
+  margin-bottom: 12px;
+}
+.rp-observation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+.rp-observation:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.rp-observation-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rp-observation-count {
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rp-observation-button {
+  flex: none;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.rp .rp-observation-button:hover {
+  background: transparent;
+}
+.rp-observation-button:hover,
+.rp-observation-button[aria-pressed='true'] {
+  color: var(--text-1);
+}
+
+/* ---- 패드별 기록 ---- */
+.rp-block {
+  margin-top: 44px;
+}
+.rp-block h2 {
+  margin-bottom: 13px;
+}
+.rp-pad-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  table-layout: fixed;
+}
+.rp-pad-table th,
+.rp-pad-table td {
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.rp-pad-table th:first-child,
+.rp-pad-table td:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+.rp-pad-table th:last-child,
+.rp-pad-table td:last-child {
+  padding-right: 0;
+}
+.rp-pad-table th {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+.rp-pad-table td {
+  font-size: 15px;
+}
+.rp-pad-table td:first-child {
+  font-weight: 600;
+}
+.rp-more summary {
+  padding: 13px 0;
+  color: var(--brand-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.rp-more table {
+  border-top: 1px solid var(--line);
+}
+.rp-more .hist {
+  margin-top: 4px;
+}
+
+/* ---- 추천 ---- */
+.rp-reco {
+  margin-top: 44px;
+}
+
+.rp button:focus-visible,
+.rp summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-bin,
+  .rp-focus {
+    animation: none;
+  }
+}
+/* 터치 기기: 누르는 버튼은 44px 이상. `.rp button { min-height: 0 }`보다 우선하도록 .rp를 붙인다 */
+@media (pointer: coarse) {
+  .rp .rp-step,
+  .rp .rp-control,
+  .rp .rp-marker,
+  .rp .rp-observation-button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 540px) {
+  .rp-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .rp-header h1 {
+    font-size: 21px;
+  }
+  .rp-stats {
+    gap: 10px 22px;
+  }
+  .rp-stat {
+    width: calc(50% - 12px);
+  }
+  .rp-stat strong {
+    font-size: 24px;
+  }
+  .rp-stat-label {
+    font-size: 13px;
+  }
+  .rp-lead h2 {
+    font-size: 29px;
+  }
+  .rp-bars {
+    gap: min(var(--rp-gap, 3px), 2px);
+  }
+  .rp-legend {
+    gap: 8px;
+  }
+  .rp-lane {
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .rp-detail-axis {
+    margin-left: 58px;
+  }
+  /* 좁은 화면: 눈금을 하나 걸러 숨긴다 */
+  .rp-detail-axis span:nth-child(even):not(:last-child) {
+    display: none;
+  }
+  .rp-note-controls {
+    flex-wrap: wrap;
+  }
+  .rp-observation {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .rp-pad-table th,
+  .rp-pad-table td {
+    padding: 10px 3px;
+  }
+  .rp-pad-table td {
+    font-size: 13px;
+  }
+  .rp-pad-table th {
+    font-size: 12px;
+  }
+}

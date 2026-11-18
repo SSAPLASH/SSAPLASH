@@ -1,0 +1,55 @@
+/* 박자 맞추기 대화상자와 드럼 세팅 진입 줄 */
+.timing-cal-text {
+  margin: 0 0 var(--space-s);
+  color: var(--text-1);
+  font-size: 15px;
+}
+.timing-cal-sub {
+  margin: 0 0 var(--space-m);
+  color: var(--text-3);
+  font-size: 13px;
+}
+.timing-cal-change {
+  margin: 0 0 var(--space-m);
+  color: var(--text-2);
+  font-size: 14px;
+}
+.timing-cal-change strong {
+  color: var(--text-1);
+}
+.timing-cal-old {
+  color: var(--text-3);
+}
+.timing-cal-warn {
+  margin: 0 0 var(--space-m);
+  color: var(--warn);
+  font-size: 13px;
+}
+
+/* 박 점 16개: 앞 4개(듣기)는 작게, 울린 박은 채우고 지금 박은 강조 */
+.timing-cal-beats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-m) 0;
+}
+.timing-cal-beat {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.timing-cal-beat.listen {
+  width: 8px;
+  height: 8px;
+}
+.timing-cal-beat.on {
+  background: var(--text-3);
+  border-color: var(--text-3);
+}
+.timing-cal-beat.now {
+  background: var(--brand);
+  border-color: var(--brand);
+}

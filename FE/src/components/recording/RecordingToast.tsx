@@ -1,7 +1,7 @@
 // 녹음 알림 토스트 (설계 REC-001 3-6·6-2). 스토어의 notice를 한 번 꺼내 4초 동안 보인다.
 import { useEffect, useRef, useState } from 'react';
-import { consumeNotice, useRecordingStore, type RecordingNotice } from '@/app/recordingStore';
-import { Toast } from '@/components/ui/Toast';
+import { consumeNotice, useRecordingStore, type RecordingNotice } from '@/runtime/recordingStore';
+import { Toast } from '@/components/ui/feedback/Toast';
 import { toastContent } from './toastContent';
 import './recording.css';
 

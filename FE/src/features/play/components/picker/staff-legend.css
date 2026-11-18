@@ -1,0 +1,178 @@
+/* 악보 읽는 법 (Figma 378:12946). 토큰은 tokens.css의 새 이름만 */
+.play-sl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  padding: var(--space-m);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  color: var(--text-1);
+}
+.play-sl-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.play-sl-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.play-sl-staff {
+  flex: none;
+}
+.play-sl-line,
+.play-sl-ledger {
+  stroke: var(--text-3);
+  stroke-width: 1;
+}
+.play-sl-sym {
+  stroke: var(--text-1);
+  stroke-width: 1.6;
+  fill: none;
+}
+.play-sl-sym.fill {
+  fill: var(--text-1);
+  stroke: none;
+}
+.play-sl-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.play-sl-tag {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.play-sl-tag.foot {
+  color: var(--brand-sub);
+  font-weight: 600;
+}
+.play-sl-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* ── 2열 카드(설계 U9 C안): 카드 영역이 남은 높이를 5등분 ── */
+.play-sl.grid {
+  min-height: 0;
+}
+.play-sl-cells {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.play-sl-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+  padding: var(--space-xs) var(--space-s);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+  cursor: default;
+  transition:
+    border-color 0.25s ease-out,
+    box-shadow 0.25s ease-out,
+    background 0.25s ease-out;
+}
+.play-sl-cell:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+.play-sl-cell:hover,
+.play-sl-cell.active {
+  border-color: color-mix(in srgb, var(--pad-color) 60%, transparent);
+  background:
+    radial-gradient(120% 100% at 50% 110%, color-mix(in srgb, var(--pad-color) 24%, transparent), transparent 70%),
+    var(--surface-2);
+  box-shadow: 0 0 22px -6px color-mix(in srgb, var(--pad-color) 60%, transparent);
+}
+.play-sl-cell-top {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+.play-sl-cell-top .play-sl-staff {
+  max-height: 100%;
+}
+.play-sl-cell-bot {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.play-sl-cell .play-sl-name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.play-sl-pos {
+  color: var(--text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.play-sl-cell .play-sl-tag.foot {
+  margin-left: auto;
+}
+/* 패드 색 음표 + 같은 색 은은한 번짐 */
+.play-sl-staff.colored .play-sl-sym {
+  stroke: var(--pad-color);
+}
+.play-sl-staff.colored .play-sl-sym.fill {
+  fill: var(--pad-color);
+  stroke: none;
+}
+.play-sl-staff.colored .play-sl-sym {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--pad-color) 70%, transparent));
+}
+/* 10번째 칸: 기호 설명 */
+.play-sl-key {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-xs) var(--space-s);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.play-sl-key span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.play-sl-key b {
+  width: 18px;
+  color: var(--text-1);
+  font-size: 15px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-sl-cell {
+    transition: none;
+  }
+}
+/* 안내 줄이 한 열로 접히면 높이는 내용 기준 */
+@media (max-width: 1100px) {
+  .play-sl-cells {
+    flex: none;
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+  }
+  .play-sl-cell {
+    min-height: 92px;
+  }
+}

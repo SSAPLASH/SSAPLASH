@@ -1,11 +1,11 @@
-// 로그인 상태 (설계 3-6). 영속하지 않는다 — access 토큰은 api/auth가 메모리에 들고, 새로고침 복원은 refresh 쿠키로 한다.
+// 로그인 상태 (설계 3-6). 영속하지 않는다 — access 토큰은 api/account/auth가 메모리에 들고, 새로고침 복원은 refresh 쿠키로 한다.
 import { create } from 'zustand';
-import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/auth';
+import { clearAccessToken, loginUrl, logout as logoutApi, refreshAccessToken } from '@/api/account/auth';
 import { ApiError } from '@/api/http';
-import { fetchMe, postSignupConsent, withdrawMe } from '@/api/users';
-import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/auth';
-import { ACTIVE_JOB_KEY } from '@/domain/chartJob';
-import type { ConsentVersions } from '@/domain/signupTerms';
+import { fetchMe, postSignupConsent, withdrawMe } from '@/api/account/users';
+import { RETURN_TO_KEY, sanitizeReturnTo, type LoginErrorCode, type ProviderKey, type UserMe } from '@/domain/account/auth';
+import { ACTIVE_JOB_KEY } from '@/domain/song/chartJob';
+import type { ConsentVersions } from '@/domain/account/signupTerms';
 
 /** unknown: 앱 시작 직후 · restoring: refresh·me 진행 중 · authenticated · anonymous */
 export type AuthStatus = 'unknown' | 'restoring' | 'authenticated' | 'anonymous';
@@ -32,7 +32,7 @@ interface AuthState {
   refreshMe: () => Promise<void>;
   /** 가입 동의 저장. 성공 응답(`/me` 본문)으로 user를 통째로 바꾼다. 실패는 그대로 던진다(D29) */
   submitSignupConsent: (body: ConsentVersions) => Promise<void>;
-  /** 토큰이 없어졌을 때(api/auth 구독). authenticated에서만 동작한다 */
+  /** 토큰이 없어졌을 때(api/account/auth 구독). authenticated에서만 동작한다 */
   sessionLost: () => void;
   clearLostReason: () => void;
   /** 돌아갈 경로를 sessionStorage에 두고 BE 로그인 시작 주소로 브라우저를 통째로 보낸다(fetch 아님) */

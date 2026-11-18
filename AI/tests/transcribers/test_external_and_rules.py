@@ -1,4 +1,5 @@
-"""external 어댑터(가짜 스크립트)와 ADTOF+드럼 킷 분리 규칙 테스트 (채보 설계 3-10절, U8, 인수 조건 13)."""
+"""external 어댑터(가짜 스크립트), ADTOF+드럼 킷 분리 규칙·가중치 조합, 저장소 모델 yaml 읽기,
+YourMT3·drum2midi 스크립트 테스트."""
 
 from __future__ import annotations
 
@@ -288,6 +289,54 @@ def test_서비스_조합_어댑터는_탐_전용_ADTOF는_기본_가중치로_�
     assert cfg.labels["HIHAT_PEDAL"] == "HIHAT"  # 채보 JSON 8패드 유지
     plain = TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep.yaml")
     assert AdtofDrumsepTranscriber(plain, device="cpu")._tom_adtof is None
+
+
+def _yaml_dict(cfg: TranscriberConfig) -> dict:
+    import yaml
+
+    return yaml.safe_load(cfg.source_path.read_text(encoding="utf-8"))
+
+
+def test_실제_곡_평균_조합은_탐_열을_빼고_평균하고_심벌은_이름만_가져온다():
+    cfg = TranscriberConfig.from_yaml(
+        CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep_songsterr_avg.yaml"
+    )
+    tr = AdtofDrumsepTranscriber(cfg, device="cpu")
+    assert cfg.cymbal_mode == "name"
+    assert [(a.config.checkpoint_path, cols) for a, cols in tr._avg_adtofs] == [
+        ("data/models/songsterr_ft/five_all/last.pth", "kshc")
+    ]
+    plain = TranscriberConfig.from_yaml(CONFIGS_DIR / "adtof_drumsep" / "adtof_drumsep.yaml")
+    assert plain.cymbal_mode == "take" and plain.average_checkpoints == []
+    with pytest.raises(ValueError, match="cymbal_mode"):
+        bad = {**_yaml_dict(plain), "cymbal_mode": "x"}
+        AdtofDrumsepTranscriber(TranscriberConfig.from_dict(bad), device="cpu")
+    with pytest.raises(ValueError, match="columns"):
+        bad = {**_yaml_dict(plain), "average_checkpoints": [{"path": "default", "columns": "kz"}]}
+        AdtofDrumsepTranscriber(TranscriberConfig.from_dict(bad), device="cpu")
+
+
+def test_점수_평균은_적은_열만_평균하고_짧은_길이에_맞춘다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import average_activations
+
+    main = np.full((4, 5), 0.2, dtype=np.float32)
+    other = np.full((3, 5), 0.6, dtype=np.float32)
+    out = average_activations(main, [(other, "kshc")])
+    assert out.shape == (3, 5)
+    np.testing.assert_allclose(out[:, [0, 1, 3, 4]], 0.4)
+    np.testing.assert_allclose(out[:, 2], 0.2)  # 탐 열은 주 가중치 그대로
+
+
+def test_심벌_이름만_가져오기는_시각은_두고_50ms_안_이름만_바꾼다():
+    from ssaplash_ai.bench.transcribers.adtof_drumsep_transcriber import rename_pad_hits
+
+    hits = [(1.0, "CRASH", None), (2.0, "RIDE", None), (3.0, "KICK", None)]
+    other = [(1.03, "RIDE", None), (2.2, "CRASH", None), (3.0, "SNARE", None)]
+    assert rename_pad_hits(hits, other, ("CRASH", "RIDE")) == [
+        (1.0, "RIDE", None),
+        (2.0, "RIDE", None),
+        (3.0, "KICK", None),
+    ]
 
 
 def test_파인튜닝_가중치_상대_경로는_SSAPLASH_MODELS_DIR_기준으로_찾는다(
@@ -680,7 +729,7 @@ def test_히스토그램_피크_묶기는_타격이_많아_틈이_없어도_탐_
         rules_with_defaults({"tom_relative_method": "x"})
 
 
-# ---- drum2midi 원본 비교 (S15P31A307-164 작업 16) ----
+# ---- drum2midi 원본 비교 ----
 
 # 가짜 drum2midi.py: 받은 인자를 args.json에 적고 -o 경로에 노트 세 개짜리 MIDI를 씀. FAIL 인자면 실패
 FAKE_DRUM2MIDI = """

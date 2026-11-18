@@ -1,0 +1,13 @@
+# 서비스 채보(adtof_drumsep_ds_ov2.yaml)가 쓰는 드럼 킷 분리. 겹침 4 → 2. 로컬 RTX 4070 노트북 MUSDB 5곡 드럼 킷 분리 시간 −55%
+# 가중치는 mdx23c_drumsep과 같은 것을 씀 (weights_name).
+name: mdx23c_drumsep_ov2
+weights_name: mdx23c_drumsep
+adapter: msst
+model_type: mdx23c
+config_url: https://github.com/openmirlab/mdxnet-infer/releases/download/weights-drumsep-v1/aufr33-jarredou_DrumSep_model_mdx23c_ep_141_sdr_10.8059.yaml
+checkpoint_url: https://github.com/openmirlab/mdxnet-infer/releases/download/weights-drumsep-v1/aufr33-jarredou_DrumSep_model_mdx23c_ep_141_sdr_10.8059.ckpt
+drums_stem: kick
+license_code: MIT (msst)
+license_weights: 미명시 (aufr33·jarredou 공개 가중치. 저장소에 라이선스 파일 없음)
+source_url: https://pypi.org/project/mdxnet-infer/ (원 출처 msst docs/pretrained_models.md)
+overlap: 2

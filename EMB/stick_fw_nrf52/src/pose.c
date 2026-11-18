@@ -118,6 +118,20 @@ void pose_angles(const pose_t *p, float *el, float *az)
     *az = wrap180(-(atan2f(w[1], w[0]) * RAD2DEG - p->az_ref_deg) + p->az_offset_deg);
 }
 
+float pose_down_rate(const pose_t *p, const float g[3])
+{
+    const float zw[3] = {0, 0, 1};
+    float u[3], n[3];
+    const float *t = p->tip;
+    rotate_inv(p->q, zw, u);                          /* 월드 "위"를 센서 좌표로 */
+    n[0] = u[1]*t[2] - u[2]*t[1];                     /* n = 위 × 끝 : 끝을 아래로 꺾는 회전축 (수평) */
+    n[1] = u[2]*t[0] - u[0]*t[2];
+    n[2] = u[0]*t[1] - u[1]*t[0];
+    float m = sqrtf(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);   /* = cos(고도각) */
+    if (m < 0.25f) return 0.0f;
+    return (g[0]*n[0] + g[1]*n[1] + g[2]*n[2]) / m;
+}
+
 void pose_reset_yaw(pose_t *p)
 {
     p->az_ref_deg = raw_azimuth(p);

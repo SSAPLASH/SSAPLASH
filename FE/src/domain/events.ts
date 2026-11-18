@@ -1,5 +1,5 @@
 // 센서 → 브라우저 이벤트. 공통 명세서 9-1 타격 이벤트 필드명을 그대로 쓴다.
-import type { PadId } from './pads';
+import type { PadId } from '@/domain/kit/pads';
 
 /** 0 = 왼손, 1 = 오른손 */
 export type StickId = 0 | 1;
@@ -112,6 +112,11 @@ export function isSensorSource(source: InputSourceKind | string | undefined): bo
   return source !== undefined && !(NON_SENSOR_SOURCES as readonly string[]).includes(source);
 }
 
+/** 발 타격(하이햇 페달·킥)인가. 판정 타이밍 보정에서 스틱 값 대신 킥 값을 쓴다 */
+export function isFootHit(hit: { foot?: FootId }): boolean {
+  return hit.foot !== undefined;
+}
+
 /** 소스별 설정값 하나. 항목 스키마는 입력 소스 디스크립터가 선언한다 */
 export type OptionValue = string | number | boolean;
 
@@ -132,6 +137,8 @@ export interface ResolvedHit {
   /** 페달 타격만: 어느 발인지 */
   foot?: FootId;
   pad: PadId | null;
+  /** 타격 시점의 하이햇 페달 상태. null은 모름 */
+  hihatClosed?: boolean | null;
   /** 0~127 */
   velocity: number;
   /** 센서 타격 시각을 브라우저 시계로 환산한 값 */

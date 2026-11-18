@@ -1,4 +1,4 @@
-"""drum2midi 채보 스크립트 (별도 환경 `.venv-drum2midi`, 채보 설계 3-10절, S15P31A307-164 작업 16).
+"""drum2midi 채보 스크립트 (별도 환경 `.venv-drum2midi`).
 
 drum2midi(github.com/miraer/drum2midi, MIT)는 ADTOF + MDX23C 드럼 분리 + 탐·하이햇·심벌 규칙을 묶은 프로그램.
 우리 adtof_drumsep 어댑터가 참고한 원본을 그대로 돌려 같은 채점으로 비교하려는 것.

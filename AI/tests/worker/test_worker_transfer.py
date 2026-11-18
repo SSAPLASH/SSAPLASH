@@ -14,7 +14,7 @@ from ssaplash_ai.worker.transfer import IntegrityError, TransferError, download,
 
 
 class _Storage(BaseHTTPRequestHandler):
-    """경로별 바이트 저장소. /forbidden은 403, /slow는 응답 없이 끊음."""
+    """경로별 바이트 저장소. /forbidden은 403."""
 
     store: dict[str, bytes] = {}
     puts: list[tuple[str, dict[str, str]]] = []

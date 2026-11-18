@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ALL_PADS } from '@/domain/pads';
+import { ALL_PADS } from '@/domain/kit/pads';
 import { KIT_PAD_TO_PAD_ID, resolveKitPads, resolveKitVariants, type KitConfig } from './kitConfig';
 
 const config = (baked: boolean): KitConfig => ({

@@ -2,14 +2,21 @@
 // 키보드(항상 켜짐) + 센서 소스 1개(포인터 모의·BLE·WS)를 동시에 구독하고,
 // 소스 종류에 맞는 매퍼(padMapper: 키 매퍼 / 자세 매퍼)로 패드를 정한다 (설계 D8·D9, PLAY-03 기준선).
 // 판정 경로는 동기 함수만 쓴다 (지연 예산 안에서 끝나야 한다).
-import type { PadId } from '@/domain/pads';
+import type { PadId } from '@/domain/kit/pads';
 import type { FootId, InputSourceKind, Pose, ResolvedHit, StickEvent, StickHitEvent, StickId } from '@/domain/events';
-import { resolvePad, type CalibrationProfile } from '@/domain/calibration';
+import { resolvePad, type CalibrationProfile } from '@/domain/kit/calibration/calibration';
 import { mapHit } from './padMapper';
-import type { KeyMap } from '@/domain/keyMap';
-import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/tuning';
-import type { InputSource } from './InputSource';
+import type { KeyMap } from '@/domain/kit/keyMap';
+import { accelToVelocity, DEFAULT_SENSOR_TUNING, type OutsidePolicy, type VelocityCurve } from '@/domain/kit/calibration/tuning';
+import type { InputSource } from './source/InputSource';
 import { isSensorSource } from '@/domain/events';
+import { PedalTimeline } from './pedalTimeline';
+import { packetTap } from './packetTap';
+import { decodePacket, encodeHapticWave, encodeSetParam, PARAM_ACK_RESET_POSE, STICK_PARAMS } from './stickProtocol';
+
+/** 스틱 로컬 진동 사용(hapticEnable) 파라미터 id. 표에서 찾아 id 중복 정의를 피한다 */
+const HAPTIC_ENABLE_PARAM_ID = STICK_PARAMS.find((p) => p.key === 'hapticEnable')!.id;
+const MIN_PEAK_PARAM_ID = STICK_PARAMS.find((p) => p.key === 'minPeak')!.id;
 
 export type HitListener = (hit: ResolvedHit) => void;
 export type PoseListener = (stickId: StickId, pose: Pose, source: InputSourceKind) => void;
@@ -26,6 +33,17 @@ export type StatusListener = (
 export type PedalStatusListener = (foot: FootId, connected: boolean, batteryPct?: number) => void;
 /** 하이햇 페달 밟힘 상태. closed = 밟음 */
 export type PedalListener = (closed: boolean) => void;
+/**
+ * 기준 자세 초기화 알림. source 'fe' = FE가 resetPose()를 보냄(stickId null = 연결된 전부),
+ * 'button' = 스틱 USER 버튼 보정(PARAM_ACK 0x22가 FE 요청 없이 왔다). 펌웨어 방위각 오프셋이 0이 된다
+ */
+export type ResetPoseListener = (source: 'fe' | 'button', stickId: StickId | null) => void;
+
+/** FE가 RESET_POSE를 보낸 뒤 이 시간(ms) 안에 온 PARAM_ACK 0x22는 FE 요청의 응답으로 본다 */
+const RESET_ACK_WINDOW_MS = 1000;
+
+/** 손별 판정 프로필. 인덱스 = StickId */
+export type HandProfiles = [CalibrationProfile | null, CalibrationProfile | null];
 
 export class InputManager {
   private sources = new Map<InputSourceKind, InputSource>();
@@ -35,24 +53,56 @@ export class InputManager {
   private statusListeners = new Set<StatusListener>();
   private pedalStatusListeners = new Set<PedalStatusListener>();
   private pedalListeners = new Set<PedalListener>();
-  private resetPoseListeners = new Set<() => void>();
-  private profile: CalibrationProfile | null = null;
+  private resetPoseListeners = new Set<ResetPoseListener>();
+  /** 손별 판정 프로필(PLAY-004 D1). 왼손 타격은 왼손 앵커와만 비교한다 */
+  private profiles: HandProfiles = [null, null];
+  /** FE가 마지막으로 RESET_POSE를 보낸 시각. 그 뒤 창 안의 0x22는 FE 응답, 밖은 버튼 보정 */
+  private lastFeResetAt: number | null = null;
+  private offTap: (() => void) | null = null;
   private keyMap: KeyMap = {};
   private velocityCurve: VelocityCurve = DEFAULT_SENSOR_TUNING.velocity;
   /** 센서 타격 시각 보정(ms). 키보드 타격에는 적용하지 않는다(T5) */
   private sensorOffsetMs = DEFAULT_SENSOR_TUNING.sensorOffsetMs;
   private outsidePolicy: OutsidePolicy = DEFAULT_SENSOR_TUNING.outsidePolicy;
   private seq = 0;
+  private pedalTimeline = new PedalTimeline();
+  private pedalOwners: Partial<Record<FootId, InputSource>> = {};
+  private retiredPedalOwners: Record<FootId, WeakSet<InputSource>> = { 2: new WeakSet(), 3: new WeakSet() };
+
+  getHihatPedalState(): { connected: boolean; closed: boolean | null } {
+    const connected = !!this.pedalOwners[2];
+    return { connected, closed: connected ? this.pedalTimeline.stateAt(performance.now()) : null };
+  }
   /** 리듬 게임이 "지금 칠 법한 패드"를 알려주면 판정을 그 후보로 제한한다 */
   private candidateProvider: ((tHit: number) => PadId[] | undefined) | null = null;
   readonly lastPose: Record<StickId, Pose> = { 0: { pitch: 0, yaw: 0 }, 1: { pitch: 0, yaw: 0 } };
 
-  setProfile(p: CalibrationProfile | null): void {
-    this.profile = p;
+  constructor() {
+    // 스틱 USER 버튼 보정(0x22)은 패킷 탭에서 잡는다. FE가 보낸 RESET_POSE의 응답(창 안)은 알리지 않는다
+    this.offTap = packetTap.subscribe((rec) => {
+      if (rec.dir !== 'in') return;
+      const pkt = decodePacket(rec.bytes, rec.recvTime);
+      if (pkt.kind !== 'paramAck' || pkt.paramId !== PARAM_ACK_RESET_POSE) return;
+      if (this.lastFeResetAt !== null && rec.recvTime - this.lastFeResetAt <= RESET_ACK_WINDOW_MS) return;
+      const stickId: StickId | null = rec.stickId ?? (pkt.role === 0 || pkt.role === 1 ? pkt.role : null);
+      for (const l of this.resetPoseListeners) l('button', stickId);
+    });
   }
 
-  getProfile(): CalibrationProfile | null {
-    return this.profile;
+  /** 테스트용: 패킷 탭 구독 해제 */
+  dispose(): void {
+    this.offTap?.();
+    this.offTap = null;
+  }
+
+  /** 손별 프로필을 한 번에 바꾼다 */
+  setProfiles(p: HandProfiles): void {
+    this.profiles = [p[0], p[1]];
+  }
+
+  /** 그 손의 판정 프로필. 없으면 null */
+  profileFor(stickId: StickId): CalibrationProfile | null {
+    return this.profiles[stickId];
   }
 
   /** 키 매퍼가 쓸 매핑. 키보드 소스에는 키 목록만 따로 넘긴다(bootstrap) */
@@ -84,10 +134,12 @@ export class InputManager {
    */
   async attach(source: InputSource, auto = false): Promise<void> {
     await this.detach(source.kind);
+    this.retiredPedalOwners[2].delete(source);
+    this.retiredPedalOwners[3].delete(source);
     this.sources.set(source.kind, source);
     this.unsubs.set(
       source.kind,
-      source.subscribe((e) => this.handle(e, source.kind)),
+      source.subscribe((e) => { if (this.sources.get(source.kind) === source) this.handle(e, source); }),
     );
     if (auto && source.autoConnect) await source.autoConnect();
     else await source.connect();
@@ -99,16 +151,17 @@ export class InputManager {
     this.unsubs.get(kind)?.();
     this.unsubs.delete(kind);
     this.sources.delete(kind);
-    await s.disconnect();
     for (const l of this.statusListeners) {
       l(0, false, kind);
       l(1, false, kind);
     }
-    // 소스가 내려가면 페달도 끊긴 것으로 알린다(손 status와 같은 방식)
-    for (const l of this.pedalStatusListeners) {
-      l(2, false);
-      l(3, false);
+    for (const foot of [2, 3] as const) {
+      if (this.pedalOwners[foot] !== s) continue;
+      delete this.pedalOwners[foot];
+      if (foot === 2) this.pedalTimeline.clear();
+      for (const l of this.pedalStatusListeners) l(foot, false);
     }
+    await s.disconnect();
   }
 
   get(kind: InputSourceKind): InputSource | undefined {
@@ -123,19 +176,42 @@ export class InputManager {
     for (const s of this.sources.values()) s.setPoseStream?.(enabled);
   }
 
+  /** 연결된 스틱 전부에 RESET_POSE. 리스너에는 ('fe', null)로 알린다 */
   resetPose(): void {
+    this.lastFeResetAt = performance.now();
     for (const s of this.sources.values()) s.resetPose?.();
-    for (const l of this.resetPoseListeners) l();
+    for (const l of this.resetPoseListeners) l('fe', null);
   }
 
-  /** resetPose()가 소스에 전달된 뒤 불린다. 펌웨어가 방위각 오프셋을 0으로 되돌리는 것을 따라가는 용도 */
-  onResetPose(l: () => void): () => void {
+  /**
+   * resetPose()가 소스에 전달된 뒤('fe'), 또는 스틱 버튼 보정 0x22가 FE 요청 없이 왔을 때('button') 불린다.
+   * 펌웨어가 방위각 오프셋을 0으로 되돌리는 것을 따라가는 용도
+   */
+  onResetPose(l: ResetPoseListener): () => void {
     this.resetPoseListeners.add(l);
     return () => this.resetPoseListeners.delete(l);
   }
 
   haptic(stickId: StickId, strength: number, durationMs: number): void {
     for (const s of this.sources.values()) s.haptic?.(stickId, strength, durationMs);
+  }
+
+  /** 그 손에만 라이브러리 파형 진동 1회(판정 진동). sendCommand가 없는 소스(키보드·터치)는 무시된다 */
+  hapticWave(stickId: StickId, wave: number): void {
+    const bytes = encodeHapticWave(wave);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
+  }
+
+  /** 스틱 로컬 진동(hapticEnable)을 켜고 끈다. stickId가 없으면 붙은 손 전부 */
+  setLocalHaptic(enabled: boolean, stickId?: StickId): void {
+    const bytes = encodeSetParam(HAPTIC_ENABLE_PARAM_ID, enabled ? 1 : 0);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
+  }
+
+  /** 그 손의 최소 타격 세기(minPeak, °/s)를 보낸다(PLAY-004 ③). 그 손에만 간다 */
+  setMinPeak(stickId: StickId, dps: number): void {
+    const bytes = encodeSetParam(MIN_PEAK_PARAM_ID, dps);
+    for (const s of this.sources.values()) s.sendCommand?.(bytes, stickId);
   }
 
   onHit(l: HitListener): () => void {
@@ -163,12 +239,13 @@ export class InputManager {
     return () => this.pedalListeners.delete(l);
   }
 
-  /** 캘리브레이션 화면 등에서 자세를 패드로 미리 보여줄 때 */
-  previewPad(pose: Pose): ReturnType<typeof resolvePad> {
-    return resolvePad(this.profile, pose);
+  /** 캘리브레이션 화면 등에서 자세를 패드로 미리 보여줄 때. 손을 모르면 오른손 프로필 */
+  previewPad(pose: Pose, stickId: StickId = 1): ReturnType<typeof resolvePad> {
+    return resolvePad(this.profiles[stickId], pose);
   }
 
-  private handle(e: StickEvent, source: InputSourceKind): void {
+  private handle(e: StickEvent, owner: InputSource): void {
+    const source = owner.kind;
     if (e.kind === 'pose') {
       this.lastPose[e.stickId] = { pitch: e.pitch, yaw: e.yaw };
       for (const l of this.poseListeners) l(e.stickId, this.lastPose[e.stickId], source);
@@ -179,10 +256,28 @@ export class InputManager {
       return;
     }
     if (e.kind === 'pedalStatus') {
+      if (this.retiredPedalOwners[e.foot].has(owner)) return;
+      const previous = this.pedalOwners[e.foot];
+      if (e.connected) {
+        if (previous !== owner) {
+          if (previous) {
+            this.retiredPedalOwners[e.foot].add(previous);
+            for (const l of this.pedalStatusListeners) l(e.foot, false);
+          }
+          if (e.foot === 2) this.pedalTimeline.clear();
+          this.pedalOwners[e.foot] = owner;
+        }
+      } else {
+        if (previous !== owner) return;
+        delete this.pedalOwners[e.foot];
+        if (e.foot === 2) this.pedalTimeline.clear();
+      }
       for (const l of this.pedalStatusListeners) l(e.foot, e.connected, e.batteryPct);
       return;
     }
     if (e.kind === 'pedal') {
+      if (this.retiredPedalOwners[2].has(owner) || this.pedalOwners[2] !== owner || !Number.isFinite(e.timestamp)) return;
+      this.pedalTimeline.add(e.timestamp, e.closed);
       for (const l of this.pedalListeners) l(e.closed);
       return;
     }
@@ -195,7 +290,8 @@ export class InputManager {
     const tHit = isSensorSource(source) ? e.timestamp + this.sensorOffsetMs : e.timestamp;
     const m = mapHit(e, source, {
       keyMap: this.keyMap,
-      profile: this.profile,
+      // 손별 프로필(D1): 왼손 타격은 왼손 앵커로 판정한다
+      profile: this.profiles[e.stickId],
       candidates: this.candidateProvider?.(tHit),
       outsidePolicy: this.outsidePolicy,
     });
@@ -208,6 +304,7 @@ export class InputManager {
       id: ++this.seq,
       stickId,
       pad: m.pad,
+      ...(m.pad === 'HIHAT' ? { hihatClosed: this.pedalOwners[2] ? this.pedalTimeline.stateAt(e.timestamp) : null } : {}),
       // 스틱 velocity는 펌웨어 곡선 결과라 그대로 쓴다(이중 적용 금지). 없으면 가속도 곡선
       velocity:
         e.velocity !== undefined
@@ -240,6 +337,7 @@ export class InputManager {
       stickId: null,
       foot,
       pad: e.pad ?? null,
+      ...(e.pad === 'HIHAT' ? { hihatClosed: this.pedalOwners[2] ? this.pedalTimeline.stateAt(e.timestamp) : null } : {}),
       velocity: Math.min(127, Math.max(1, Math.round(e.velocity ?? 100))),
       tHit: e.timestamp + this.sensorOffsetMs,
       tRecv: e.recvTime,

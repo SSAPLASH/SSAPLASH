@@ -36,6 +36,8 @@ META_KEYS = {
     "notes_by_pad",
     "duration_ms",
     "bpm",
+    "tracked_bpm",
+    "timing_refine",
     "raw_bpm",
     "first_beat_ms",
     "first_downbeat_ms",
@@ -47,6 +49,9 @@ META_KEYS = {
     "transcribe_ms",
     "peak_vram_mb",
     "peak_ram_mb",
+    "downbeat_phase_ms",
+    "beat_source",
+    "tempo_segments",
 }
 
 
@@ -87,6 +92,21 @@ def _module(config: TranscriptionConfig) -> TranscriptionModule:
     module = TranscriptionModule(config)
     module.load()
     return module
+
+
+def test_원곡을_주면_박을_원곡으로_찾고_못_읽으면_드럼_트랙(tmp_path: Path):
+    # 설계 CHART-003-variable-tempo-exp 인수 조건 4
+    module = _module(_config(tmp_path))
+    mix = tmp_path / "mix.wav"
+    write_wav(mix, make_hits(2.2))
+    with_mix = module.transcribe_file(_drums(tmp_path), tmp_path / "a", beat_audio_path=mix)
+    assert with_mix.beat_source == "mix"
+    missing = module.transcribe_file(
+        _drums(tmp_path), tmp_path / "b", beat_audio_path=tmp_path / "없음.wav"
+    )
+    assert missing.beat_source == "drums"
+    assert module.transcribe_file(_drums(tmp_path), tmp_path / "c").beat_source == "drums"
+    module.close()
 
 
 def test_드럼_트랙에서_채보_JSON과_메타(tmp_path: Path):

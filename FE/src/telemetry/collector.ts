@@ -2,7 +2,7 @@
 // diagTap(resolved·judged·session)과 packetTap(HIT seq·STATUS)을 구독해 wire 이벤트를 만들어 큐에 넣는다.
 // 구독은 start()~stop() 사이만. 판정·입력 코드는 이 모듈을 모른다.
 import type { StickId } from '@/domain/events';
-import type { Judgement } from '@/domain/judgement';
+import type { Judgement } from '@/domain/play/judgement';
 import type { ResolvedHit } from '@/domain/events';
 import { diagTap, type DiagEvent } from '@/engine/diagTap';
 import { packetTap, type PacketRecord } from '@/input/packetTap';

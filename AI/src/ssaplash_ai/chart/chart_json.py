@@ -1,12 +1,10 @@
-"""타격 표 → 채보 JSON (설계 3장 "채보 JSON", BE TranscriptionResult schemaVersion 1).
+"""타격 표 → 채보 JSON (BE TranscriptionResult schemaVersion 1).
 
-모양: {schemaVersion, generator, generatorVersion, metrics, charts: [{difficulty, notationStatus, notes, timing}]}.
-- generator는 BE가 `ADT_MODEL`만 받으므로 고정. 어떤 모델·규칙으로 만들었는지는 generatorVersion에 남김
-- charts는 NORMAL 하나, notationStatus는 UNAVAILABLE(악보 표기 없음), sheetPages 없음
-- timing.offsetMs: 곡의 첫 마디 첫 박 시각(격자 원점). grid_origin_ms 참고. origin이 notes면 align_origin_to_notes로
-  킥·스네어 노트에 맞춰 박 안 위치를 보정
-- notes: 시각순 정렬 뒤 noteId `n0001`부터. timeMs는 반올림 정수, 0~durationMs로 자름. 같은 시각은
-  패드 8종 순서. 같은 시각·같은 패드가 두 번 나오면 하나만 남김. 세기가 있을 때만 velocityHint
+- generator는 BE가 `ADT_MODEL`만 받아서 고정. 모델·규칙은 generatorVersion에 남김
+- charts는 NORMAL 하나, notationStatus는 UNAVAILABLE
+- notes: 시각순 `n0001`부터. timeMs는 반올림 정수, 0~durationMs. 같은 시각은 패드 9종 순서,
+  같은 시각·같은 패드는 하나만 남김
+- timing: offsetMs는 곡의 첫 마디 첫 박 시각. 빠르기 구간이 둘 이상이면 ppq·tempoMap·timeSignatureMap을 더 넣음
 
 validate_chart는 BE `WorkerResults.java`의 검사를 그대로 옮긴 것. 실패하면 ChartOutputError.
 """
@@ -20,7 +18,8 @@ import numpy as np
 from ssaplash_ai.bench.datasets.pads import PADS
 from ssaplash_ai.chart.config import ORIGIN_MODES
 from ssaplash_ai.chart.errors import ChartOutputError
-from ssaplash_ai.chart.tempo import TempoEstimate
+from ssaplash_ai.chart.tempo import TempoEstimate, TempoMapPoint
+from ssaplash_ai.chart.tempo_refine import RefineResult, refine_timing
 
 GENERATOR = "ADT_MODEL"
 DIFFICULTY = "NORMAL"
@@ -33,7 +32,9 @@ BPM_MAX = 9999.99
 TIME_SIGNATURE_MAX = 5
 NOTE_ID_WIDTH = 4
 # offsetMs·bpm 계산 규칙 버전. 규칙이 바뀌면 올려서 generatorVersion이 바뀌게 함(transcription.model_version)
-TIMING_RULES_VERSION = "timing3"
+TIMING_RULES_VERSION = "timing5"
+# 빠르기 구간(tempoMap) 틱 단위. BE MIDI 채보와 같은 480
+TEMPO_MAP_PPQ = 480
 # 원점 보정에 쓰는 노트. 8분·16분에 많은 하이햇·심벌은 빼고 4분 박에 주로 오는 패드만
 ORIGIN_ALIGN_PADS = ("KICK", "SNARE")
 # 격자 박에서 이 거리 안의 노트만 보정에 씀
@@ -72,15 +73,14 @@ def build_notes(hits: np.ndarray, duration_ms: int) -> list[dict]:
 
 
 def grid_origin_ms(tempo: TempoEstimate) -> int:
-    """채보 JSON offsetMs. FE 악보 격자와 BE 난이도 솎기의 원점(곡의 첫 마디 첫 박, 설계 U14·U16).
+    """채보 JSON offsetMs(곡의 첫 마디 첫 박). FE 악보 격자와 BE 난이도 솎기의 원점.
 
-    - 마디 첫 박이 있으면(Beat This!) 첫 마디 첫 박에서 한 마디씩 앞으로 당겨 0ms 이상인 가장 이른
-      마디 시작. 드럼 없는 인트로가 있어도 첫 마디가 곡 맨 앞 한 마디 길이 안에서 시작함
-    - 마디 첫 박이 없으면(librosa) 첫 박 시각
-    - bpm 추정 실패나 박이 없으면 0
+    마디 첫 박 다수결 위치 → 첫 마디 첫 박을 한 마디씩 당긴 위치 → 첫 박 시각 순으로 있는 것을 씀. 추정 실패면 0.
     """
     if not tempo.estimated:
         return 0
+    if tempo.downbeat_phase_ms is not None:
+        return tempo.downbeat_phase_ms
     if tempo.first_downbeat_ms is not None:
         beats_per_bar = int(tempo.time_signature.split("/")[0])
         bar_ms = 60_000.0 / tempo.bpm * beats_per_bar
@@ -91,11 +91,10 @@ def grid_origin_ms(tempo: TempoEstimate) -> int:
 
 
 def align_origin_to_notes(origin_ms: int, tempo: TempoEstimate, notes: list[dict]) -> int:
-    """grid_origin_ms 값을 킥·스네어 노트로 박 안 위치만 보정한 원점(설계 v0.5 "보정 규칙").
+    """원점을 킥·스네어 노트로 박 안 위치만 보정.
 
-    노트마다 원점 격자에서 가장 가까운 박까지의 차이를 구해 ORIGIN_ALIGN_WINDOW_MS 안의 것만 모으고, 그 중앙값만큼
-    원점을 옮김. 보정량이 창 안이라 마디 첫 박이 다른 박으로 바뀌지 않음. 결과는 0ms 이상이고, 원점이 첫 마디
-    안이었으면 계속 첫 마디 안. bpm 추정 실패이거나 쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적으면 그대로
+    가장 가까운 박과의 차이가 ORIGIN_ALIGN_WINDOW_MS 안인 노트의 중앙값만큼 옮김.
+    쓸 노트가 ORIGIN_ALIGN_MIN_NOTES보다 적거나 bpm 추정 실패면 그대로.
     """
     if not tempo.estimated:
         return origin_ms
@@ -114,6 +113,62 @@ def align_origin_to_notes(origin_ms: int, tempo: TempoEstimate, notes: list[dict
     return int(round(aligned))
 
 
+def _beat_number(points: list[TempoMapPoint], time_ms: np.ndarray) -> np.ndarray:
+    """곡 시각 → 박 번호(실수). 첫 구간 앞은 첫 구간 빠르기로 거꾸로 셈"""
+    starts = np.array([p.time_ms for p in points])
+    i = np.clip(np.searchsorted(starts, time_ms, side="right") - 1, 0, len(points) - 1)
+    beat = np.array([p.beat for p in points], dtype=float)[i]
+    bpm = np.array([p.bpm for p in points])[i]
+    return beat + (time_ms - starts[i]) * bpm / 60_000.0
+
+
+def tempo_map_timing(tempo: TempoEstimate, notes: list[dict], origin: str) -> dict | None:
+    """빠르기 구간이 있는 채보 JSON timing. 구간이 둘 미만이면 None.
+
+    offsetMs(틱 0)는 첫 구간 시작에서 한 마디씩 당겨 0ms 이상인 가장 이른 마디 시작.
+    tempoMap 첫 항목은 틱 0·첫 구간 bpm, 나머지는 구간 시작 박 번호 × TEMPO_MAP_PPQ.
+    origin이 notes면 align_origin_to_notes와 같은 방식으로 모든 구간 시작을 옮김.
+    """
+    points = tempo.tempo_map
+    if not tempo.estimated or not points or len(points) < 2:
+        return None
+    shift = 0.0
+    if origin == "notes":
+        times = np.array([n["timeMs"] for n in notes if n["pad"] in ORIGIN_ALIGN_PADS], dtype=float)
+        if times.size:
+            beat = _beat_number(points, times)
+            nearest = np.round(beat)
+            bpm = np.array([p.bpm for p in points])[
+                np.clip(
+                    np.searchsorted([p.time_ms for p in points], times, side="right") - 1,
+                    0,
+                    len(points) - 1,
+                )
+            ]
+            d = (beat - nearest) * 60_000.0 / bpm
+            d = d[np.abs(d) <= ORIGIN_ALIGN_WINDOW_MS]
+            if d.size >= ORIGIN_ALIGN_MIN_NOTES:
+                shift = float(np.median(d))
+    beats_per_bar = int(tempo.time_signature.split("/")[0])
+    first = points[0]
+    bar0 = 60_000.0 / first.bpm * beats_per_bar
+    start0 = first.time_ms + shift
+    pulled = math.floor(start0 / bar0)
+    offset = int(round(start0 - pulled * bar0))
+    base = pulled * beats_per_bar
+    tempo_map = [{"tick": 0, "bpm": first.bpm}]
+    tempo_map += [{"tick": (p.beat + base) * TEMPO_MAP_PPQ, "bpm": p.bpm} for p in points[1:]]
+    numerator, denominator = (int(x) for x in tempo.time_signature.split("/"))
+    return {
+        "bpm": first.bpm,
+        "offsetMs": offset,
+        "timeSignature": tempo.time_signature,
+        "ppq": TEMPO_MAP_PPQ,
+        "tempoMap": tempo_map,
+        "timeSignatureMap": [{"tick": 0, "numerator": numerator, "denominator": denominator}],
+    }
+
+
 def build_chart(
     hits: np.ndarray,
     duration_ms: int,
@@ -127,9 +182,12 @@ def build_chart(
     if origin not in ORIGIN_MODES:
         raise ValueError(f"origin은 {ORIGIN_MODES} 중 하나: {origin!r}")
     notes = build_notes(hits, duration_ms)
-    offset_ms = grid_origin_ms(tempo)
-    if origin == "notes":
-        offset_ms = align_origin_to_notes(offset_ms, tempo, notes)
+    timing = tempo_map_timing(tempo, notes, origin)
+    if timing is None:
+        offset_ms = grid_origin_ms(tempo)
+        if origin == "notes":
+            offset_ms = align_origin_to_notes(offset_ms, tempo, notes)
+        timing = {"bpm": tempo.bpm, "offsetMs": offset_ms, "timeSignature": tempo.time_signature}
     return {
         "schemaVersion": schema_version,
         "generator": GENERATOR,
@@ -140,14 +198,26 @@ def build_chart(
                 "difficulty": DIFFICULTY,
                 "notationStatus": NOTATION_STATUS,
                 "notes": notes,
-                "timing": {
-                    "bpm": tempo.bpm,
-                    "offsetMs": offset_ms,
-                    "timeSignature": tempo.time_signature,
-                },
+                "timing": timing,
             }
         ],
     }
+
+
+def refine_chart_timing(
+    chart: dict, tempo: TempoEstimate, min_bpm: float, max_bpm: float
+) -> RefineResult | None:
+    """채보 노트로 chart의 bpm·offsetMs를 다시 맞춤. 추정 실패이거나 tempoMap이 있으면 None."""
+    timing = chart["charts"][0]["timing"]
+    # 빠르기 구간(tempoMap)이 있는 채보는 박 위치를 이미 따라가므로 bpm 하나로 고치지 않음
+    if not tempo.estimated or "tempoMap" in timing:
+        return None
+    times = [n["timeMs"] for n in chart["charts"][0]["notes"]]
+    result = refine_timing(times, float(timing["bpm"]), int(timing["offsetMs"]), min_bpm, max_bpm)
+    if result.changed:
+        timing["bpm"] = result.bpm
+        timing["offsetMs"] = result.offset_ms
+    return result
 
 
 def _require(ok: bool, message: str) -> None:

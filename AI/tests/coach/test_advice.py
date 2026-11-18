@@ -63,8 +63,8 @@ def test_알_수_없는_pattern은_None이다():
 @pytest.mark.parametrize(
     ("pattern", "pads", "expected"),
     [
-        ("PAD_LATE", ["SNARE"], "스네어만 따로 골라"),
-        ("PAD_EARLY", ["HIHAT_PEDAL"], "하이햇 페달만 따로 골라"),
+        ("PAD_LATE", ["SNARE"], "스네어만 박에 맞춰"),
+        ("PAD_EARLY", ["HIHAT_PEDAL"], "하이햇 페달만 박에 맞춰"),
         # '로'/'으로': 받침이 없거나 ㄹ이면 '로', 그 밖의 받침은 '으로'
         ("TRANSITION_LATE", ["HIHAT", "SMALL_TOM"], "하이햇에서 스몰탐으로 넘어가는"),
         ("TRANSITION_LATE", ["SNARE", "KICK"], "스네어에서 킥으로 넘어가는"),
@@ -82,7 +82,7 @@ def test_패드_이름과_조사가_맞다(pattern, pads, expected):
 
 
 def test_HAND_WEAK는_왼손_오른손으로_단정하지_않는다():
-    # 어느 스틱이 어느 손인지 문서에 없어서 "약한 쪽 손"이라고만 쓴다
+    # 조언은 pads만 받아서 "약한 쪽 손"이라고 쓴다. 어느 손인지는 제목과 설명이 알려 준다
     tip = tip_for("HAND_WEAK", ["SNARE"])
 
     assert "약한 쪽 손" in tip
@@ -183,3 +183,24 @@ def test_같은_입력은_같은_상세_설명이다():
     args = ("PAD_LATE", ["SNARE"], DETAIL_METRICS["PAD_LATE"], 0.0, 1.0)
 
     assert detail_for(*args) == detail_for(*args)
+
+
+@pytest.mark.parametrize("pattern", sorted(ENABLED_PATTERNS))
+def test_조언은_앱에_없는_기능을_권하지_않는다(pattern):
+    # 리듬 게임과 악보 연습에는 템포 조절과 구간 반복이 없다
+    tip = tip_for(pattern, ["SNARE", "KICK"]) or ""
+    for word in ("템포", "구간만", "부분만", "박 소리"):
+        assert word not in tip
+
+
+@pytest.mark.parametrize(("stick", "hand"), [(0, "왼손"), (1, "오른손"), (None, "약한 쪽 손")])
+def test_손_약점_설명은_어느_손인지_알려_준다(stick, hand):
+    metrics = {"velocityRatio": 0.6, "weakHitCount": 20, "strongHitCount": 20}
+    if stick is not None:
+        metrics["weakStickId"] = stick
+    assert detail_for("HAND_WEAK", [], metrics, 0, 1000).startswith(f"{hand}이 다른 손의 60%")
+
+
+def test_박자_불안정_설명은_표준편차를_평균이라고_하지_않는다():
+    detail = detail_for("UNSTEADY", [], {"stdDeltaMs": 32.0, "hitCount": 40}, 0, 1000)
+    assert "약 32ms 폭" in detail and "평균" not in detail

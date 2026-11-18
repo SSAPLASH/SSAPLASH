@@ -1,0 +1,180 @@
+/* Navigation / GlassDock 148:2288 — 상단 글래스 Dock. mode(shell|play) × collapsed 4변이 */
+.glass-dock {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-dock-gap);
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0 var(--space-m);
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  backdrop-filter: blur(10px) saturate(125%);
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  /* 바깥 그림자 + 안쪽 윗변 림 하이라이트 */
+  box-shadow:
+    var(--shadow-dock),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
+  white-space: nowrap;
+}
+/* 접혀도 높이·아이콘 크기는 그대로다(설계 QA-page-header-dock-fold). 좌우 여백만 아이콘 줄에 맞게 줄인다 */
+.glass-dock.collapsed {
+  padding: 0 var(--space-s);
+}
+.dock-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-dock-gap);
+  height: 100%;
+}
+.dock-divider {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  background: var(--line);
+}
+.ui-icon-btn.sound-toggle:not(.on) {
+  color: var(--text-3);
+}
+/* 접힘·펼침 때 폭 0 ↔ 제 폭으로 미끄러지는 묶음(GlassDock Slide). 넘치는 부분은 잘라 왼쪽으로 사라져 보이게 한다 */
+.dock-slide {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-dock-gap);
+  height: 100%;
+  overflow: hidden;
+}
+/* 접힘 메트로놈 아이콘 스위치: 켜지면 브랜드 색 */
+.ui-icon-btn.dock-metro-mini {
+  color: var(--text-2);
+}
+.ui-icon-btn.dock-metro-mini.on {
+  color: var(--brand-text);
+}
+/* 접힘 녹음 상태(표시만): 꺼짐은 흐린 원, 녹음 중은 빨간 원 */
+.dock-rec-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-3);
+}
+.dock-rec-status.on {
+  color: var(--miss);
+}
+.dock-metro-chip {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 120px;
+  height: 32px;
+}
+/* 패널이 열려 있는 동안 칩 전체(아이콘·숫자·스위치)를 은은한 브랜드 색으로 감싼다. 칩 밖으로 5·7px 번지는 면이라 Dock 폭은 그대로다 */
+.dock-metro-chip::before {
+  content: '';
+  position: absolute;
+  inset: -5px -7px;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition:
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+  pointer-events: none;
+}
+.dock-metro-chip.open::before {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--brand-tint-line);
+}
+.dock-metro-chip.open .dock-metro-body,
+.dock-metro-chip.open .dock-metro-body:hover {
+  background: transparent;
+  color: var(--brand-text);
+}
+.dock-metro-body {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  width: 80px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.dock-metro-body:hover {
+  background: var(--surface-3);
+}
+.dock-metro-body svg {
+  flex: none;
+  margin: 0 6px;
+}
+.dock-bpm {
+  width: 40px;
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: center;
+  color: var(--text-1);
+}
+.dock-metro-chip.locked .dock-bpm {
+  color: var(--brand-text);
+}
+.dock-switch {
+  min-height: 0;
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+  cursor: pointer;
+}
+/* 보이는 크기(32×20)는 그대로 두고 세로 클릭 영역만 넓힌다(좌우는 이웃과 겹치지 않게 유지) */
+.dock-switch::before {
+  content: '';
+  position: absolute;
+  inset: -12px 0;
+}
+.dock-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition: transform var(--motion-fast);
+}
+.dock-switch.on {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.dock-switch.on .dock-switch-knob {
+  background: var(--brand-on);
+  transform: translateX(12px);
+}
+
+/* 리듬 게임: 메트로놈 조작 비활성 */
+.dock-switch:disabled,
+.dock-metro-mini:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

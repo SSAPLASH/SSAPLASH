@@ -1,0 +1,191 @@
+/* 연주 HUD: 높이 96, 배경 없음. game·sheet 같은 배치이고 폭만 연주 영역을 따른다(10/31 결정 ①) */
+.play-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-l);
+  height: 96px;
+  box-sizing: border-box;
+  font-family: var(--font);
+}
+.play-hud-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-m);
+  min-width: 0;
+}
+.play-hud-cover {
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+.play-hud-cover .song-cover {
+  height: 100%;
+  border-radius: var(--radius-control);
+}
+.play-hud-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.play-hud-titleline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+.play-hud-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+.play-hud-title:focus {
+  outline: none;
+}
+.play-hud-bpm {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.play-hud-rate {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--brand-sub) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-sub) 14%, transparent);
+  color: var(--brand-sub);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.play-hud-artist {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-hud-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.play-hud-bar {
+  flex: none;
+  width: 280px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+.play-hud.sheet .play-hud-progress {
+  min-width: 0;
+}
+.play-hud.sheet .play-hud-bar {
+  flex: 0 1 280px;
+  min-width: 0;
+}
+.play-hud-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+}
+.play-hud-time {
+  flex: none;
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+
+/* 수치 영역: 고정 폭에 세 수치 균등 배치 */
+.play-hud-stats {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 460px;
+}
+.play-hud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-1);
+}
+.play-hud-label {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.play-hud-value {
+  font-family: var(--font-display);
+  font-size: 52px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+.play-hud-stat.brand .play-hud-value {
+  color: var(--brand-text);
+}
+.play-hud-stat.perfect .play-hud-label,
+.play-hud-stat.perfect .play-hud-value {
+  color: var(--perfect);
+}
+.play-hud-stat.good .play-hud-label,
+.play-hud-stat.good .play-hud-value {
+  color: var(--good);
+}
+.play-hud-stat.miss .play-hud-label,
+.play-hud-stat.miss .play-hud-value {
+  color: var(--miss);
+}
+
+/* E5 콤보 10의 배수 강조: 브랜드색으로 번쩍였다가 원래 색으로 돌아온다 */
+.play-hud-value.combo-flash {
+  animation: combo-flash 160ms ease-out;
+}
+@keyframes combo-flash {
+  from {
+    color: var(--brand);
+  }
+}
+
+/* 리듬 게임: 세 수치를 오른쪽 끝으로 붙여 오른쪽 정렬한다(가운데에 떠 있는 Dock이 점수를 가리지 않게).
+   칸 폭은 가장 긴 값 기준으로 고정해 숫자가 바뀌어도 자리가 흔들리지 않는다: 점수 1,000,000대 · 콤보 4자리 · 정확도 100.0% */
+.play-hud.game .play-hud-stats {
+  width: auto;
+  justify-content: flex-end;
+  gap: 28px;
+}
+.play-hud.game .play-hud-stat {
+  align-items: flex-end;
+}
+.play-hud.game .play-hud-value {
+  display: inline-block;
+  text-align: right;
+  white-space: nowrap;
+  /* 콤보가 커졌다 줄 때 오른쪽 끝을 기준으로 */
+  transform-origin: right center;
+}
+.play-hud.game .play-hud-value[data-stat='score'] {
+  min-width: 150px;
+}
+.play-hud.game .play-hud-value[data-stat='combo'] {
+  min-width: 76px;
+}
+.play-hud.game .play-hud-value[data-stat='accuracy'] {
+  min-width: 122px;
+}

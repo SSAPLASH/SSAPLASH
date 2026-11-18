@@ -1,4 +1,4 @@
-"""채보 보고서 집계 테스트 (채보 설계 3-12절 묶음 집계, 인수 조건 8의 SUM 규칙·10의 변화 열)."""
+"""채보 보고서 집계 테스트 (인수 조건 8의 SUM 규칙·10의 변화 열)."""
 
 from __future__ import annotations
 
@@ -192,7 +192,7 @@ def test_라벨별_표와_보고서_파일(tmp_path: Path):
 
 
 def test_GPU가_섞인_묶음에만_GPU_열이_붙는다(tmp_path: Path):
-    # 코랩 run과 서버 run을 합칠 때 (설계 U21). 다른 묶음은 GPU 한 종류라 열이 없음
+    # 코랩 run과 서버 run을 합칠 때. 다른 묶음은 GPU 한 종류라 열이 없음
     a100, h200 = "NVIDIA A100-SXM4-40GB", "NVIDIA H200 NVL"
     colab = [
         _row(model="m", songId="a", gpuName=a100, **_counts("Five", 1, 0, 0)),

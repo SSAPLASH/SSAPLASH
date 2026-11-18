@@ -1,0 +1,48 @@
+{
+  "modelVersion": "coach-gate-0.1",
+  "featureVersion": 1,
+  "dataSource": "SYNTHETIC",
+  "perCell": 60,
+  "rows": 13936,
+  "positives": 11635,
+  "negatives": 2301,
+  "inputs": 20,
+  "byTag": {
+    "LIVE_LATE": 2968,
+    "LIVE_PAD_LATE": 1230,
+    "LIVE_PAD_MISS": 2113,
+    "LIVE_MISS_STREAK": 375,
+    "LIVE_EARLY": 3002,
+    "LIVE_PAD_EARLY": 1285,
+    "LIVE_UNSTEADY": 1190,
+    "LIVE_HAND_WEAK": 1773
+  },
+  "maxRecallDrop": 0.05,
+  "scores": {
+    "logistic": {
+      "name": "logistic",
+      "auc": 0.9424998043674888,
+      "threshold": 0.2677630211435241,
+      "recall": 0.9500644606789859,
+      "false_kept": 0.2590178183398522,
+      "false_kept_at_98": 0.409387222946545
+    },
+    "mlp16": {
+      "name": "mlp16",
+      "auc": 0.9808831458529549,
+      "threshold": 0.8162679002333246,
+      "recall": 0.9500644606789859,
+      "false_kept": 0.0938722294654498,
+      "false_kept_at_98": 0.14732724902216426
+    },
+    "mlp32x16": {
+      "name": "mlp32x16",
+      "auc": 0.9796591866879499,
+      "threshold": 0.8362442114938725,
+      "recall": 0.9500644606789859,
+      "false_kept": 0.10560625814863103,
+      "false_kept_at_98": 0.15080399826162538
+    }
+  },
+  "onnxMaxDiff": 4.157178637997916e-07
+}

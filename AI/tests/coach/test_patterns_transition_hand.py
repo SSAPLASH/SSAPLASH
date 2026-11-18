@@ -65,7 +65,7 @@ def test_한쪽_손이_약하면_HAND_WEAK가_나온다():
 
     assert patterns_of(response) == ["HAND_WEAK"]
     segment = response["weakSegments"][0]
-    assert segment["description"] == "한쪽 손이 상대 손보다 40% 약하게 쳐요."
+    assert segment["description"] == "오른손이 다른 손보다 40% 약하게 쳐요."
     assert segment["causeTags"] == ["WEAK", "HAND"]
     assert segment["metrics"]["weakStickId"] == 1
     assert segment["metrics"]["velocityRatio"] == 0.6

@@ -1,22 +1,15 @@
-// 곡 목록·상세·채보 로드 (설계 2·4-1). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
+// 곡 상세·채보 로드와 곡 소스 (설계 2·4-1). 곡 목록은 서버 데이터 캐시(api/song/songQueries)가 읽는다(설계 TECH-351). 출처는 빌드 플래그: VITE_SONGS_SOURCE=builtin이면 BE 없이 내장 3곡.
 // 내장 소스의 id 규칙: 곡·채보 id 모두 -(BUILTIN_CHARTS 인덱스 + 1). chartVersionId는 null.
 import { create } from 'zustand';
-import { getChartAssets, getChartLatest } from '@/api/charts';
+import { getChartAssets, getChartLatest } from '@/api/song/charts';
 import { ApiError } from '@/api/http';
-import { getSong, listSongs } from '@/api/songs';
-import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/chart';
-import { chartFromDetail, type ChartAssetsDto } from '@/domain/chartMapping';
-import type { SongDetail, SongLevel, SongScope, SongSummary } from '@/domain/songCatalog';
+import { getSong } from '@/api/song/songs';
+import { builtinSummary } from '@/domain/song/builtinSongs';
+import { BUILTIN_CHARTS, builtinId, type Chart } from '@/domain/song/chart';
+import { chartFromDetail, type ChartAssetsDto } from '@/domain/song/chartMapping';
+import type { SongDetail, SongScope } from '@/domain/song/songCatalog';
 
 export type SongsSource = 'api' | 'builtin';
-export type SongsStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-/** 목록 조건(설계 CHART-001 곡 난이도 3-3). 생략하면 전체·필터 없음 */
-export interface SongListFilter {
-  songLevel?: SongLevel;
-  /** 곡 선택·추천만 켠다. 내 곡(/studio)은 켜지 않는다 */
-  playableOnly?: boolean;
-}
 
 export const SONGS_SOURCE: SongsSource = import.meta.env.VITE_SONGS_SOURCE === 'builtin' ? 'builtin' : 'api';
 
@@ -25,26 +18,6 @@ const builtinIndex = (id: number): number => -id - 1;
 
 function builtinChart(id: number): Chart | null {
   return BUILTIN_CHARTS[builtinIndex(id)] ?? null;
-}
-
-function builtinSummary(c: Chart, index: number): SongSummary {
-  return {
-    id: builtinId(index),
-    title: c.title,
-    artist: '기본 제공',
-    source: 'BUILTIN',
-    status: 'READY',
-    bpm: c.bpm,
-    timeSignature: `${c.beatsPerBar}/4`,
-    durationMs: c.durationMs,
-    hasAccompaniment: false,
-    accompanimentStatus: 'NONE',
-    // 내장 곡은 BE 산정 대상이 아니고 FE는 난이도를 계산하지 않는다
-    songLevel: null,
-    difficulties: [c.difficulty],
-    createdAt: '',
-    coverUrl: null,
-  };
 }
 
 function builtinDetail(id: number): SongDetail | null {
@@ -67,56 +40,15 @@ function messageOf(e: unknown): string {
 
 interface SongsState {
   source: SongsSource;
+  /** 곡 선택 창이 마지막으로 연 목록 탭. 다음 진입의 기본 탭이 된다(설계 TECH-350 U4). 목록 자체는 서버 데이터 캐시(api/song/songQueries)가 갖는다 */
   scope: SongScope;
-  items: SongSummary[];
-  status: SongsStatus;
-  error: string | null;
-
-  /** 목록을 읽는다. 늦게 도착한 이전 요청 결과는 버린다 */
-  load: (scope: SongScope, q?: string, filter?: SongListFilter) => Promise<void>;
   /** 곡 상세(난이도별 채보 요약 포함) */
   selectSong: (id: number) => Promise<SongDetail>;
-  /**
-   * 목록의 같은 id 곡에 다시 읽은 상세의 상태 필드(status·hasAccompaniment·accompanimentStatus·songLevel)만 반영한다(설계 CHART-002 반주 상태 3-3).
-   * 채보가 끝나면 곡 난이도가 생기므로 songLevel도 함께 옮긴다(설계 CHART-001 곡 난이도 3-3).
-   * 상세 응답에는 difficulties 등 목록 전용 값이 비어 올 수 있어 나머지는 그대로 둔다. 로딩 상태는 바꾸지 않는다
-   */
-  patchItem: (song: SongSummary) => void;
 }
 
-let seq = 0;
-
-export const useSongs = create<SongsState>()((set, get) => ({
+export const useSongs = create<SongsState>()((_set, get) => ({
   source: SONGS_SOURCE,
   scope: 'BUILTIN',
-  items: [],
-  status: 'idle',
-  error: null,
-
-  load: async (scope, q, filter) => {
-    const my = ++seq;
-    set({ scope, status: 'loading', error: null });
-    try {
-      let items: SongSummary[];
-      if (get().source === 'builtin') {
-        const needle = q?.trim().toLowerCase() ?? '';
-        // 내장 곡은 난이도가 없다(null). playableOnly는 무시하고 난이도 필터만 흉내 낸다(설계 3-3)
-        items =
-          scope === 'MINE'
-            ? []
-            : BUILTIN_CHARTS.map(builtinSummary).filter(
-                (s) => (!needle || s.title.toLowerCase().includes(needle)) && (!filter?.songLevel || s.songLevel === filter.songLevel),
-              );
-      } else {
-        items = (await listSongs({ source: scope, q, size: 50, songLevel: filter?.songLevel, playableOnly: filter?.playableOnly })).items;
-      }
-      if (my !== seq) return;
-      set({ items, status: 'ready' });
-    } catch (e) {
-      if (my !== seq) return;
-      set({ items: [], status: 'error', error: messageOf(e) });
-    }
-  },
 
   selectSong: async (id) => {
     if (get().source === 'builtin') {
@@ -126,21 +58,6 @@ export const useSongs = create<SongsState>()((set, get) => ({
     }
     return getSong(id);
   },
-
-  patchItem: (song) =>
-    set((st) => ({
-      items: st.items.map((s) =>
-        s.id === song.id
-          ? {
-              ...s,
-              status: song.status,
-              hasAccompaniment: song.hasAccompaniment,
-              accompanimentStatus: song.accompanimentStatus,
-              songLevel: song.songLevel,
-            }
-          : s,
-      ),
-    })),
 }));
 
 export interface LoadedChart {

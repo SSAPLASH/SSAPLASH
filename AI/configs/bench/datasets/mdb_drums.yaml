@@ -1,5 +1,5 @@
 # MDB Drums 23곡 (CC BY-NC-SA 4.0). 실제 녹음 채보 평가·논문 수치 검산용.
-# 받는 법·체크섬: AI/README.md "데이터" 절, data/mdb_drums/CHECKSUMS.txt
+# 받는 법: AI/README.md "데이터" 절
 name: mdb_drums
 kind: mdb
 root: data/mdb_drums/MDB Drums

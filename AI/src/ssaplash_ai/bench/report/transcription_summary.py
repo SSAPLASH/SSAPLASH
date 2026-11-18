@@ -1,7 +1,7 @@
-"""채보 결과 CSV 집계와 요약 표(마크다운) (채보 설계 3-12절 묶음 집계, 3-13절 보고서).
+"""채보 결과 CSV 집계와 요약 표(마크다운).
 
 CSV만 읽고 모델·지표 코드는 모름. 집계 단위는 (데이터 묶음, 모델, 입력, 분리 모델)이고
-F1은 곡별 F1의 평균이 아니라 곡별 tp·fp·fn을 묶음 안에서 더한 값으로 다시 계산한다(-107 SUM 규칙).
+F1은 곡별 F1의 평균이 아니라 곡별 tp·fp·fn을 묶음 안에서 더한 값으로 다시 계산한다.
 실패한 곡(error 열)은 집계에서 뺀다. RTF·GPU 메모리처럼 개수가 아닌 값은 곡 중앙값.
 "분리 후 F1 변화"는 같은 (묶음, 모델)의 drums 행 대비 separated·mixture 행의 주 F1(8패드가 있으면
 8패드, 없으면 5가지) 차이. drums 행이 없으면 빈칸.
@@ -219,9 +219,9 @@ def label_f1_table(hits: pd.DataFrame, scheme: str, window_ms: int = 50) -> pd.D
 
 
 def label_f1_metrics(hits: pd.DataFrame, window_ms: int = 50) -> dict[str, dict[str, float]]:
-    """tracking.log_run용 {모델: {f1_{라벨}: 값}}. 패드 8종(pads 기준)과 tom·cymbal(five 기준).
+    """mlflow_tracking.log_run용 {모델: {f1_{라벨}: 값}}. 패드 8종(pads 기준)과 tom·cymbal(five 기준).
 
-    run 하나는 입력이 하나라 모델만 키로 씀. S15P31A307-163: 규칙을 바꿔 가며 잰 run을 MLflow에서
+    run 하나는 입력이 하나라 모델만 키로 씀. 규칙을 바꿔 가며 잰 run을 MLflow에서
     나란히 놓고 패드별 차이를 보기 위한 것.
     """
     out: dict[str, dict[str, float]] = {}
@@ -297,7 +297,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame, hits: pd.DataFrame
         sub = summary[summary["dataset"].astype(str) == ds]
         parts.append(f"## {ds}")
         parts.append("")
-        # 다른 GPU에서 잰 run이 섞이면 RTF·GPU 메모리를 바로 비교할 수 없어 GPU 열을 붙임 (설계 U21)
+        # 다른 GPU에서 잰 run이 섞이면 RTF·GPU 메모리를 바로 비교할 수 없어 GPU 열을 붙임
         mixed_gpu = len(_gpu_names(sub)) > 1
         headers = (
             ["모델", "입력", "곡/실패"]
@@ -375,7 +375,7 @@ def summary_markdown(summary: pd.DataFrame, df: pd.DataFrame, hits: pd.DataFrame
 
 
 def summary_metrics_by_model(summary: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """tracking.log_run에 넘길 {모델: {열: 값}}. run 하나는 묶음·입력이 하나라 모델만 키로."""
+    """mlflow_tracking.log_run에 넘길 {모델: {열: 값}}. run 하나는 묶음·입력이 하나라 모델만 키로."""
     cols = [c for c, _, _ in COMPARISON_METRICS] + [c for c, _ in AUXILIARY_METRICS]
     out: dict[str, dict[str, float]] = {}
     for _, r in summary.iterrows():

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch, resetSignupIncompleteForTest, subscribeSignupIncomplete } from './http';
-import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from './auth';
+import { REFRESH_RETRY_DELAY_MS, getAccessToken, resetForTest } from '@/api/account/auth';
 
 type Handler = (url: string, init: RequestInit | undefined, call: number) => Response | Promise<Response>;
 

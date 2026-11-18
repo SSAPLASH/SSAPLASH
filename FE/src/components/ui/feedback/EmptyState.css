@@ -1,0 +1,52 @@
+/* Feedback / EmptyState 126:3830 */
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-m);
+  padding: var(--space-l);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-1);
+  text-align: center;
+}
+.ui-empty-icon {
+  display: flex;
+  color: var(--text-3);
+}
+.ui-empty-title,
+.ui-empty-desc {
+  /* 한글이 낱말 중간에서 끊기지 않게 하고 줄 길이를 고르게 나눈다 */
+  word-break: keep-all;
+  text-wrap: balance;
+}
+.ui-empty-title {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.ui-empty-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ui-empty-action {
+  display: flex;
+  gap: var(--space-s);
+}
+/* 작은 크기 — 필터 결과 없음처럼 목록 자리에 들어가는 한두 줄 안내 */
+.ui-empty-sm {
+  gap: var(--space-s);
+  padding: var(--space-m);
+}
+.ui-empty-sm .ui-empty-title {
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+.ui-empty-sm .ui-empty-desc {
+  font-size: 13px;
+}

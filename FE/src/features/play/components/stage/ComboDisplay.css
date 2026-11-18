@@ -1,0 +1,78 @@
+/* 하이웨이 위 콤보 두 줄(설계 MODE-001-score-combo-fx D3). 위치는 NoteHighway의 topOverlay 슬롯이 정하고, 이 파일은 글꼴·색·글로우만 */
+.combo-display {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+}
+.combo-display[data-visible='false'] {
+  visibility: hidden;
+}
+.combo-display-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--fx-combo, #ffd23d);
+  /* 글로우는 그림자 한 겹(DOM 요소 1개라 비용이 작다). burst는 2배 */
+  text-shadow: 0 0 14px color-mix(in srgb, var(--fx-combo, #ffd23d) 55%, transparent);
+  will-change: transform;
+}
+.combo-display-value {
+  font-family: var(--font-display);
+  font-size: 72px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+}
+.combo-display-label {
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+.combo-display-inner.is-burst {
+  text-shadow:
+    0 0 14px color-mix(in srgb, var(--fx-combo, #ffd23d) 70%, transparent),
+    0 0 30px color-mix(in srgb, var(--fx-combo, #ffd23d) 55%, transparent);
+}
+.combo-display-inner.is-break {
+  color: var(--fx-miss, #ff4d6d);
+  text-shadow: none;
+  /* 흔들림(motion x)이 끝날 즈음 사라진다. 숨김 자체는 컴포넌트 타이머가 한다 */
+  animation: combo-break-fade 300ms ease-in forwards;
+}
+@keyframes combo-break-fade {
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 위치 A(기본): 하이웨이 상단 중앙, 레인 이름 아래. 노트를 덜 가리도록 반투명 */
+.combo-display--top {
+  opacity: 0.92;
+}
+
+/* 위치 B: 단계(pulse·burst·break) 때만 가운데에 잠깐 보였다가 서서히 사라진다 */
+.combo-display--stage .combo-display-inner {
+  opacity: 0;
+}
+.combo-display--stage .combo-display-inner.is-special {
+  opacity: 1;
+  animation: combo-stage-out 1000ms ease-in 300ms forwards;
+}
+@keyframes combo-stage-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo-display--stage .combo-display-inner.is-special {
+    animation-duration: 600ms;
+  }
+}

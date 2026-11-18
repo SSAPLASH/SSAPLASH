@@ -1,0 +1,72 @@
+/* 곡 선택 레이아웃 (Figma 112:381·112:696): 제목 행 · (악보) 안내 줄 · 구분선 · [왼쪽 열(탭·검색 400·표) 760 | 상세 352](gap 24) */
+.play-sp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  color: var(--text-1);
+}
+/* 검색은 최대 400. 왼쪽 열(카드 옆)이 좁아지면 난이도 칩과 한 줄에 남도록 240까지 줄어든다 */
+.play-sp .play-sp-search {
+  /* 줄바꿈 판단은 기준 폭 240으로 하고, 남는 폭은 400까지 채운다 */
+  flex: 1 1 240px;
+  max-width: 400px;
+}
+/* 검색 라벨은 화면 낭독기에만 보인다 */
+.play-sp-search .ui-input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.play-sp-search .ui-input-foot {
+  display: none;
+}
+.play-sp-center {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-l);
+}
+.play-sp-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 760px) 352px;
+  gap: var(--space-l);
+  align-items: start;
+}
+.play-sp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .play-sp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .play-sp-grid .play-sd {
+    width: auto;
+  }
+}
+/* 검색 400 + 곡 난이도 칩(Figma 481:30686: gap 8, 칩 폭 76 — 666:33746) */
+.play-sp-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+}
+.play-sp-levels {
+  display: flex;
+  gap: var(--space-s);
+}
+.play-sp-levels .ui-chip {
+  justify-content: center;
+  width: 76px;
+}
+/* 악보 연습 안내 줄 아래 구분선(Figma 112:696). 위아래 간격은 .play-sp gap 16 + 8 */
+.play-sp-divider {
+  height: 1px;
+  margin: var(--space-s) 0;
+  border: 0;
+  background: var(--line-strong);
+}
