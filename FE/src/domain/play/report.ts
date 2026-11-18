@@ -96,15 +96,6 @@ export function formatClock(ms: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** 약점 카드 패널의 구간 문구. 마디는 0부터라 +1해서 보인다 */
-export function segmentRangeText(seg: WeakSegment, bars: [number, number] | null, durationMs: number | null): string {
-  if (seg.scope === 'WHOLE') return `곡 전체 · 0:00 – ${formatClock(durationMs ?? seg.toMs)}`;
-  const clock = `${formatClock(seg.fromMs)} – ${formatClock(seg.toMs)}`;
-  if (!bars) return clock;
-  const [from, to] = bars;
-  return `${from === to ? `${from + 1}마디` : `${from + 1}~${to + 1}마디`} · ${clock}`;
-}
-
 /** 판정 수 합이 분석 최소 노트 수 미만인지 */
 export function isTooShortForAnalysis(counts: Record<Judgement, number>): boolean {
   return counts.PERFECT + counts.GOOD + counts.MISS < MIN_NOTES_FOR_ANALYSIS;
