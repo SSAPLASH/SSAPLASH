@@ -21,11 +21,11 @@ S15P31A307/
 
 | 파트 | 스택 | 문서 |
 | --- | --- | --- |
-| AI & Data |  | [AI/README.md](./AI/README.md) |
+| AI & Data | Python 3.11 · PyTorch · FastAPI · BS-RoFormer · STRUM · Ollama(gemma3:12b) · MLflow | [AI/README.md](./AI/README.md) |
 | Backend | Java 21 · Spring Boot 4.1.1 · Gradle | [BE/README.md](./BE/README.md) |
-| Embedded |  | [EMB/README.md](./EMB/README.md) |
-| Frontend |  | [FE/README.md](./FE/README.md) |
-| Infra |  | [Infra/README.md](./Infra/README.md) |
+| Embedded | Arduino(C/C++) · Adafruit Feather nRF52840 Sense · Seeed XIAO nRF52840 · BLE | [EMB/README.md](./EMB/README.md) |
+| Frontend | React 19 · TypeScript · Vite · Zustand · TanStack Query · ONNX Runtime Web | [FE/README.md](./FE/README.md) |
+| Infra | AWS EC2 · Docker Compose · Nginx · PostgreSQL(TimescaleDB) · Redis · SeaweedFS · GitLab CI/CD · Prometheus · Grafana · Loki | [Infra/README.md](./Infra/README.md) |
 
 ---
 
