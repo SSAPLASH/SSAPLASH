@@ -2,15 +2,10 @@
 // 쿼리가 없으면 status 'none'(곡 선택 단계), 있으면 loadChart → 'ready' | 'error'.
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { parseId } from '@/features/play/domain/playShared';
 import { loadChart, type LoadedChart } from '@/store/songStore';
 
 export type ChartParamStatus = 'none' | 'loading' | 'ready' | 'error';
-
-function parseId(raw: string | null): number | null {
-  if (raw === null || !/^-?\d+$/.test(raw)) return null;
-  const n = Number(raw);
-  return Number.isSafeInteger(n) ? n : null;
-}
 
 interface Fetched {
   key: string;
