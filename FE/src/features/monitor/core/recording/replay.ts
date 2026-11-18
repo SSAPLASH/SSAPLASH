@@ -141,11 +141,6 @@ export class ReplayPlayer {
   }
 }
 
-/** 오프셋 계산식(InputSource ClockSync와 같다): 브라우저 = 스틱 + offset, (t0 + t2) / 2 − t1 */
-export function syncOffsetMs(t0: number, t1Ms: number, t2: number): number {
-  return (t0 + t2) / 2 - t1Ms;
-}
-
 /**
  * 녹화의 SYNC 송신(out, t0 = 1바이트 뒤 u32 LE)과 SYNC_ACK(in)를 SyncPairer로 짝지어 스틱별 오프셋을 다시 구한다.
  * 연주 때 소스가 쓰는 ClockSync를 그대로 돌려, 그때 게임이 썼을 오프셋과 같은 규칙(최근 창의 최소 왕복 + 천천히 따라가기)으로 낸다.
