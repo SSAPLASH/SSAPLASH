@@ -35,6 +35,7 @@ import { BestRecordsNotice } from './BestRecordsNotice';
 import { useSongs } from '@/store/songStore';
 import { songListQuery } from '@/api/song/songQueries';
 import { useApiQuery } from '@/runtime/useApiQuery';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
@@ -125,7 +126,7 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   // 추천: API 곡 소스이고 로그인 상태일 때만 탭과 무관하게 마운트 시 한 번 요청한다(U7)
   const authed = useAuth((a) => a.status === 'authenticated');
   const recoKey = `SONG_PICKER:${mode === 'play' ? 'RHYTHM' : 'SHEET'}`;
-  const recoEnabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && source === 'api' && authed;
+  const recoEnabled = AUTH_REQUIRED && source === 'api' && authed;
   const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
   const loadReco = useRecommendations((r) => r.load);
   const loadSimilar = useRecommendations((r) => r.loadSimilar);

@@ -37,6 +37,7 @@ import {
 } from '@/features/result/domain/reportView';
 import { playedHitsFromLog, playedHitsFromNotes, type PlayedHits } from '@/features/result/domain/segmentPlayback';
 import { getPlayLog } from '@/engine/playLog';
+import { AUTH_REQUIRED } from '@/config/auth';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSongs } from '@/store/songStore';
@@ -121,7 +122,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const recoKey = `REPORT:${playId}`;
   const songsSource = useSongs((s) => s.source);
   const authed = useAuth((a) => a.status === 'authenticated');
-  const recoEnabled = import.meta.env.VITE_AUTH_REQUIRED !== 'false' && songsSource === 'api' && authed;
+  const recoEnabled = AUTH_REQUIRED && songsSource === 'api' && authed;
   const recoEntry = useRecommendations((r) => entryOf(r.entries, recoKey));
   const loadReco = useRecommendations((r) => r.load);
   const clickReco = useRecommendations((r) => r.click);
