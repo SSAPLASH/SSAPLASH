@@ -1,6 +1,5 @@
 // 박자 맞추기 화면 문구(순수 함수). 대화상자·설정·드럼 세팅이 같이 쓴다.
 import {
-  clampTimingOffset,
   OUTPUT_LATENCY_WARN_MS,
   TIMING_CAL_MIN_PAIRS,
   type TimingCalInput,
@@ -23,14 +22,6 @@ export function timingCalResultText(r: TimingCalResult): string {
   const ms = Math.round(Math.abs(r.medianMs ?? 0));
   if (ms === 0) return '클릭과 거의 같은 순간에 쳤어요.';
   return (r.medianMs ?? 0) < 0 ? `클릭보다 평균 ${ms}ms 일찍 쳤어요.` : `클릭보다 평균 ${ms}ms 늦게 쳤어요.`;
-}
-
-/** 마지막 측정 기록 한 줄. 기록이 없으면 안내 */
-export function timingCalRecordText(rec: TimingCalRecord | null): string {
-  if (!rec) return '아직 박자를 맞추지 않았어요';
-  const d = new Date(rec.measuredAt);
-  const base = `${d.getMonth() + 1}월 ${d.getDate()}일에 ${INPUT_WITH[rec.input]} 맞췄어요`;
-  return rec.kick ? `${base} · 킥 ${timingOffsetText(clampTimingOffset(rec.kick.medianMs))}` : base;
 }
 
 /** 드럼 세팅 상태 줄: 맞춘 적 있으면 지금 보정값(킥 값이 따로 있으면 같이), 없으면 안 맞춤 */

@@ -150,7 +150,6 @@ function SheetPageBody() {
   const [songMs, setSongMs] = useState(0);
   // 카운트다운 표시값(남은 박 수 · 'go' · 없음)
   const [countValue, setCountValue] = useState<number | 'go' | null>(null);
-  // 리드인 앞 빈 마디 구간(숫자 없이 옅은 딤만)
   // 곡 상세(커버·가수·연습 단계 목록). 준비·연주 화면이 쓴다
   const [detail, setDetail] = useState<SongDetail | null>(null);
   const [noteStates, setNoteStates] = useState<(Judgement | null)[]>([]);

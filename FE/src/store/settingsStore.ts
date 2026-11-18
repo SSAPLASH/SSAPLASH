@@ -73,10 +73,6 @@ interface SettingsState {
   songVolume: number;
   /** 사운드 세트 ('ssaplash' 샘플 키트 / 'synth' 합성음) */
   soundSetId: SoundSetId;
-  /** 세팅 화면 톡 치기 세기: 약 64 · 보통 96 · 강 120 */
-  testVelocity: TestVelocity;
-  /** 리듬 게임 뷰: 'highway' 노트 레인 / 'kit' 세팅한 킷 위 연주 */
-  gameView: GameView;
   /** 전역 메트로놈 마지막 BPM(영속 사본. 값의 주인은 엔진) */
   metronomeBpm: number;
   metronomeBeatsPerBar: BeatsPerBar;
@@ -144,8 +140,6 @@ interface SettingsState {
   setKitSkin: (s: KitSkin) => void;
   setHitFxTheme: (t: HitFxTheme) => void;
   setSoundSetId: (id: SoundSetId) => void;
-  setTestVelocity: (v: TestVelocity) => void;
-  setGameView: (v: GameView) => void;
   /** bootstrap만 부른다(엔진 → 영속). 화면은 엔진 메서드를 부른다 */
   setMetronomeBpm: (v: number) => void;
   setMetronomeBeatsPerBar: (v: BeatsPerBar) => void;
@@ -162,8 +156,6 @@ interface SettingsState {
   setPlayHaptic: (v: PlayHaptic) => void;
 }
 
-export type TestVelocity = 64 | 96 | 120;
-export type GameView = 'highway' | 'kit';
 export type PlayHaptic = 'judgement' | 'local';
 
 export const SETTINGS_VERSION = 27;
@@ -192,8 +184,7 @@ function isLegacyDefaultLayout(raw: unknown): boolean {
  * v1 → v2: inputKind(keyboard/pointer/ble/websocket) → sensorKind(none/pointer/ble/websocket)
  * v2 → v3: 최상위 pointerHitKeys·wsUrl → sensorOptions(소스별 설정 묶음). 옛 필드는 지운다.
  * v3 → v4: 최상위 maxRadiusDeg → tuning.maxRadiusDeg. 나머지 튜닝 값은 기본값.
- * v4 → v5: soundSetId(기본 'ssaplash')·testVelocity(기본 96) 추가.
- * v5 → v6: gameView(기본 'highway') 추가. 알 수 없는 값은 'highway'.
+ * v4 → v5: soundSetId(기본 'ssaplash') 추가. (testVelocity·gameView는 폐기돼 이행하지 않는다. 저장분에 남은 옛 값은 persist merge가 버린다)
  * v6 → v7: metronomeBpm(기본 120, 범위 밖이면 120)·metronomeBeatsPerBar(3이 아니면 4)·soundOn(boolean 아니면 true) 추가.
  * v7 → v8: keyMap 삭제(키 매핑 설정 폐기). presets[] 각 항목에서 keyMap·profile 삭제, soundSetId가 없으면 현재 설정 soundSetId(없으면 'ssaplash')로 채움. layout 없는 프리셋은 버림.
  * v8 → v9: profile·calibrationMode·holdMs 삭제(판정 프로필은 배치에서 유도). firstSetupDone=false, activePresetId=presets[0]?.id ?? null 추가. 프리셋에 isDefault(첫 항목)·schemaVersion 1·updatedAt(=createdAt) 채움.
@@ -243,10 +234,6 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
   }
   if (version < 5) {
     if (p.soundSetId !== 'synth' && p.soundSetId !== 'ssaplash') p.soundSetId = 'ssaplash';
-    if (p.testVelocity !== 64 && p.testVelocity !== 96 && p.testVelocity !== 120) p.testVelocity = 96;
-  }
-  if (version < 6) {
-    if (p.gameView !== 'highway' && p.gameView !== 'kit') p.gameView = 'highway';
   }
   if (version < 7) {
     const bpm = p.metronomeBpm;
@@ -455,8 +442,6 @@ export const useSettings = create<SettingsState>()(
       playHaptic: 'judgement',
       songVolume: 1,
       soundSetId: 'ssaplash',
-      testVelocity: 96,
-      gameView: 'highway',
       metronomeBpm: BPM_DEFAULT,
       metronomeBeatsPerBar: 4,
       metronomeSubdivision: 'auto',
@@ -552,8 +537,6 @@ export const useSettings = create<SettingsState>()(
       },
       setSongVolume: (v) => set({ songVolume: clampVolume(v, 1) }),
       setSoundSetId: (soundSetId) => set({ soundSetId }),
-      setTestVelocity: (testVelocity) => set({ testVelocity }),
-      setGameView: (gameView) => set({ gameView }),
       setMetronomeBpm: (metronomeBpm) => set({ metronomeBpm }),
       setMetronomeBeatsPerBar: (metronomeBeatsPerBar) => set({ metronomeBeatsPerBar }),
       setSoundOn: (soundOn) => set({ soundOn }),
@@ -574,7 +557,10 @@ export const useSettings = create<SettingsState>()(
       migrate: migrateSettings,
       // 저장된 tuning에 빠진 키(나중에 추가된 항목)는 기본값으로 채우고 범위 밖 값은 자른다
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<SettingsState>;
+        // 폐기된 옛 키(testVelocity·gameView)가 저장분에 남아 있어도 상태에 섞이지 않게 뺀다. 설정 버전은 올리지 않는다
+        const p = { ...(persisted ?? {}) } as Partial<SettingsState> & { testVelocity?: unknown; gameView?: unknown };
+        delete p.testVelocity;
+        delete p.gameView;
         return {
           ...current,
           ...p,

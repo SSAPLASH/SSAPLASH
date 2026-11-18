@@ -5,14 +5,8 @@ import { DrumKit } from '@/components/drum/DrumKit';
 import { IconButton } from '@/components/ui/action/IconButton';
 import { KIT_SKINS, KIT_SKIN_LABELS } from '@/domain/kit/drumKit';
 import type { KitSkin } from '@/domain/kit/drumKit';
+import { nextSkin } from '@/features/settings/domain/carouselStep';
 import './KitSkinCarousel.css';
-
-/** 이전(-1)·다음(1) 스킨. 끝에서 넘기면 반대편 끝으로 순환한다 */
-export function nextSkin(cur: KitSkin, dir: 1 | -1): KitSkin {
-  const n = KIT_SKINS.length;
-  const i = KIT_SKINS.indexOf(cur);
-  return KIT_SKINS[(i + dir + n) % n] ?? cur;
-}
 
 interface Props {
   value: KitSkin;

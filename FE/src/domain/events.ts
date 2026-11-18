@@ -176,13 +176,3 @@ export type SourceState = 'disconnected' | 'connecting' | 'connected' | 'error';
  * ok: LINK 수신 중(1초 하트비트), stale: LINK가 3초 넘게 끊김(동글 문제)
  */
 export type DongleLink = 'waiting' | 'ok' | 'stale';
-
-/** 패드 타격 이펙트 입력. 화면이 타격마다 채우고 KitCanvas가 읽기만 한다 */
-export interface HitFx {
-  /** performance.now() */
-  at: number;
-  /** 0~127 */
-  velocity: number;
-  /** 0 = 왼손, 1 = 오른손 */
-  hand: 0 | 1 | null;
-}
