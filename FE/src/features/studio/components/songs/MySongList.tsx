@@ -32,11 +32,11 @@ interface Props {
   retryingAccompanimentIds?: ReadonlySet<number>;
   /** 카드 보기(기본)/목록 보기 */
   view?: StudioView;
-  /** 없으면 ⋯ 메뉴를 그리지 않는다(기능 스위치 꺼짐) */
+  /** 없으면 ⋯ 메뉴를 그리지 않는다 */
   onEdit?: (kind: SongEditKind, song: SongSummary) => void;
   /** 커버 이미지를 불러오지 못했을 때(서명 URL 만료, U10) */
   onCoverError?: () => void;
-  /** 악보 목록(악보 기능 켜짐). 없으면 곡만 그린다 */
+  /** 악보 목록. 없으면 곡만 그린다 */
   sheets?: SheetSummary[];
   /** 악보 목록만 읽지 못했다. 곡은 그대로 두고 목록 위에 한 줄을 보인다 */
   sheetsFailed?: boolean;
@@ -45,7 +45,7 @@ interface Props {
   onSheetCoverError?: () => void;
   /** 악보 항목 ⋯ 메뉴 선택 */
   onSheetMenu?: (kind: SheetMenuKind, sheet: SheetSummary) => void;
-  /** 있으면 악보만 항목에 업로드 버튼(곡 올리기)을 그린다(악보 재연결 스위치 켜짐) */
+  /** 있으면 악보만 항목에 업로드 버튼(곡 올리기)을 그린다 */
   onUploadSong?: (sheet: SheetSummary) => void;
   /** 있으면 곡 ⋯ 메뉴에 [악보 보기 | 악보 올리기]를 넣는다 */
   onSongSheet?: (kind: SongSheetKind, song: SongSummary) => void;

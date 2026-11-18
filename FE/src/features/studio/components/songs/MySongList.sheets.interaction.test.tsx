@@ -70,7 +70,7 @@ describe.each<StudioView>(['card', 'list'])('악보 항목 (%s 보기)', (view) 
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['/studio/sheets/10', '/studio/sheets/11']);
   });
 
-  it('비활성 [악보 연습]·설명 문구가 없고, 스위치 꺼짐(onUploadSong 없음)이면 곡 올리기 버튼도 없다', () => {
+  it('비활성 [악보 연습]·설명 문구가 없고, onUploadSong이 없으면 곡 올리기 버튼도 없다', () => {
     renderList(view);
     // 곡의 [악보 연습]은 링크라 버튼 역할로는 하나도 없다
     expect(screen.queryAllByRole('button', { name: '악보 연습' })).toHaveLength(0);
@@ -155,7 +155,7 @@ describe('악보 목록 실패·연결', () => {
     expect(onSongSheet).toHaveBeenCalledWith('sheetView', expect.objectContaining({ id: 2 }));
   });
 
-  it('onSongSheet이 없으면(스위치 꺼짐) 곡 ⋯ 메뉴에 악보 항목이 없다', async () => {
+  it('onSongSheet이 없으면 곡 ⋯ 메뉴에 악보 항목이 없다', async () => {
     const user = userEvent.setup();
     renderList('card', { sheets: [] });
     await user.click(screen.getByRole('button', { name: '별빛 산책 메뉴' }));
