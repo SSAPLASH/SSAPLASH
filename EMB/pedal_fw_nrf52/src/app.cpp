@@ -7,7 +7,7 @@
  * 채터링: 접점이 붙는 첫 순간 바로 보내고(지연 없음) LOCKOUT_US 동안 다시 안 받는다.
  *   떼짐은 RELEASE_US 동안 계속 떨어져 있어야 인정한다 (발을 걸쳐 둘 때 깜빡임 방지).
  * 시각: micros() 하나로 HIT·PEDAL·SYNC_ACK를 찍는다 (FE 시계 보정과 같은 기준).
- * 전원 버튼·LED (FW 3.1): 박스 뚜껑의 불 들어오는 버튼. 아래 "전원 버튼 · LED" 참고.
+ * 전원 버튼·LED (FW 3.1, 3.3부터 보드 USER 버튼): 아래 "전원 버튼 · LED" 참고.
  */
 #include "app.h"
 #include <Arduino.h>
@@ -23,8 +23,10 @@ extern "C" {
 #define SERIAL_MODE   SERIAL_BINARY
 
 #define FW_MAJOR 3                     /* 3 = 페달 보드 */
-#define FW_MINOR 2                     /* 1 = 박스 전원 버튼(D5)·LED(D6), 2 = 버튼 튐(1초 안 반복 짧은 누름)은 BAT 표시·로그 대신 10초마다 BTN noise 집계 */
-#define FW_TAG   "BOOT 3.2 pedal"
+#define FW_MINOR 3                     /* 1 = 박스 전원 버튼(D5)·LED(D6), 2 = 버튼 튐(1초 안 반복 짧은 누름)은 BAT 표시·로그 대신 10초마다 BTN noise 집계,
+                                          3 = 전원 버튼을 박스 버튼(D5) → 보드 USER 버튼(7)으로 (D5가 혼자 눌림으로 읽혀 끌 수 없었음),
+                                              끄기는 systemOff 대신 저전력 대기 후 리셋, 10분 자동 꺼짐을 웹 명령·페달 기준으로 */
+#define FW_TAG   "BOOT 3.3 pedal"
 #define BLE_NAME "SSAPLASH-PEDAL"
 
 #define ROLE_HIHAT   2                 /* 왼발 */
@@ -33,10 +35,12 @@ extern "C" {
 #define PAD_HH_PEDAL 8
 #define PEDAL_VEL    100               /* 페달 HIT 세기 고정 */
 
-/* 전원 버튼·LED 핀 (D9·D6·D5 3핀 헤더 하나. 보드 GND 헤더는 풋스위치가 쓰고 있어 D9를 LOW로 두고 GND 대신 쓴다)
- *   버튼(6mm 택트, LED 내장): 스위치 D5 ↔ D9, LED + → D6, LED − → D9 (빨간 칠 쪽이 LED −)
- *   D5·D6·D9는 Feather nRF52840 Sense·Express 같은 자리 */
-#define PIN_PWR_BTN  5
+/* 전원 버튼·LED 핀
+ *   버튼: 보드 USER 버튼(7번 핀, 스틱과 같음). 3.2까지 쓰던 박스 버튼(D5 ↔ D9)은 11/13 D5가 손 안 대도 눌림으로
+ *     읽혀(BTN noise·혼자 꺼짐 시도·잠들자마자 깨어남) 3.3부터 읽지 않는다. 배선은 남아 있어도 된다.
+ *   LED: 박스 버튼 LED(+ → D6, − → D9. 보드 GND 헤더는 풋스위치가 쓰고 있어 D9를 LOW로 두고 GND 대신 쓴다)와
+ *     보드 빨간 LED에 같은 표시를 낸다 (박스 버튼을 빼도 보드 LED로 보이게) */
+#define PIN_PWR_BTN  7
 #define PIN_PWR_LED  6
 #define PIN_PWR_GND  9
 
@@ -118,27 +122,32 @@ static void bat_update()
     if (bat_mv < BAT_WARN_MV && !warned) { warned = true; send_log("BAT LOW"); }
     n_low = bat_mv < BAT_OFF_MV ? n_low + 1 : 0;
     if (n_low >= BAT_OFF_N) {
-        power_off("BAT OFF");                        /* 박스 버튼(D5)으로 다시 켬 */
+        power_off("BAT OFF");                        /* USER 버튼으로 다시 켬 */
     }
 }
 
 /* ===================== 전원 버튼 · LED =====================
- *   꺼진 상태에서 누름 → 깨어나 부팅 (LED 켜짐)
- *   2초 누름          → 누르는 동안 LED 빠르게 깜빡 → 꺼짐 (손 떼면 깊은 잠)
+ * 버튼 = 보드 USER 버튼(7번 핀). LED = 박스 버튼 LED(D6) + 보드 빨간 LED (같은 표시)
+ *   꺼진 상태에서 누름 → 손 떼면 켜짐 (부팅)
+ *   2초 누름          → 누르는 동안 LED 빠르게 깜빡 → 6번 깜빡 → 꺼짐
  *   한 번 누름         → 배터리 깜빡 1~4번 (25%씩)
  *   LED: 동글 연결 찾는 중 1초 주기 깜빡, 연결되면 계속 켜짐
- *   BLE·USB 시리얼 없이 10분 → 자동으로 꺼짐. 배터리 3.3V 아래 3번 연속 → 꺼짐
- * D5는 부트로더가 보지 않아서 systemOff로 자도 깨어날 때 DFU로 빠지지 않는다 (스틱 USER 버튼과 다름).
- * 잠든 동안 D9 LOW·D6 LOW 출력 상태는 유지된다 (nRF52 System OFF는 GPIO 설정을 그대로 둔다).
+ *   웹 명령(SYNC 등)·USB 시리얼·페달 밟음이 10분 없으면 → 자동으로 꺼짐. 동글 BLE 연결만으로는 안 켜 둔다
+ *     (동글이 PC에 꽂혀 있으면 웹을 닫아도 연결이 살아 있어 3.2까지는 영영 안 꺼졌다). 배터리 3.3V 아래 3번 연속 → 꺼짐
+ * 끄기는 systemOff가 아니다: USER 버튼(P1.02)은 부트로더의 DFU 버튼이라, 눌러서 깨면 DFU로 빠져 앱이 안 돈다(스틱 11/5 확인).
+ *   그래서 스틱처럼 BLE를 끄고 저전력으로 기다리다가, 버튼을 눌렀다 뗀 뒤에 리셋한다. USB 전원으로 다시 깨는 문제도 없다.
+ *   꺼진 동안도 조금은 먹으니 오래 안 쓰면 배터리 커넥터를 뺀다.
  * 흰 LED(1mA에서 2.57V)라 저항 없이 기본 구동(standard drive)으로 켠다. 강한 구동으로 바꾸지 말 것 */
 #define LONG_PRESS_MS 2000
 #define AUTO_OFF_MS   (10UL * 60UL * 1000UL)
+#define BTN_UP_MS     50               /* 누르는 중 이만큼 계속 떨어져 있어야 뗌 (짧은 튐 무시) */
 
 static uint32_t ui_last_click = 0;    /* 직전 짧은 누름 시각 (튐 판별) */
 static uint16_t ui_noise = 0;         /* 10초 동안 모인 튐 수 */
 static uint32_t ui_noise_ms = 0;
 static bool     ui_armed = false;     /* 부팅을 깨운 누름이 떨어진 뒤부터 버튼을 받는다 */
 static uint32_t ui_t_down = 0;        /* 누르고 있는 중이면 누른 시각, 아니면 0 */
+static uint32_t ui_t_up = 0;          /* 누르는 중 떨어지기 시작한 시각 (0 = 붙어 있음) */
 static uint32_t ui_link_ms = 0, ui_blink_t0 = 0;
 static uint8_t  ui_blinks = 0;
 
@@ -148,39 +157,65 @@ static void power_pins_init()
     digitalWrite(PIN_PWR_GND, LOW);
     pinMode(PIN_PWR_LED, OUTPUT);
     digitalWrite(PIN_PWR_LED, HIGH);
+    digitalWrite(LED_RED, HIGH);
     pinMode(PIN_PWR_BTN, INPUT_PULLUP);
     ui_link_ms = millis();
+}
+
+static inline bool btn_down() { return !digitalRead(PIN_PWR_BTN); }
+
+static inline void led_out(bool on)
+{
+    digitalWrite(PIN_PWR_LED, on ? HIGH : LOW);
+    digitalWrite(LED_RED, on ? HIGH : LOW);
 }
 
 static void power_off(const char *why)
 {
     send_log(why);
-    for (int i = 0; i < 6; i++) { digitalWrite(PIN_PWR_LED, (i & 1) ? HIGH : LOW); delay(80); }
-    digitalWrite(PIN_PWR_LED, LOW);
-    digitalWrite(LED_RED, LOW);
-    while (!digitalRead(PIN_PWR_BTN)) delay(10);        /* 누른 채로 자면 바로 다시 깨어난다 */
+    for (int i = 0; i < 6; i++) { led_out(i & 1); delay(80); }
+    led_out(false);
+    while (btn_down()) delay(10);                       /* 뗄 때까지 (누른 채 기다리기 시작하면 바로 다시 켜진다) */
     delay(100);
     Bluefruit.Advertising.restartOnDisconnect(false);
     Bluefruit.Advertising.stop();
     for (uint16_t h = 0; h < BLE_MAX_CONNECTION; h++)
         if (Bluefruit.connected(h)) Bluefruit.disconnect(h);
     delay(50);
-    systemOff(PIN_PWR_BTN, LOW);                        /* D5가 LOW(눌림)면 깨어나 리셋 → 앱 부팅 */
+    Bluefruit.autoConnLed(false);                       /* 파란 LED(연결 표시)가 켜진 채 남지 않게 (11/13) */
+#ifdef LED_BLUE
+    digitalWrite(LED_BLUE, LOW);
+#endif
+    for (;;) {
+        delay(50);                                      /* FreeRTOS 대기: CPU는 잔다 */
+        if (!btn_down()) continue;
+        uint32_t t = millis();
+        while (btn_down()) delay(10);                   /* 뗄 때까지 */
+        if (millis() - t >= 30) {                       /* 30ms 미만은 튐 */
+            led_out(true);
+            delay(20);
+            NVIC_SystemReset();                         /* 버튼이 떼진 상태로 리셋 → 부트로더가 바로 앱으로 */
+        }
+    }
 }
 
 static void ui_update()
 {
     uint32_t now = millis();
-    bool down = !digitalRead(PIN_PWR_BTN);
+    bool down = btn_down();
 
     if (!ui_armed) {
         if (!down) ui_armed = true;
     } else if (down) {
+        ui_t_up = 0;                                    /* 짧게 떨어졌다 다시 붙음: 누름이 이어진다 */
         if (!ui_t_down) ui_t_down = now ? now : 1;
         else if (now - ui_t_down >= LONG_PRESS_MS) power_off("OFF (btn)");
-    } else if (ui_t_down) {
-        uint32_t held = now - ui_t_down;
+    } else if (ui_t_down && !ui_t_up) {
+        ui_t_up = now ? now : 1;                        /* 떨어지기 시작: BTN_UP_MS 동안 지켜본다 */
+    } else if (ui_t_down && now - ui_t_up >= BTN_UP_MS) {
+        uint32_t held = ui_t_up - ui_t_down;
         ui_t_down = 0;
+        ui_t_up = 0;
         if (held >= 30 && ui_last_click && now - ui_last_click < 1000) {
             ui_noise++;                                 /* 1초 안에 또 짧게 눌림 = 배선 튐으로 본다 (11/11 0.3초마다 BTN BAT 297건) */
             ui_last_click = now;
@@ -202,7 +237,7 @@ static void ui_update()
         ui_noise_ms = now;
     }
 
-    if (ble_connected || Serial) ui_link_ms = now;
+    if (Serial) ui_link_ms = now;                       /* 웹 명령(handle_cmd)·페달 밟음(send_hit)도 갱신한다 */
     if (now - ui_link_ms > AUTO_OFF_MS) power_off("OFF (idle 10min)");
 
     bool on;
@@ -219,7 +254,7 @@ static void ui_update()
     } else {
         on = ble_connected ? true : ((now / 500) & 1);
     }
-    digitalWrite(PIN_PWR_LED, on ? HIGH : LOW);
+    led_out(on);
 }
 
 /* ===================== 페달 입력 ===================== */
@@ -248,6 +283,7 @@ static void send_hit(pedal_t &p, uint32_t t)
     h.velocity = PEDAL_VEL;
     uint8_t b[PKT_MAX];
     send(b, pkt_hit(b, &h));
+    ui_link_ms = millis();                              /* 밟는 중이면 안 꺼진다 */
 }
 
 /* 0x08 PEDAL (v0.8 초안): [0]0x08 [1]flags [2]state [3-6]t_us */
@@ -321,6 +357,7 @@ static void handle_cmd(const cmd_t *c)
 {
     const uint8_t *d = c->d;
     uint8_t b[PKT_MAX];
+    ui_link_ms = millis();                              /* 웹이 열려 있으면 SYNC가 1초마다 온다 = 쓰는 중 */
     switch (d[0]) {
     case CMD_SYNC:                                      /* role 2·3 둘 다 답한다 (FE는 역할별로 시계 보정) */
         if (c->len >= 5) {
@@ -415,6 +452,6 @@ void app_loop()
     }
 #endif
 
-    if (status_due) { status_due = false; t_status = millis(); send_status(); }   /* 연결 직후 1회 */
+    if (status_due) { status_due = false; t_status = millis(); send_log(FW_TAG); send_status(); }   /* 연결 직후 1회 (부팅 로그는 연결 전이라 못 받으므로 버전도 다시) */
     if (millis() - t_status > 5000) { t_status = millis(); bat_update(); send_status(); }
 }
