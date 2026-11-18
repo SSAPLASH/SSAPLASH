@@ -6,21 +6,9 @@ import {
   MIDI_UNCERTAIN_TEXT,
   isMidiUncertain,
   midiErrorText,
-  precheckMidi,
   precheckUpload,
   uploadKindOf,
 } from './midiUpload';
-
-describe('precheckMidi', () => {
-  it('빈 파일은 EMPTY', () => {
-    expect(precheckMidi({ size: 0 })).toEqual({ ok: false, reason: 'EMPTY' });
-  });
-  it('1 MiB 초과는 TOO_LARGE, 정확히 1 MiB는 통과', () => {
-    expect(MAX_MIDI_BYTES).toBe(1_048_576);
-    expect(precheckMidi({ size: MAX_MIDI_BYTES + 1 })).toEqual({ ok: false, reason: 'TOO_LARGE' });
-    expect(precheckMidi({ size: MAX_MIDI_BYTES })).toEqual({ ok: true });
-  });
-});
 
 describe('midiErrorText', () => {
   it('표의 코드는 고정 문구', () => {

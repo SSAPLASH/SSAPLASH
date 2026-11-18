@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analysisTeaser, formatClock, isTooShortForAnalysis, isUploadTarget, levelBadge, MIN_NOTES_FOR_ANALYSIS, segmentBars, segmentLevel, segmentRangeText, summaryBadge, type AnalysisStatus, type Report, type WeakSegment } from './report';
+import { analysisTeaser, formatClock, isTooShortForAnalysis, isUploadTarget, levelBadge, MIN_NOTES_FOR_ANALYSIS, segmentBars, segmentLevel, summaryBadge, type AnalysisStatus, type Report, type WeakSegment } from './report';
 
 describe('segmentBars', () => {
   it('bpm 120·4박에서 7000~12000ms는 [3, 5]', () => {
@@ -158,24 +158,5 @@ describe('formatClock', () => {
     expect(formatClock(59999)).toBe('0:59');
     expect(formatClock(-1)).toBe('0:00');
     expect(formatClock(Number.NaN)).toBe('0:00');
-  });
-});
-
-describe('segmentRangeText', () => {
-  const s: WeakSegment = { ...seg, fromMs: 7000, toMs: 12000 };
-
-  it('마디가 있으면 마디 + 시계, 같은 마디는 한 마디만', () => {
-    expect(segmentRangeText(s, segmentBars(7000, 12000, 120, 4), 32000)).toBe('4~6마디 · 0:07 – 0:12');
-    expect(segmentRangeText(s, [1, 1], null)).toBe('2마디 · 0:07 – 0:12');
-  });
-
-  it('마디가 없으면 시계만', () => {
-    expect(segmentRangeText(s, null, 32000)).toBe('0:07 – 0:12');
-  });
-
-  it('WHOLE은 곡 전체 · 0:00 – 곡 길이(없으면 toMs)', () => {
-    const whole: WeakSegment = { ...seg, scope: 'WHOLE', fromMs: 0, toMs: 32000 };
-    expect(segmentRangeText(whole, null, 32000)).toBe('곡 전체 · 0:00 – 0:32');
-    expect(segmentRangeText(whole, null, null)).toBe('곡 전체 · 0:00 – 0:32');
   });
 });
