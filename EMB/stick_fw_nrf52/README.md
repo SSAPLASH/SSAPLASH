@@ -2,7 +2,7 @@
 
 최종 보드 **Adafruit Feather nRF52840 Sense** 펌웨어입니다. 내장 IMU를 1.66kHz로 읽어 타격을 검출하고, 자세·패드를 판정해 **BLE**(Web Bluetooth)와 USB 시리얼로 HIT 패킷을 보냅니다. 통신 규약은 스틱 통신 프로토콜 v0.7(GitLab Wiki)을 따릅니다.
 
-알고리즘(`hit_detect`, `pose`, `pad`)은 NUCLEO 프로토타입(`../stick_fw_f103`)의 순수 C 모듈을 그대로 가져왔고, 2026-10-26 녹화로 1.66kHz용 파라미터만 다시 잡았습니다. 하드웨어 배선 전체는 "에어드럼 센서 스틱 하드웨어 명세서" 5장을 따릅니다.
+알고리즘(`hit_detect`, `pose`, `pad`)은 NUCLEO 프로토타입(`stick_fw_f103`, 지금은 지움)의 순수 C 모듈을 그대로 가져왔고, 2026-10-26 녹화로 1.66kHz용 파라미터만 다시 잡았습니다. 하드웨어 배선 전체는 "에어드럼 센서 스틱 하드웨어 명세서" 5장을 따릅니다.
 
 ## 1. 개발 환경
 
@@ -53,11 +53,11 @@ IMU 설정: 자이로 ±2000dps(0.07°/s/LSB), 가속도 ±16g(0.488mg/LSB), 둘
 |---|---|
 | `stick_fw_nrf52.ino` | `setup()`/`loop()`만. 본체는 `src/app.cpp` (Arduino가 .ino에 함수 원형을 자동으로 넣어 타입 순서가 꼬이는 문제 회피) |
 | `src/app.cpp` | IMU 읽기, 바이어스 측정, 검출·자세·판정, BLE GATT, 명령 처리, 시리얼 출력. **설정은 파일 위쪽 `#define`** |
-| `src/hit_detect.*` | 타격 검출 (f103 사본 + `min_swing_ms`, `n_reject_short` 추가) |
-| `src/pose.*`, `src/pad.*` | 자세 추정, 패드 판정 (f103과 같음) |
+| `src/hit_detect.*` | 타격 검출 (프로토타입에서 가져와 `min_swing_ms`, `n_reject_short` 추가) |
+| `src/pose.*`, `src/pad.*` | 자세 추정, 패드 판정 |
 | `src/stick_proto.*` | 패킷 만들기, CRC8, 시리얼 프레이밍·해제, 명령 구조체 |
 
-`hit_detect`·`pose`·`pad`는 f103과 사본이 둘이다. f103 쪽 `hit_detect`는 `min_swing_ms` 기본값 0이라 동작이 같다. 나중에 공용 폴더로 합친다.
+`hit_detect`·`pose`·`pad`는 PC 재생 도구(`../tools/hit_replay`, `../tools/pad_replay`)도 이 파일을 그대로 빌드해 쓴다. HAL 없는 순수 C로 유지한다.
 
 ## 5. 설정 (`src/app.cpp` 위쪽)
 
