@@ -1,32 +1,12 @@
-// 리포트의 작은 구역들 (설계 COACH-002 리포트 화면 개편 2장): 요약 수치 한 줄 · 관찰 목록 · 패드별 기록 표 · AI 분석 상태 안내.
+// 리포트의 작은 구역들 (설계 COACH-002 리포트 화면 개편 2장): 관찰 목록 · 패드별 기록 표 · AI 분석 상태 안내.
+// 관찰·패드 기록은 둥근 면 하나에 줄과 구분선을 두는 묶음 목록 모양이다(설계 COACH-002-report-apple-redesign ⑥).
 // 모두 props만 그린다. 계산은 domain/reportView, 조회·타이머는 페이지가 맡는다.
 import type { ReactNode } from 'react';
 import type { Judgement } from '@/domain/play/judgement';
 import { PAD_META } from '@/domain/kit/pads';
-import { isTooShortForAnalysis, type AnalysisStatus, type PadStat, type Report, type WeakSegment } from '@/domain/play/report';
+import { isTooShortForAnalysis, type AnalysisStatus, type PadStat, type WeakSegment } from '@/domain/play/report';
 import { deltaText, padRows, padStatTotal } from '@/features/result/domain/reportView';
 import './report.css';
-
-/** 요약 수치 한 줄: 정확도 · 최대 콤보 · 점수 · 판정 노트. 모두 서버 값 */
-export function StatsLine({ report: r }: { report: Report }) {
-  const total = r.counts.PERFECT + r.counts.GOOD + r.counts.MISS;
-  const items: [string, string][] = [
-    ['정확도', `${(r.accuracy * 100).toFixed(1)}%`],
-    ['최대 콤보', String(r.maxCombo)],
-    ['점수', r.score.toLocaleString('ko-KR')],
-    ['판정 노트', String(total)],
-  ];
-  return (
-    <div className="rp-stats" role="group" aria-label="연주 요약">
-      {items.map(([label, value]) => (
-        <div key={label} className="rp-stat">
-          <span className="rp-stat-label">{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export interface ObservationRow {
   key: string;
@@ -42,6 +22,7 @@ export function ObservationList({ id, title, rows }: { id: string; title: string
   return (
     <section className="rp-observations" aria-labelledby={id}>
       <h2 id={id}>{title}</h2>
+      <div className="rp-list">
       {rows.map((r) => (
         <div key={r.key} className="rp-observation">
           <div>
@@ -55,6 +36,7 @@ export function ObservationList({ id, title, rows }: { id: string; title: string
           )}
         </div>
       ))}
+      </div>
     </section>
   );
 }
@@ -67,7 +49,12 @@ function PadRow({ s }: { s: PadStat }) {
   return (
     <tr>
       <td>{PAD_META[s.pad].label}</td>
-      <td>{accuracyText(s.accuracy)}</td>
+      <td>
+        <span className="rp-pad-meter" aria-hidden="true">
+          {s.accuracy !== null && <i style={{ width: `${Math.round(Math.min(1, Math.max(0, s.accuracy)) * 100)}%` }} />}
+        </span>
+        {accuracyText(s.accuracy)}
+      </td>
       <td>{padStatTotal(s)}</td>
       <td>{deltaText(s.meanDeltaMs) || DASH}</td>
     </tr>

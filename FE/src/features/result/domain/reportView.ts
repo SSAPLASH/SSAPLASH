@@ -343,13 +343,109 @@ export function splitSummary(text: string): { headline: string; rest: string } {
   return m ? { headline: m[1], rest: m[2] } : { headline: flat, rest: '' };
 }
 
+
+// ---- 리포트 머리(애플 스타일 개편, 설계 COACH-002-report-apple-redesign 3장) ----
+
+/** 노트 판정 한 줄 막대의 개수. 정확·빠름늦음·놓침은 서버 counts, 빠름·늦음 나누기는 노트가 있을 때만 */
+export interface JudgementSplit {
+  perfect: number;
+  good: number;
+  miss: number;
+  total: number;
+  /** 노트를 받기 전이면 null */
+  early: number | null;
+  late: number | null;
+}
+
+export function judgementSplit(
+  counts: Record<'PERFECT' | 'GOOD' | 'MISS', number>,
+  notes: readonly Pick<ReportNote, 'judgement' | 'deltaMs'>[] | null,
+): JudgementSplit {
+  const perfect = Math.max(0, counts.PERFECT || 0);
+  const good = Math.max(0, counts.GOOD || 0);
+  const miss = Math.max(0, counts.MISS || 0);
+  const v = notes ? verdictCounts(notes) : null;
+  return { perfect, good, miss, total: perfect + good + miss, early: v ? v.EARLY : null, late: v ? v.LATE : null };
+}
+
+/** 평균 박자 칸에 쓰는 오차 요약 */
+export interface TimingSummary {
+  /** 평균 오차(ms). 음수 = 빠름 */
+  meanMs: number;
+  /** 가운데 절반(25~75%)이 모인 범위(ms) */
+  lowMs: number;
+  highMs: number;
+  samples: number;
+}
+
+/** 평균 박자를 보일 최소 표본 수. 이보다 적으면 칸을 숨긴다 */
+export const TIMING_MIN_SAMPLES = 5;
+
+/** 정렬된 값의 분위수(선형 보간) */
+function quantile(sorted: readonly number[], q: number): number {
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+/** 맞힌 노트(정확·빠름·늦음)의 오차 요약. 표본이 모자라면 null */
+export function timingSummary(notes: readonly Pick<ReportNote, 'judgement' | 'deltaMs'>[] | null): TimingSummary | null {
+  if (!notes) return null;
+  const d = notes
+    .filter((n) => n.judgement !== 'MISS' && n.deltaMs !== null && Number.isFinite(n.deltaMs))
+    .map((n) => n.deltaMs as number)
+    .sort((a, b) => a - b);
+  if (d.length < TIMING_MIN_SAMPLES) return null;
+  const mean = d.reduce((s, x) => s + x, 0) / d.length;
+  return { meanMs: mean, lowMs: quantile(d, 0.25), highMs: quantile(d, 0.75), samples: d.length };
+}
+
+/** 오차(ms)를 빠름 ← 정박 → 늦음 눈금의 0~1 위치로. 반폭 밖이면 끝에 붙인다 */
+export function timingScalePos(deltaMs: number, halfMs: number): number {
+  const h = halfMs > 0 ? halfMs : 60;
+  return Math.min(1, Math.max(0, 0.5 + deltaMs / (2 * h)));
+}
+
+/** 평균 오차 글자: 「12ms 늦게」·「8ms 빠르게」·「정박」 */
+export function meanTimingText(meanMs: number): { value: string; unit: string } {
+  const abs = Math.round(Math.abs(meanMs));
+  if (abs === 0) return { value: '정박', unit: '' };
+  return { value: String(abs), unit: `ms ${meanMs < 0 ? '빠르게' : '늦게'}` };
+}
+
+/** 지난번 대비 계산에 쓰는 연주 기록 한 줄(서버 연주 기록 목록의 필요한 필드만) */
+export interface PlayAccuracyRow {
+  playId: string;
+  songId: number | null;
+  mode: string;
+  difficulty: string | null;
+  accuracy: number | null;
+  endedAt: string;
+}
+
+export interface RecentAccuracy {
+  /** 오래된 순 정확도(0~1), 마지막이 이번 연주. 최대 5개 */
+  values: number[];
+  /** 직전 대비 변화(%p, 반올림) */
+  diffPoint: number;
+}
+
+export const RECENT_PLAY_COUNT = 5;
+
 /**
- * 한 줄에 들어가는 가장 큰 글자 크기(px)를 고른다. `fits(size)`는 그 크기에서 한 줄에 들어가는지 알려 준다.
- * max부터 step씩 줄이며, min에서도 들어가지 않으면 `{ size: min, fits: false }`(화면은 단어 단위로 접는다).
+ * 같은 곡·같은 모드·같은 연습 단계의 최근 정확도. 이번 연주가 목록에 없거나 정확도 있는 기록이 2번 미만이면 null.
+ * 이번 연주보다 나중에 끝난 기록은 넣지 않는다(옛 리포트를 다시 볼 때 그 시점 기준)
  */
-export function fitFontSize(fits: (size: number) => boolean, max: number, min: number, step = 0.5): { size: number; fits: boolean } {
-  for (let size = max; size >= min; size -= step) {
-    if (fits(size)) return { size, fits: true };
-  }
-  return { size: min, fits: false };
+export function recentAccuracies(rows: readonly PlayAccuracyRow[], current: { playId: string; songId: number | null; mode: string; difficulty: string | null }): RecentAccuracy | null {
+  if (current.songId === null) return null;
+  const me = rows.find((r) => r.playId === current.playId);
+  if (!me || me.accuracy === null) return null;
+  const same = rows
+    .filter((r) => r.songId === current.songId && r.mode === current.mode && r.difficulty === current.difficulty && r.accuracy !== null && r.endedAt <= me.endedAt)
+    .sort((a, b) => (a.endedAt < b.endedAt ? -1 : a.endedAt > b.endedAt ? 1 : 0))
+    .slice(-RECENT_PLAY_COUNT);
+  if (same.length < 2 || same[same.length - 1].playId !== current.playId) return null;
+  const values = same.map((r) => r.accuracy as number);
+  return { values, diffPoint: Math.round((values[values.length - 1] - values[values.length - 2]) * 100) };
 }
