@@ -4,12 +4,12 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
 import type { PadId } from '@/domain/kit/pads';
-import type { PadStat, Report, ReportNote, WeakSegment } from '@/domain/play/report';
+import type { PadStat, ReportNote, WeakSegment } from '@/domain/play/report';
 import { flowBins, focusOfBin, focusOfCluster, focusOfTransition, type ReportGrid } from '@/features/result/domain/reportView';
 import type { PlayedHit, PlayedHits } from '@/features/result/domain/segmentPlayback';
 import { FocusPanel } from './FocusPanel';
 import { NoteFlowChart } from './NoteFlowChart';
-import { AnalysisNotice, ObservationList, PadTable, StatsLine } from './ReportSections';
+import { AnalysisNotice, ObservationList, PadTable } from './ReportSections';
 
 afterEach(cleanup);
 
@@ -117,7 +117,7 @@ describe('NoteFlowChart', () => {
   it('범례는 정확 · 빠름·늦음 · 놓침 — 막대는 색 3개 그대로다(D5)', () => {
     const { container } = render(<NoteFlowChart bins={flowBins(NOTES, 60000)} totalMs={60000} clusters={[]} focus={null} onPickBin={() => {}} onPickCluster={() => {}} />);
     expect([...within(screen.getByLabelText('판정 범례')).getAllByText(/./)].map((e) => e.textContent)).toEqual(['정확', '빠름·늦음', '놓침']);
-    expect(container.querySelector('.rp-bin')!.querySelectorAll('span')).toHaveLength(3);
+    expect(container.querySelector('.rp-bin .rp-stack')!.querySelectorAll('span')).toHaveLength(3);
     expect(container.textContent).not.toContain('타이밍 차이');
   });
 
@@ -136,16 +136,23 @@ describe('NoteFlowChart', () => {
     expect(screen.queryByText('시각은 원래 빠르기 기준이에요')).toBeNull();
   });
 
-  it('칸이 많은 긴 곡은 칸 사이 간격을 줄인다', () => {
-    const gap = (totalMs: number) => {
-      const { container } = render(<NoteFlowChart bins={flowBins([], totalMs)} totalMs={totalMs} clusters={[]} focus={null} onPickBin={() => {}} onPickCluster={() => {}} />);
-      const v = (container.querySelector('.rp-bars') as HTMLElement).style.getPropertyValue('--rp-gap');
+  it('칸이 많은 긴 곡은 막대를 넓히고 틈·모서리를 줄인다(높이는 px)', () => {
+    const shape = (totalMs: number) => {
+      const { container } = render(<NoteFlowChart bins={flowBins(NOTES, totalMs)} totalMs={totalMs} clusters={[]} focus={null} onPickBin={() => {}} onPickCluster={() => {}} />);
+      const st = (container.querySelector('.rp-bars') as HTMLElement).style;
+      const v = [st.getPropertyValue('--rp-stack-w'), st.getPropertyValue('--rp-stack-r'), st.getPropertyValue('--rp-seg-gap'), st.height];
       cleanup();
       return v;
     };
-    expect(gap(180_000)).toBe('3px');
-    expect(gap(600_000)).toBe('1px');
-    expect(gap(1_200_000)).toBe('0px');
+    expect(shape(180_000)).toEqual(['60%', '5px', '2px', '160px']);
+    expect(shape(600_000)).toEqual(['80%', '2px', '1px', '160px']);
+    expect(shape(1_200_000)).toEqual(['100%', '0px', '0px', '160px']);
+  });
+
+  it('확대 중인 구간과 겹치는 칸만 진하게 표시한다', () => {
+    const { container } = render(<NoteFlowChart bins={flowBins(NOTES, 60000)} totalMs={60000} clusters={[]} focus={focusOfBin(10000)} onPickBin={() => {}} onPickCluster={() => {}} />);
+    expect(container.querySelector('.rp-bars')!.classList.contains('has-focus')).toBe(true);
+    expect([...container.querySelectorAll('.rp-bin.in-focus')].map((b) => b.getAttribute('aria-label')!.slice(0, 9))).toEqual(['0:10–0:15']);
   });
 
   it('놓친 구간이 없으면 버튼 줄이 없고, 안내가 있으면 그 자리에 보인다(A3)', () => {
@@ -372,7 +379,7 @@ describe('ObservationList', () => {
   });
 });
 
-describe('PadTable · StatsLine', () => {
+describe('PadTable', () => {
   const stat = (pad: PadId, accuracy: number | null, total: number, meanDeltaMs: number | null): PadStat => ({
     pad, accuracy, meanDeltaMs, meanVelocity: null, counts: { PERFECT: total, GOOD: 0, MISS: 0 }, sampleCount: total,
   });
@@ -400,12 +407,6 @@ describe('PadTable · StatsLine', () => {
     expect(screen.getByText('패드 통계가 없습니다.')).toBeTruthy();
   });
 
-  it('요약 수치 한 줄: 정확도·최대 콤보·점수·판정 노트(A1)', () => {
-    const report = { accuracy: 0.383, maxCombo: 24, score: 26320, counts: { PERFECT: 200, GOOD: 100, MISS: 387 } } as Report;
-    render(<StatsLine report={report} />);
-    const text = screen.getByLabelText('연주 요약').textContent;
-    expect(text).toBe('정확도38.3%최대 콤보24점수26,320판정 노트687');
-  });
 });
 
 describe('AnalysisNotice', () => {
