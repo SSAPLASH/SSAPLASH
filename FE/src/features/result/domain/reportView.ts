@@ -331,3 +331,25 @@ export function focusBasis(focus: Focus, notes: readonly ReportNote[] | null): s
   if (inRange.length === 0) return '';
   return missText('개', '노트 ', inRange.length, inRange.filter((n) => n.judgement === 'MISS').length, null);
 }
+
+/**
+ * 코치 총평을 헤드라인(첫 문장)과 나머지로 나눈다(설계 COACH-002-coach-summary-emphasis).
+ * 줄바꿈·연속 공백은 공백 하나로 잇는다. 문장 끝은 「. ! ?」 뒤에 공백이 올 때만 본다(「0.75배」의 점은 문장 끝이 아니다).
+ * 문장 끝이 없으면 전체가 헤드라인이고 나머지는 빈 문자열이다.
+ */
+export function splitSummary(text: string): { headline: string; rest: string } {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  const m = /^(.+?[.!?])\s+(.+)$/.exec(flat);
+  return m ? { headline: m[1], rest: m[2] } : { headline: flat, rest: '' };
+}
+
+/**
+ * 한 줄에 들어가는 가장 큰 글자 크기(px)를 고른다. `fits(size)`는 그 크기에서 한 줄에 들어가는지 알려 준다.
+ * max부터 step씩 줄이며, min에서도 들어가지 않으면 `{ size: min, fits: false }`(화면은 단어 단위로 접는다).
+ */
+export function fitFontSize(fits: (size: number) => boolean, max: number, min: number, step = 0.5): { size: number; fits: boolean } {
+  for (let size = max; size >= min; size -= step) {
+    if (fits(size)) return { size, fits: true };
+  }
+  return { size: min, fits: false };
+}
