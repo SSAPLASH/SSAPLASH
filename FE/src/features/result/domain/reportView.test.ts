@@ -8,6 +8,7 @@ import {
   clockRange,
   clockTenth,
   deltaText,
+  fitFontSize,
   flowBins,
   flowTotalMs,
   focusBasis,
@@ -25,6 +26,7 @@ import {
   padRows,
   reportGrid,
   splitSegments,
+  splitSummary,
   transitionWindow,
   VERDICT_LABEL,
   verdictCounts,
@@ -302,5 +304,42 @@ describe('선택(Focus)', () => {
     expect(initialFocus(splitSegments([t]), notes, 50000)?.kind).toBe('transition');
     expect(initialFocus(splitSegments([]), notes, 50000)).toMatchObject({ kind: 'bin', fromMs: 10000 });
     expect(initialFocus(splitSegments([]), [], 5000)).toBeNull();
+  });
+});
+
+describe('splitSummary', () => {
+  it('첫 문장과 나머지로 나누고 줄바꿈은 공백으로 잇는다', () => {
+    expect(splitSummary('박자는 안정적이에요.\n스네어를 신경 써 보세요.\n  천천히 다시 쳐 봐요.')).toEqual({
+      headline: '박자는 안정적이에요.',
+      rest: '스네어를 신경 써 보세요. 천천히 다시 쳐 봐요.',
+    });
+  });
+  it('한 문장이면 나머지는 빈 문자열', () => {
+    expect(splitSummary('  정말 잘 쳤어요.  ')).toEqual({ headline: '정말 잘 쳤어요.', rest: '' });
+  });
+  it('문장 끝 표시가 없으면 전체가 헤드라인', () => {
+    expect(splitSummary('정말 잘 쳤어요')).toEqual({ headline: '정말 잘 쳤어요', rest: '' });
+  });
+  it('숫자 속 점은 문장 끝으로 보지 않는다', () => {
+    expect(splitSummary('0.75배로 3~5초 구간을 쳐 봐요! 그다음 원래 빠르기로 쳐요.')).toEqual({
+      headline: '0.75배로 3~5초 구간을 쳐 봐요!',
+      rest: '그다음 원래 빠르기로 쳐요.',
+    });
+  });
+  it('빈 문자열', () => {
+    expect(splitSummary('')).toEqual({ headline: '', rest: '' });
+  });
+});
+
+describe('fitFontSize', () => {
+  it('들어가는 가장 큰 크기를 고른다', () => {
+    // 글자 30개, 폭 600px, 글자 폭 = 크기
+    expect(fitFontSize((s) => s * 30 <= 600, 26, 18)).toEqual({ size: 20, fits: true });
+  });
+  it('최대 크기로 들어가면 최대', () => {
+    expect(fitFontSize(() => true, 26, 18)).toEqual({ size: 26, fits: true });
+  });
+  it('하한에서도 넘치면 하한과 fits=false', () => {
+    expect(fitFontSize(() => false, 26, 18)).toEqual({ size: 18, fits: false });
   });
 });
