@@ -41,6 +41,8 @@ interface Props {
 }
 
 const MARK_CLASS: Record<NoteVerdict, string> = { PERFECT: 'perfect', EARLY: 'early', LATE: 'late', MISS: 'miss' };
+/** 노트 표시 범례 순서 */
+const NOTE_KEY: NoteVerdict[] = ['PERFECT', 'EARLY', 'LATE', 'MISS'];
 
 /** 고른 노트 한 줄의 판정 글자. 빠름·늦음은 오차 글자(「39ms 빠름」)가 방향을 말하므로 이름을 따로 쓰지 않는다(D6) */
 function readoutVerdict(n: ReportNote): string {
@@ -175,8 +177,14 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
                 </span>
               )}
             </div>
-            <p className="rp-note-key">
-              {VERDICT_LABEL.PERFECT} ● · {VERDICT_LABEL.EARLY} ◀ · {VERDICT_LABEL.LATE} ▶ · {VERDICT_LABEL.MISS} ×
+            {/* 위 노트 흐름 범례처럼 그림 + 이름. 그림은 레인 표시와 같은 모양·색(정확 ● · 빠름 ◀ · 늦음 ▶ · 놓침 ×) */}
+            <p className="rp-note-key" role="group" aria-label="노트 표시 범례">
+              {NOTE_KEY.map((v) => (
+                <span key={v} className={`rp-note-key-item ${MARK_CLASS[v]}`}>
+                  <i aria-hidden="true" />
+                  {VERDICT_LABEL[v]}
+                </span>
+              ))}
             </p>
           </>
         )}
