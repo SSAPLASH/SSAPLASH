@@ -70,12 +70,50 @@
 }
 /* 코치의 한마디: 카드 틀 없이 단락으로 */
 .rp .coach-summary {
+  position: relative;
+  gap: 10px;
   margin: 0;
-  padding: 18px 0;
+  padding: 24px 0 24px 20px;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
+}
+/* 강조는 카드 틀 대신 왼쪽 브랜드 색 세로 줄 하나(설계 COACH-002-coach-summary-emphasis) */
+.rp .coach-summary::before {
+  content: '';
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+/* 이름표는 내용보다 작게 */
+.rp .coach-summary-head h3 {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* 첫 문장 헤드라인: 한 줄로 두고 글자 크기는 useFitOneLine이 26px에서 폭에 맞게 줄인다. 하한에서도 넘치면 is-wrapped로 접는다 */
+.rp .coach-summary-headline {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+.rp .coach-summary-headline.is-wrapped {
+  white-space: normal;
+}
+.rp .coach-summary-text {
+  max-width: 800px;
+  font-size: 17px;
+  line-height: 1.6;
+  white-space: normal;
+  word-break: keep-all;
 }
 
 /* ---- 전체 노트 흐름 ---- */
@@ -693,6 +731,18 @@
   }
   .rp-stat-label {
     font-size: 13px;
+  }
+  .rp .coach-summary {
+    gap: 8px;
+    padding: 18px 0 18px 14px;
+  }
+  .rp .coach-summary::before {
+    top: 18px;
+    bottom: 18px;
+    width: 3px;
+  }
+  .rp .coach-summary-text {
+    font-size: 16px;
   }
   .rp-lead h2 {
     font-size: 29px;
