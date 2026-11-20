@@ -2,6 +2,7 @@
 // 페이지가 선택(Focus)마다 key를 바꿔 다시 만든다 — 고른 노트는 선택이 바뀌면 처음으로 돌아가고 재생은 멈춘다.
 // 화면 이동의 목적지(id="rp-focus")는 다시 만들어지지 않는 바깥 틀에 페이지가 둔다.
 // 재생기는 페이지가 useSegmentPlayer로 만들어 내려준다. AI 문구(description·detail·tip)는 고치지 않고 그대로 보인다.
+// 배치(설계 COACH-002-report-apple-redesign ⑤): 넓은 화면은 두 칸 — 왼쪽은 읽는 것(제목·근거·AI 문구·연습 방법), 오른쪽은 보는 것(패드 줄·재생 조작).
 // 타이밍이 어긋난 노트는 빠름 ◀ · 늦음 ▶로 나눠 그리고 센다(설계 COACH-002-report-timing-direction D3·D4). 구간 글자는 격자가 있으면 마디를 앞에 붙인다(D8).
 import { useEffect, useState } from 'react';
 import type { UseSegmentPlayer } from './useSegmentPlayer';
@@ -103,6 +104,7 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
         )}
       </div>
 
+      <div className="rp-focus-side">
       <div className="rp-detail">
         {focus.kind !== 'cluster' && (
           <>
@@ -183,7 +185,7 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
       <div className="rp-player">
         <button
           type="button"
-          className="rp-control"
+          className="rp-control primary"
           disabled={notes === null || inWindow.length === 0}
           aria-pressed={playing}
           onClick={() => {
@@ -205,12 +207,14 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
         >
           {playingMine ? '정지' : '내 연주 듣기'}
         </button>
-        <button type="button" className="rp-control" aria-pressed={player.rate === 1} onClick={() => player.rate !== 1 && player.toggleRate()}>
-          1배
-        </button>
-        <button type="button" className="rp-control" aria-pressed={player.rate === 0.75} onClick={() => player.rate !== 0.75 && player.toggleRate()}>
-          0.75배
-        </button>
+        <span className="rp-seg" role="group" aria-label="재생 빠르기">
+          <button type="button" className="rp-control" aria-pressed={player.rate === 1} onClick={() => player.rate !== 1 && player.toggleRate()}>
+            1배
+          </button>
+          <button type="button" className="rp-control" aria-pressed={player.rate === 0.75} onClick={() => player.rate !== 0.75 && player.toggleRate()}>
+            0.75배
+          </button>
+        </span>
         <button type="button" className="rp-control" aria-pressed={player.loop} onClick={player.toggleLoop}>
           반복
         </button>
@@ -222,6 +226,7 @@ export function FocusPanel({ focus, notes, notesFailed = false, player, accompan
           {played.source === 'LOG' ? '이 구간에서 친 타격이 없어 내 연주는 들을 수 없어요' : '이 구간에서 노트에 맞은 타격이 없어 내 연주는 들을 수 없어요'}
         </p>
       )}
+      </div>
     </section>
   );
 }
