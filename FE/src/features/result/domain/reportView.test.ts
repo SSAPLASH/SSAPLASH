@@ -8,7 +8,6 @@ import {
   clockRange,
   clockTenth,
   deltaText,
-  fitFontSize,
   flowBins,
   flowTotalMs,
   focusBasis,
@@ -19,14 +18,19 @@ import {
   focusOfTransition,
   focusRangeText,
   initialFocus,
+  judgementSplit,
+  meanTimingText,
   noteVerdict,
   notesInRange,
   observationText,
   OFF_BEAT_LABEL,
   padRows,
+  recentAccuracies,
   reportGrid,
   splitSegments,
   splitSummary,
+  timingScalePos,
+  timingSummary,
   transitionWindow,
   VERDICT_LABEL,
   verdictCounts,
@@ -331,15 +335,72 @@ describe('splitSummary', () => {
   });
 });
 
-describe('fitFontSize', () => {
-  it('들어가는 가장 큰 크기를 고른다', () => {
-    // 글자 30개, 폭 600px, 글자 폭 = 크기
-    expect(fitFontSize((s) => s * 30 <= 600, 26, 18)).toEqual({ size: 20, fits: true });
+
+describe('judgementSplit', () => {
+  it('서버 counts로 세고, 노트가 있으면 빠름·늦음을 나눈다', () => {
+    const notes = [
+      { judgement: 'GOOD' as const, deltaMs: -20 },
+      { judgement: 'GOOD' as const, deltaMs: 15 },
+      { judgement: 'GOOD' as const, deltaMs: 30 },
+    ];
+    expect(judgementSplit({ PERFECT: 5, GOOD: 3, MISS: 2 }, notes)).toEqual({ perfect: 5, good: 3, miss: 2, total: 10, early: 1, late: 2 });
   });
-  it('최대 크기로 들어가면 최대', () => {
-    expect(fitFontSize(() => true, 26, 18)).toEqual({ size: 26, fits: true });
+  it('노트 전이면 빠름·늦음은 null', () => {
+    expect(judgementSplit({ PERFECT: 1, GOOD: 0, MISS: 0 }, null)).toEqual({ perfect: 1, good: 0, miss: 0, total: 1, early: null, late: null });
   });
-  it('하한에서도 넘치면 하한과 fits=false', () => {
-    expect(fitFontSize(() => false, 26, 18)).toEqual({ size: 18, fits: false });
+});
+
+describe('timingSummary', () => {
+  const hit = (deltaMs: number | null, judgement: 'PERFECT' | 'GOOD' | 'MISS' = 'PERFECT') => ({ judgement, deltaMs });
+  it('놓침·오차 없는 노트는 빼고 평균과 25~75% 범위를 낸다', () => {
+    const s = timingSummary([hit(0), hit(10), hit(20), hit(30), hit(40), hit(null, 'MISS'), hit(null)]);
+    expect(s).toEqual({ meanMs: 20, lowMs: 10, highMs: 30, samples: 5 });
+  });
+  it('표본이 5개 미만이면 null', () => {
+    expect(timingSummary([hit(1), hit(2), hit(3), hit(4)])).toBeNull();
+    expect(timingSummary(null)).toBeNull();
+  });
+});
+
+describe('timingScalePos · meanTimingText', () => {
+  it('정박이 가운데, 반폭 밖은 끝에 붙인다', () => {
+    expect(timingScalePos(0, 60)).toBe(0.5);
+    expect(timingScalePos(30, 60)).toBe(0.75);
+    expect(timingScalePos(-90, 60)).toBe(0);
+    expect(timingScalePos(10, 0)).toBeCloseTo(0.5833, 3);
+  });
+  it('방향 글자', () => {
+    expect(meanTimingText(12.4)).toEqual({ value: '12', unit: 'ms 늦게' });
+    expect(meanTimingText(-8)).toEqual({ value: '8', unit: 'ms 빠르게' });
+    expect(meanTimingText(0.3)).toEqual({ value: '정박', unit: '' });
+  });
+});
+
+describe('recentAccuracies', () => {
+  const row = (playId: string, endedAt: string, accuracy: number | null, over: Partial<{ songId: number; mode: string; difficulty: string }> = {}) => ({
+    playId,
+    songId: 7,
+    mode: 'RHYTHM',
+    difficulty: 'EASY',
+    accuracy,
+    endedAt,
+    ...over,
+  });
+  const cur = { playId: 'p3', songId: 7, mode: 'RHYTHM', difficulty: 'EASY' };
+  it('같은 곡·모드·단계만 오래된 순으로, 직전 대비 %p', () => {
+    const rows = [row('p3', '2026-11-03', 0.91), row('x', '2026-11-02', 0.5, { difficulty: 'HARD' }), row('p2', '2026-11-02', 0.88), row('p1', '2026-11-01', 0.84), row('y', '2026-11-02', 0.2, { songId: 9 })];
+    expect(recentAccuracies(rows, cur)).toEqual({ values: [0.84, 0.88, 0.91], diffPoint: 3 });
+  });
+  it('이번 연주보다 나중 기록은 빼고 최대 5개', () => {
+    const rows = ['01', '02', '03', '04', '05', '06'].map((d, i) => row(`q${i}`, `2026-11-${d}`, 0.5 + i / 100));
+    rows.push(row('p3', '2026-11-07', 0.9), row('later', '2026-11-08', 0.1));
+    const r = recentAccuracies(rows, cur);
+    expect(r?.values).toEqual([0.52, 0.53, 0.54, 0.55, 0.9]);
+    expect(r?.diffPoint).toBe(35);
+  });
+  it('기록이 하나뿐이거나 이번 연주가 없으면 null', () => {
+    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], cur)).toBeNull();
+    expect(recentAccuracies([row('p1', '2026-11-01', 0.8)], cur)).toBeNull();
+    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], { ...cur, songId: null })).toBeNull();
   });
 });

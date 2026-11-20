@@ -1,5 +1,5 @@
 // 연주 상세 리포트 (COACH-002, 설계 COACH-002 4-3 · 화면 구성은 설계 COACH-002 리포트 화면 개편). 서버 리포트만 쓴다 — 로컬 결과 값과 섞지 않는다(D5).
-// 화면 순서: 머리말 → 요약 수치 → 코치의 한마디 → 전체 노트 흐름(5초 막대·놓친 구간 버튼) → 선택 구간 확대 → 패드 전환 관찰 → 그 밖의 관찰 → 패드별 기록 → 추천.
+// 화면 순서(설계 COACH-002-report-apple-redesign): 메타 줄 → 머리(총평 제목 · 점수·판정 막대) → 하이라이트 → 전체 노트 흐름(5초 막대·놓친 구간 캡슐) → 선택 구간 확대 → 관찰 | 패드별 기록 → 추천.
 // 요약이 오면 바로 그리고, 노트는 페이지를 끝까지 받아 시간순 정렬한 뒤 막대와 확대 영역을 그린다(D8).
 // AI 약점은 유형으로 자리를 나누되(놓침이 몰린 구간·패드 전환·그 밖) 문구는 서버 값을 그대로 쓴다.
 // 리포트에 songId가 있으면 "방금 친 곡과 비슷한 곡"(설계 COACH-004-similar-songs D4)도 붙는다. 없으면(BE 반영 전) 그리지 않는다.
@@ -11,14 +11,16 @@ import { getChartAssets } from '@/api/song/charts';
 import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from './analysisPoller';
 import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/runtime/playSync';
-import { CoachSummaryCard } from '@/features/result/components/report/CoachSummaryCard';
+import { ReportHero } from '@/features/result/components/report/ReportHero';
+import { ReportHighlights } from '@/features/result/components/report/ReportHighlights';
 import { FocusPanel } from '@/features/result/components/report/FocusPanel';
 import { NoteFlowChart } from '@/features/result/components/report/NoteFlowChart';
-import { AnalysisNotice, ObservationList, PadTable, StatsLine, type ObservationRow, type PollingState } from '@/features/result/components/report/ReportSections';
+import { AnalysisNotice, ObservationList, PadTable, type ObservationRow, type PollingState } from '@/features/result/components/report/ReportSections';
 import { TimingHistogram } from '@/features/result/components/report/TimingHistogram';
 import { useSegmentPlayer } from '@/features/result/components/report/useSegmentPlayer';
 import { RecommendRow } from '@/features/result/components/RecommendRow';
 import type { Report, ReportNote, WeakSegment } from '@/domain/play/report';
+import { DEFAULT_TIMING } from '@/domain/play/judgement';
 import { recommendationPathOf } from '@/domain/song/recommendation';
 import {
   flowBins,
@@ -29,12 +31,17 @@ import {
   focusOfTransition,
   focusRangeText,
   initialFocus,
+  judgementSplit,
   observationText,
+  recentAccuracies,
   reportGrid,
   splitSegments,
+  timingSummary,
   transitionWindow,
   type Focus,
+  type RecentAccuracy,
 } from '@/features/result/domain/reportView';
+import { listPlays } from '@/api/play/plays';
 import { playedHitsFromLog, playedHitsFromNotes, type PlayedHits } from '@/features/result/domain/segmentPlayback';
 import { getPlayLog } from '@/engine/playLog';
 import { AUTH_REQUIRED } from '@/config/auth';
@@ -107,6 +114,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   const noteList = notes.s === 'ok' ? notes.v : null;
   const totalMs = useMemo(() => flowTotalMs(noteList ?? [], log?.durationMs ?? null), [noteList, log?.durationMs]);
   const bins = useMemo(() => flowBins(noteList ?? [], totalMs), [noteList, totalMs]);
+  const timing = useMemo(() => timingSummary(noteList), [noteList]);
   // 구간을 마디로 세는 격자. 리포트 응답에는 BPM이 없어 이 브라우저의 연주 기록에서 만든다 — 기록이 없으면 구간을 시각만으로 보인다
   const grid = useMemo(() => reportGrid(log), [log]);
   // 내 타격 목록: 이 브라우저의 연주 기록이 있으면 그것(헛친 타격 포함), 없으면 서버 노트의 판정된 타격. 둘 다 없으면 null
@@ -169,6 +177,24 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     };
   }, [playId]);
 
+  // 지난번보다(설계 U4): 서버 연주 기록에서 같은 곡·모드·연습 단계의 최근 정확도. 목록 API에 곡 ID 조건이 없어 제목으로 좁히고 곡 ID로 다시 거른다.
+  // 로그인·API 곡 소스일 때만 한 번 부르고, 실패하면 칸을 숨긴다(오류 표시 없음)
+  const [recent, setRecent] = useState<RecentAccuracy | null>(null);
+  const recentKey = report.s === 'ok' ? `${report.v.songId}:${report.v.mode}:${report.v.difficulty}` : null;
+  useEffect(() => {
+    if (!recoEnabled || report.s !== 'ok' || report.v.songId === null) return;
+    const { songId, mode, difficulty } = report.v;
+    if (mode !== 'RHYTHM' && mode !== 'SHEET') return;
+    const ac = new AbortController();
+    listPlays({ q: log?.title || undefined, mode, size: 30 }, ac.signal).then(
+      (page) => setRecent(recentAccuracies(page.items, { playId, songId, mode, difficulty })),
+      () => setRecent(null),
+    );
+    return () => ac.abort();
+    // 리포트가 폴링으로 다시 와도 같은 곡이면 다시 부르지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recoEnabled, recentKey, playId, log?.title]);
+
   // 구간 재생 반주 URL. 곡 상세에는 없고 채보 자산에 있다. 내장 곡·실패는 합성음만 재생한다
   useEffect(() => {
     const id = log?.chartVersionId;
@@ -208,10 +234,11 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
           log ? new Date(log.startedAt).toLocaleString('ko-KR') : '',
         ].filter((t) => t !== '')
       : [];
-  const header = (
+  // 불러오는 중·오류일 때는 곡 이름이 제목(h1)이다. 리포트가 오면 제목 자리는 머리(ReportHero)가 갖고, 여기는 메타 줄이 된다
+  const header = (asTitle: boolean) => (
     <header className="rp-header">
-      <div>
-        <h1>{title}</h1>
+      <div className="rp-crumb">
+        {asTitle ? <h1>{title}</h1> : log?.title ? <strong className="rp-crumb-title">{log.title}</strong> : null}
         {meta.length > 0 && <p className="rp-header-meta">{meta.join(' · ')}</p>}
       </div>
       <div className="rp-header-actions">
@@ -230,7 +257,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   if (report.s === 'loading') {
     return (
       <main className="main rp">
-        {header}
+        {header(true)}
         <p className="rp-notice">분석을 불러오는 중…</p>
       </main>
     );
@@ -239,7 +266,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
     const d = describeError(report.e);
     return (
       <main className="main rp">
-        {header}
+        {header(true)}
         <InlineError size="lg" style={{ marginTop: 16 }} onRetry={d.retry ? onRetry : undefined} action={d.login ? <Link to="/login">로그인</Link> : undefined}>
           {d.text}
         </InlineError>
@@ -248,6 +275,8 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   }
 
   const r = report.v;
+  // 연주 시간: 이 브라우저 기록의 길이, 없으면 마지막 노트 시각
+  const playedMs = log?.durationMs ?? (noteList && noteList.length > 0 ? noteList[noteList.length - 1].timeMs : null);
   const focus = picked ?? initialFocus(groups, noteList ?? [], totalMs);
   /** 구간을 고르고 확대 영역으로 화면을 옮긴다(관찰 목록의 버튼) */
   const openFocus = (f: Focus) => {
@@ -288,9 +317,17 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
 
   return (
     <main className="main rp">
-      {header}
-      <StatsLine report={r} />
-      <CoachSummaryCard summary={r.coachSummary} />
+      {header(false)}
+      <ReportHero summary={r.coachSummary} fallbackTitle={title} score={r.score} accuracy={r.accuracy} split={judgementSplit(r.counts, noteList)} />
+      <ReportHighlights
+        maxCombo={r.maxCombo}
+        totalNotes={r.counts.PERFECT + r.counts.GOOD + r.counts.MISS}
+        timing={timing}
+        goodMs={log?.timing.goodMs ?? DEFAULT_TIMING.goodMs}
+        durationMs={playedMs}
+        bars={grid && playedMs !== null ? Math.ceil(playedMs / ((60000 / grid.bpm) * grid.beatsPerBar)) : null}
+        recent={recent}
+      />
 
       {notes.s === 'ok' ? (
         <NoteFlowChart
@@ -325,15 +362,22 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
         {focus && <FocusPanel key={focus.key} focus={focus} notes={noteList} notesFailed={notes.s === 'error'} player={player} accompanimentUrl={accompanimentUrl} grid={grid} played={played} />}
       </div>
 
-      <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />
-      <ObservationList id="rp-others-title" title="그 밖의 관찰" rows={otherRows} />
-
-      <PadTable stats={r.padStats}>
-        <details className="rp-more">
-          <summary>타이밍 분포 보기</summary>
-          <TimingHistogram histogram={r.histogram} perfectMs={log?.timing.perfectMs ?? null} />
-        </details>
-      </PadTable>
+      <div className={`rp-columns${transitionRows.length + otherRows.length === 0 ? ' single' : ''}`}>
+        {transitionRows.length + otherRows.length > 0 && (
+          <div className="rp-column">
+            <ObservationList id="rp-transitions-title" title="패드 전환 관찰" rows={transitionRows} />
+            <ObservationList id="rp-others-title" title="그 밖의 관찰" rows={otherRows} />
+          </div>
+        )}
+        <div className="rp-column">
+          <PadTable stats={r.padStats}>
+            <details className="rp-more">
+              <summary>타이밍 분포 보기</summary>
+              <TimingHistogram histogram={r.histogram} perfectMs={log?.timing.perfectMs ?? null} />
+            </details>
+          </PadTable>
+        </div>
+      </div>
 
       {recoEnabled && r.analysisStatus === 'DONE' && drillEntry.status === 'ready' && (
         <div className="rp-reco">
