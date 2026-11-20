@@ -221,7 +221,14 @@ describe('FocusPanel', () => {
     expect(screen.getByLabelText('0:10.20 스네어 빠름').classList.contains('early')).toBe(true);
     expect(screen.getByLabelText('0:11.00 스네어 늦음').classList.contains('late')).toBe(true);
     expect(screen.getByText('구간 내 판정: 정확 1 · 빠름 1 · 늦음 1 · 놓침 1')).toBeTruthy();
-    expect(screen.getByText('정확 ● · 빠름 ◀ · 늦음 ▶ · 놓침 ×')).toBeTruthy();
+    // 범례는 레인 표시와 같은 모양 클래스 + 이름
+    const key = screen.getByRole('group', { name: '노트 표시 범례' });
+    expect([...key.querySelectorAll('.rp-note-key-item')].map((e) => `${e.className.replace('rp-note-key-item ', '')}:${e.textContent}`)).toEqual([
+      'perfect:정확',
+      'early:빠름',
+      'late:늦음',
+      'miss:놓침',
+    ]);
     // 고른 노트 한 줄: 빠름 → 늦음 → 정확 → 놓침
     expect(screen.getByText('0:10.20 · 스네어 · 39ms 빠름')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '다음 노트' }));
