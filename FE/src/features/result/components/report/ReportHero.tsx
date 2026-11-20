@@ -38,7 +38,8 @@ export function ReportHero({ summary, fallbackTitle, score, accuracy, split }: P
               <span>코치의 한마디</span>
               <span className="rp-hero-ai">AI가 작성했어요</span>
             </div>
-            <h1 className="rp-hero-title">{headline}</h1>
+            {/* 나머지 문장이 있으면 첫 문장은 도입 줄로 낮추고 본문을 크게 둔다 */}
+            <h1 className={rest ? 'rp-hero-title is-lead' : 'rp-hero-title'}>{headline}</h1>
             {rest && <p className="rp-hero-rest">{rest}</p>}
           </>
         ) : (
