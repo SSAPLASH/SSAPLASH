@@ -38,14 +38,20 @@ _NO_WEAKNESS_TAIL = {
     "NEEDS_WORK": "놓친 노트가 한 곳에 몰려 있지는 않아요. 쉬운 연습 단계부터 곡을 차근차근 익혀 보세요.",
 }
 
+_TOO_SHORT_TAIL = "곡이 짧아 자세한 분석은 하지 않았어요. 조금 더 긴 곡에서 약점을 확인해 보세요."
+
 
 def _level(notes: NoteTable, segments: Sequence[WeakSegment]) -> str:
     miss_rate = float(notes.miss.mean())
     perfect_share = float(notes.perfect.mean())
     has_high = any(s.severityLevel == _HIGH for s in segments)
-    if miss_rate >= SUMMARY_NEEDS_WORK_MISS_RATE or has_high:
+    if miss_rate >= SUMMARY_NEEDS_WORK_MISS_RATE:
         return "NEEDS_WORK"
-    if miss_rate < SUMMARY_GOOD_MISS_RATE and perfect_share >= SUMMARY_GOOD_PERFECT_SHARE:
+    if (
+        not has_high
+        and miss_rate < SUMMARY_GOOD_MISS_RATE
+        and perfect_share >= SUMMARY_GOOD_PERFECT_SHARE
+    ):
         return "GOOD"
     return "FAIR"
 
@@ -97,6 +103,18 @@ def _focus_phrase(segment: WeakSegment) -> str:
     if pattern == "UNSTEADY":
         return "일정한 간격으로 치는 것"
     return "가장 어려웠던 부분"
+
+
+def build_brief_summary(notes: NoteTable) -> Summary:
+    """약점 분석을 하지 않는 아주 짧은 곡의 총평. 등급은 놓침·PERFECT 비율로만 정한다."""
+    level = _level(notes, [])
+    return Summary(
+        level=level,  # type: ignore[arg-type]
+        text=f"{_OPENING[level]} {_TOO_SHORT_TAIL}",
+        focusPattern=None,
+        strengthPad=None,
+        source="RULE",
+    )
 
 
 def build_summary(notes: NoteTable, segments: Sequence[WeakSegment]) -> Summary:
