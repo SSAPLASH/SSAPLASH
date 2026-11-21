@@ -335,11 +335,18 @@ export function focusBasis(focus: Focus, notes: readonly ReportNote[] | null): s
 /**
  * 코치 총평을 헤드라인(첫 문장)과 나머지로 나눈다(설계 COACH-002-coach-summary-emphasis).
  * 줄바꿈·연속 공백은 공백 하나로 잇는다. 문장 끝은 「. ! ?」 뒤에 공백이 올 때만 본다(「0.75배」의 점은 문장 끝이 아니다).
- * 문장 끝이 없으면 전체가 헤드라인이고 나머지는 빈 문자열이다.
+ * 문장부호가 없으면(LLM 총평은 「…요」로 끝나도 통과한다) 존댓말·평서 어미(「어요·세요·니다·었다」 등) 뒤 공백에서 나눈다.
+ * 「필요·중요」처럼 요로 끝나는 낱말은 어미 목록에 없어 나누지 않는다. 그래도 끝이 없으면 전체가 헤드라인이고 나머지는 빈 문자열이다.
  */
+const SENTENCE_PUNCT = /^(.+?[.!?])\s+(.+)$/;
+const SENTENCE_ENDING = /^(.+?(?:[어아여에예세해래네지게죠까데]요|[니습]다|[었았였겠있없]다))\s+(.+)$/;
+
 export function splitSummary(text: string): { headline: string; rest: string } {
   const flat = text.replace(/\s+/g, ' ').trim();
-  const m = /^(.+?[.!?])\s+(.+)$/.exec(flat);
+  // 문장부호 끝과 어미 끝 중 앞선 것을 첫 문장 끝으로 본다(「잘 쳤어요 연습해요. …」에서 첫 마디만 떼어 낸다)
+  const byPunct = SENTENCE_PUNCT.exec(flat);
+  const byEnding = SENTENCE_ENDING.exec(flat);
+  const m = byPunct && byEnding ? (byEnding[1].length < byPunct[1].length ? byEnding : byPunct) : (byPunct ?? byEnding);
   return m ? { headline: m[1], rest: m[2] } : { headline: flat, rest: '' };
 }
 
