@@ -70,8 +70,8 @@ def test_후보가_없으면_빈_목록이다():
     assert select_candidates([]) == []
 
 
-def test_노트가_20개_미만이면_INSUFFICIENT_HITS다():
-    response = run(same(19, delta=40))
+def test_노트가_8개_미만이면_INSUFFICIENT_HITS다():
+    response = run(same(7, delta=40))
 
     assert response["reason"] == "INSUFFICIENT_HITS"
     assert response["weakSegments"] == []
@@ -84,7 +84,7 @@ def test_타격_기록이_비어_있어도_INSUFFICIENT_HITS다():
 
 def test_여분의_타격은_표본_수에_포함되지_않는다():
     strays = tuple((1100.0 + i * 500, "HIHAT", 70) for i in range(10))
-    notes = same(19, delta=40)
+    notes = same(7, delta=40)
 
     from ssaplash_ai.coach import AnalysisRequest, analyze
 
