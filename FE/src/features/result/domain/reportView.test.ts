@@ -330,6 +330,19 @@ describe('splitSummary', () => {
       rest: '그다음 원래 빠르기로 쳐요.',
     });
   });
+  it('문장부호 없이 이어 쓴 LLM 총평은 어미 뒤에서 나눈다', () => {
+    expect(splitSummary('킥을 안정적으로 쳤어요 먼저 스네어 박자부터 연습해 보세요')).toEqual({
+      headline: '킥을 안정적으로 쳤어요',
+      rest: '먼저 스네어 박자부터 연습해 보세요',
+    });
+    expect(splitSummary('기본기가 좋습니다 다음엔 0.75배로 쳐 보세요.')).toEqual({ headline: '기본기가 좋습니다', rest: '다음엔 0.75배로 쳐 보세요.' });
+  });
+  it('어미 끝이 마침표보다 앞서면 어미에서 나눈다', () => {
+    expect(splitSummary('잘 쳤어요 스네어를 연습해요. 천천히 쳐 봐요.')).toEqual({ headline: '잘 쳤어요', rest: '스네어를 연습해요. 천천히 쳐 봐요.' });
+  });
+  it('「필요·중요」처럼 요로 끝나는 낱말에서는 나누지 않는다', () => {
+    expect(splitSummary('박자 연습이 중요 하니까 천천히 쳐 보세요')).toEqual({ headline: '박자 연습이 중요 하니까 천천히 쳐 보세요', rest: '' });
+  });
   it('빈 문자열', () => {
     expect(splitSummary('')).toEqual({ headline: '', rest: '' });
   });
