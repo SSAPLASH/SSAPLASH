@@ -387,20 +387,25 @@ describe('recentAccuracies', () => {
     ...over,
   });
   const cur = { playId: 'p3', songId: 7, mode: 'RHYTHM', difficulty: 'EASY' };
+  // 목록 API 정확도는 0~100(퍼센트)이고, 결과는 0~1이다
   it('같은 곡·모드·단계만 오래된 순으로, 직전 대비 %p', () => {
-    const rows = [row('p3', '2026-11-03', 0.91), row('x', '2026-11-02', 0.5, { difficulty: 'HARD' }), row('p2', '2026-11-02', 0.88), row('p1', '2026-11-01', 0.84), row('y', '2026-11-02', 0.2, { songId: 9 })];
+    const rows = [row('p3', '2026-11-03', 91), row('x', '2026-11-02', 50, { difficulty: 'HARD' }), row('p2', '2026-11-02', 88), row('p1', '2026-11-01', 84), row('y', '2026-11-02', 20, { songId: 9 })];
     expect(recentAccuracies(rows, cur)).toEqual({ values: [0.84, 0.88, 0.91], diffPoint: 3 });
   });
   it('이번 연주보다 나중 기록은 빼고 최대 5개', () => {
-    const rows = ['01', '02', '03', '04', '05', '06'].map((d, i) => row(`q${i}`, `2026-11-${d}`, 0.5 + i / 100));
-    rows.push(row('p3', '2026-11-07', 0.9), row('later', '2026-11-08', 0.1));
+    const rows = ['01', '02', '03', '04', '05', '06'].map((d, i) => row(`q${i}`, `2026-11-${d}`, 50 + i));
+    rows.push(row('p3', '2026-11-07', 90), row('later', '2026-11-08', 10));
     const r = recentAccuracies(rows, cur);
     expect(r?.values).toEqual([0.52, 0.53, 0.54, 0.55, 0.9]);
     expect(r?.diffPoint).toBe(35);
   });
+  it('소수 퍼센트(92.5 → 90)도 0~1로 바꾸고, 변화는 보이는 반올림 값끼리 뺀다', () => {
+    const r = recentAccuracies([row('p1', '2026-11-01', 92.5), row('p3', '2026-11-03', 90)], cur);
+    expect(r).toEqual({ values: [0.925, 0.9], diffPoint: -3 });
+  });
   it('기록이 하나뿐이거나 이번 연주가 없으면 null', () => {
-    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], cur)).toBeNull();
-    expect(recentAccuracies([row('p1', '2026-11-01', 0.8)], cur)).toBeNull();
-    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], { ...cur, songId: null })).toBeNull();
+    expect(recentAccuracies([row('p3', '2026-11-03', 90)], cur)).toBeNull();
+    expect(recentAccuracies([row('p1', '2026-11-01', 80)], cur)).toBeNull();
+    expect(recentAccuracies([row('p3', '2026-11-03', 90)], { ...cur, songId: null })).toBeNull();
   });
 });
