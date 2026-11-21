@@ -89,6 +89,11 @@ _SPECIAL_TOKENS = re.compile(
     re.DOTALL,
 )
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+# 종결 어미: 「요」·「죠」·「니다」. 「중요 포인트」·「필요 이상」처럼 명사가 「요」로 끝나는 자리는 뺀다
+_ENDING = r"(?:(?<![중필주수개동소강민])요|죠|니다)"
+# 종결 어미 뒤에 부호 없이 다음 문장이 이어진 자리, 부호 없이 끝난 자리
+_RUN_ON = re.compile(_ENDING + r"(?=\s+[가-힣0-9])")
+_OPEN_END = re.compile(_ENDING + r"$")
 _ACCURACY_NUMBER = re.compile(r"정확도\D{0,6}\d")
 _UNIT_MS = re.compile(r"(?<=\d)\s*ms(?![A-Za-z])")
 # 한글·숫자·기본 문장부호·공백·% 외의 글자(한자, 가나, 영어 단어, 이모지)가 섞였는지 본다
@@ -167,9 +172,11 @@ SYSTEM_PROMPT = (
     "1. 사실에 없는 숫자·패드·곡 정보를 만들지 마세요. 숫자는 사실에 나온 값만 그대로 쓰세요.\n"
     "2. 점수와 정확도는 말하지 마세요.\n"
     "3. 비난하거나 단정하지 말고 격려하는 '~해요' 말투로 쓰세요.\n"
-    "4. 순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → ('비교 결과' 줄이 사실에 있을 때만) 비교.\n"
+    "4. 첫 문장은 전체 인상을 담은 짧은 격려 한마디로 쓰세요. "
+    "순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → ('비교 결과' 줄이 사실에 있을 때만) 비교.\n"
     "   '잘한 패드'로 적힌 패드만 칭찬하고, 약점에 나온 패드는 칭찬하지 마세요. 비교는 '비교 결과' 한 가지만 말하세요.\n"
-    f"5. {MAX_NARRATIVE_CHARS}자 이하의 한 문단. 목록·마크다운·이모지·영어를 쓰지 마세요.\n"
+    f"5. {MAX_NARRATIVE_CHARS}자 이하의 한 문단. 목록·마크다운·이모지·영어를 쓰지 마세요. "
+    "문장은 2개 이상 쓰고, 문장마다 마침표로 끝내세요.\n"
     "총평 문장만 출력하세요."
 )
 
@@ -309,6 +316,15 @@ def clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def punctuate(text: str) -> str:
+    """종결 어미 뒤에 빠진 마침표를 붙인다. 글자는 바꾸지 않고 문장을 더하거나 빼지 않는다.
+
+    화면은 「. ! ?」 뒤 공백에서 첫 문장과 나머지를 나눈다. 부호가 빠지면 총평 전체가 제목으로 간다.
+    """
+    text = _RUN_ON.sub(lambda m: m.group(0) + ".", text.strip())
+    return text + "." if _OPEN_END.search(text) else text
+
+
 def check(text: str, facts: NarrativeFacts) -> list[str]:
     """문장이 규칙을 어긴 곳의 목록. 비어 있으면 통과."""
     problems: list[str] = []
@@ -327,9 +343,14 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     if _FOREIGN.search(_UNIT_MS.sub("", body)):
         problems.append("한글이 아닌 글자(영어·한자·가나·이모지)가 섞임")
     if not re.search(r"[가-힣]", body) or not body.endswith(
-        ("요.", "요!", "요?", "요", "다.", "다!", "다?", "다")
+        ("요.", "요!", "요?", "죠.", "죠!", "죠?", "다.", "다!", "다?")
     ):
         problems.append("한국어 완성 문장이 아님")
+    # 화면이 첫 문장(제목)과 나머지(설명)를 부호로 나눈다. 부호 없이 이어 쓰거나 한 문장뿐이면 설명이 빈다
+    if _RUN_ON.search(body):
+        problems.append("문장이 부호 없이 이어짐")
+    if len([s for s in _SENTENCE_SPLIT.split(body) if s]) < 2:
+        problems.append("문장이 2개 미만")
     for word in FORBIDDEN_WORDS:
         if word in body:
             problems.append(f"금지 표현 '{word}'")
@@ -379,6 +400,8 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
 
 # ---------- 보정 ----------
 
+_WHOLE_TEXT_PROBLEMS = ("한국어 완성 문장", "문장이 2개 미만")
+
 
 def repair(text: str, facts: NarrativeFacts) -> str | None:
     """규칙을 어긴 **문장만 덜어내고** 나머지로 총평을 만든다. 덜어낼 게 없거나 덜어낸 뒤에도 쓸 수 없으면 None.
@@ -387,11 +410,11 @@ def repair(text: str, facts: NarrativeFacts) -> str | None:
     안전하다. 연습 안내 문장이 하나도 남지 않거나 문장이 2개 미만이면 쓰지 않는다.
     """
     sentences = [s for s in _SENTENCE_SPLIT.split(text.strip()) if s]
-    # 문장 하나를 따로 볼 때 "완성 문장이 아님"은 문장 끝 모양 때문이라 문장 단위 판정에서 뺀다
+    # 문장 하나를 따로 볼 때 "완성 문장이 아님"·"2개 미만"은 전체 모양을 보는 조건이라 문장 단위 판정에서 뺀다
     kept = [
         s
         for s in sentences
-        if not [p for p in check(s, facts) if not p.startswith("한국어 완성 문장")]
+        if not [p for p in check(s, facts) if not p.startswith(_WHOLE_TEXT_PROBLEMS)]
     ]
     if len(kept) == len(sentences) or len(kept) < 2:
         return None
@@ -415,6 +438,8 @@ class NarrativeOutcome:
     last_text: str | None = None
     # 규칙을 어긴 문장을 덜어내고 통과한 경우
     repaired: bool = False
+    # 빠진 마침표를 붙인 경우(통과 여부와 무관)
+    punctuated: bool = False
 
 
 def write_narrative(
@@ -429,20 +454,25 @@ def write_narrative(
     problems: list[str] = []
     attempts = 0
     last: str | None = None
+    punctuated = False
     for attempts in range(1, max_attempts + 1):
         try:
-            text = clean(generator(SYSTEM_PROMPT, build_user_prompt(facts, hint)))
+            raw = clean(generator(SYSTEM_PROMPT, build_user_prompt(facts, hint)))
         except Exception as exc:  # noqa: BLE001 - 어떤 생성기 오류도 규칙 총평으로 되돌린다
             return NarrativeOutcome(None, attempts, [f"생성기 오류 {type(exc).__name__}"])
+        text = punctuate(raw)
+        punctuated = punctuated or text != raw
         problems = check(text, facts)
         if not problems:
-            return NarrativeOutcome(text, attempts, last_text=text)
+            return NarrativeOutcome(text, attempts, last_text=text, punctuated=punctuated)
         fixed = repair(text, facts)
         if fixed is not None:
-            return NarrativeOutcome(fixed, attempts, problems, last_text=text, repaired=True)
+            return NarrativeOutcome(
+                fixed, attempts, problems, last_text=text, repaired=True, punctuated=punctuated
+            )
         last = text
         hint = "; ".join(problems)
-    return NarrativeOutcome(None, attempts, problems, last_text=last)
+    return NarrativeOutcome(None, attempts, problems, last_text=last, punctuated=punctuated)
 
 
 def facts_from_analysis(

@@ -1,14 +1,15 @@
-"""종합 총평(`summary`): 등급 경계, 문장 규칙, 잘한 점, 약점 없음, 표본 부족, 결정성."""
+"""종합 총평(`summary`): 등급 경계, 문장 규칙, 잘한 점, 약점 없음, 짧은 곡, 결정성."""
 
 from __future__ import annotations
 
 import re
+from types import SimpleNamespace
 
 from coach_helpers import N, build_request, same
 from ssaplash_ai.coach import AnalysisRequest, analyze
 from ssaplash_ai.coach.config import MAX_SUMMARY_CHARS
 from ssaplash_ai.coach.notes import build_notes
-from ssaplash_ai.coach.summary import build_summary
+from ssaplash_ai.coach.summary import _level, build_summary
 
 
 def _run(notes, **kwargs):
@@ -29,8 +30,28 @@ def test_전부_정확하면_GOOD이고_약점_없음_문장이다():
     assert "눈에 띄는 약점은 없었어요" in response.summary.text
 
 
-def test_표본이_부족하면_총평이_없다():
-    response = _run(same(10, delta=3.0))
+def test_노트가_8개_미만이면_약점_분석_없이_간단_총평이_온다():
+    response = _run(same(5, delta=3.0))
+
+    assert response.reason == "INSUFFICIENT_HITS"
+    assert response.weakSegments == []
+    assert response.summary.level == "GOOD"
+    assert response.summary.source == "RULE"
+    assert response.summary.focusPattern is None and response.summary.strengthPad is None
+    assert "곡이 짧아" in response.summary.text
+    assert len(re.findall(r"[.!?](?:\s|$)", response.summary.text)) >= 2
+    assert len(response.summary.text) <= MAX_SUMMARY_CHARS
+
+
+def test_간단_총평도_놓침이_많으면_NEEDS_WORK이다():
+    response = _run([N(delta=None), N(delta=None), N(delta=None), N(delta=3.0), N(delta=3.0)])
+
+    assert response.summary.level == "NEEDS_WORK"
+    assert "정말 잘 쳤어요" not in response.summary.text
+
+
+def test_노트가_없으면_총평이_없다():
+    response = _run([])
 
     assert response.reason == "INSUFFICIENT_HITS"
     assert response.summary is None
@@ -66,16 +87,31 @@ def test_가장_심한_약점이_focusPattern이다():
     assert "먼저" in response.summary.text and "연습해 보세요" in response.summary.text
 
 
-def test_HIGH_약점이_있으면_NEEDS_WORK이다():
+def test_HIGH_약점이_있어도_놓침이_적으면_NEEDS_WORK가_아니다():
     response = _run(same(40, delta=55.0))  # 평균 55ms 늦음 → 기준 60ms에서 severity 0.76
 
     assert any(s.severityLevel == "HIGH" for s in response.weakSegments)
-    assert response.summary.level == "NEEDS_WORK"
+    assert response.summary.level == "FAIR"
+
+
+def test_HIGH_약점이_있으면_전부_정확해도_GOOD이_아니다():
+    table = build_notes(AnalysisRequest.model_validate(build_request(_good_notes())))
+
+    assert _level(table, []) == "GOOD"
+    assert _level(table, [SimpleNamespace(severityLevel="HIGH")]) == "FAIR"
+    assert _level(table, [SimpleNamespace(severityLevel="MEDIUM")]) == "GOOD"
+
+
+def test_놓침이_40퍼센트_미만이면_NEEDS_WORK가_아니다():
+    notes = [N(delta=None) if i % 8 < 3 else N(delta=3.0) for i in range(48)]  # 37.5% 놓침
+    table = build_notes(AnalysisRequest.model_validate(build_request(notes)))
+
+    assert build_summary(table, []).level == "FAIR"
 
 
 def test_놓침_비율이_높으면_약점이_없어도_NEEDS_WORK이고_문장이_모순되지_않는다():
-    # 약점 탐지와 상관없이 총평 규칙만 본다: 노트 48개 중 18개(37.5%)를 놓쳤고 약점 목록은 비어 있다
-    notes = [N(delta=None) if i % 8 < 3 else N(delta=3.0) for i in range(48)]
+    # 약점 탐지와 상관없이 총평 규칙만 본다: 노트 48개 중 24개(50%)를 놓쳤고 약점 목록은 비어 있다
+    notes = [N(delta=None) if i % 2 == 0 else N(delta=3.0) for i in range(48)]
     table = build_notes(AnalysisRequest.model_validate(build_request(notes)))
 
     summary = build_summary(table, [])
