@@ -10,6 +10,7 @@ from ssaplash_ai.coach.narrative import (
     NarrativeFacts,
     build_user_prompt,
     check,
+    punctuate,
     write_narrative,
 )
 
@@ -17,6 +18,9 @@ GOOD_TEXT = (
     "전체적으로 기본기는 잘 잡혀 있어요. 킥은 특히 안정적으로 쳤어요. "
     "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
 )
+
+# 문장 2개 조건을 채우려고 앞에 붙이는 첫 문장
+LEAD = "기본기는 잘 잡혀 있어요."
 
 
 def _facts(**overrides) -> NarrativeFacts:
@@ -388,7 +392,7 @@ def test_잘한_패드로_꼽힌_패드는_칭찬해도_된다():
 
 
 def test_약점_패드가_칭찬_문장이_아닌_곳에_나오면_걸리지_않는다():
-    assert check("스네어로 7~12초 구간을 느린 템포로 반복해 보세요.", _facts()) == []
+    assert check(f"{LEAD} 스네어로 7~12초 구간을 느린 템포로 반복해 보세요.", _facts()) == []
 
 
 def test_프롬프트에는_영어_항목_이름이_없고_한국어_이름이_있다():
@@ -508,12 +512,13 @@ def test_굵게_표시는_지우고_정확도_말은_숫자가_없으면_허용�
     from ssaplash_ai.coach.narrative import clean
 
     assert clean("**특정 구간**을 `반복`해 보세요.") == "특정 구간을 반복해 보세요."
-    assert check("정확도를 높이려면 7~12초 구간을 느린 템포로 반복해 보세요.", _facts()) == []
+    text = f"{LEAD} 정확도를 높이려면 7~12초 구간을 느린 템포로 반복해 보세요."
+    assert check(text, _facts()) == []
     assert any("정확도" in p for p in check("정확도 85%를 목표로 반복해 보세요.", _facts()))
 
 
 def test_물음표로_끝나는_문장도_허용한다():
-    assert check("7~12초 구간을 느린 템포로 반복해 보는 건 어떨까요?", _facts()) == []
+    assert check(f"{LEAD} 7~12초 구간을 느린 템포로 반복해 보는 건 어떨까요?", _facts()) == []
 
 
 # ---------- 리뷰 반영 ----------
@@ -571,3 +576,114 @@ def test_제어_문자가_남은_문장은_check가_거른다():
     facts = _facts()
     assert any("제어 문자" in p for p in check("기본기는 좋아요.\t다음에도 힘내요.", facts))
     assert not any("제어 문자" in p for p in check(GOOD_TEXT, facts))
+
+
+# ---------- 문장 형식 (FE 요청: 화면이 첫 문장과 나머지를 부호로 나눈다) ----------
+
+NO_PERIODS = (
+    "전체적으로 기본기는 잘 잡혀 있어요 킥은 특히 안정적으로 쳤어요 "
+    "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요"
+)
+
+
+def _sentences(text: str) -> list[str]:
+    import re
+
+    return [s for s in re.split(r"(?<=[.!?])\s+", text) if s]
+
+
+def test_부호_없이_끝난_문장은_가드레일에_걸린다():
+    text = GOOD_TEXT.rstrip(".")
+
+    assert "한국어 완성 문장이 아님" in check(text, _facts())
+
+
+def test_부호_없이_이어_쓴_문장은_가드레일에_걸린다():
+    assert "문장이 부호 없이 이어짐" in check(NO_PERIODS + ".", _facts())
+
+
+def test_한_문장뿐이면_가드레일에_걸린다():
+    problems = check("7~12초 구간을 느린 템포로 반복해 보세요.", _facts())
+
+    assert problems == ["문장이 2개 미만"]
+
+
+def test_숫자_속_점은_문장_끝으로_세지_않는다():
+    facts = _facts()
+    one = "놓침 비율이 0.4인 7~12초 구간을 느린 템포로 반복해 보세요."
+
+    assert check(one, facts) == ["문장이 2개 미만"]
+    assert check(f"{LEAD} {one}", facts) == []
+
+
+def test_빠진_마침표를_붙이고_글자는_바꾸지_않는다():
+    fixed = punctuate(NO_PERIODS)
+
+    assert fixed.replace(".", "") == NO_PERIODS.replace(".", "")
+    assert len(_sentences(fixed)) == 3
+    assert all(s.endswith(".") for s in _sentences(fixed))
+    assert check(fixed, _facts()) == []
+
+
+def test_이미_부호가_있는_문장은_그대로_둔다():
+    assert punctuate(GOOD_TEXT) == GOOD_TEXT
+    assert punctuate("정말 잘 쳤어요! 다음에도 해 볼까요?") == "정말 잘 쳤어요! 다음에도 해 볼까요?"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "가장 중요 한 것은 박자예요.",
+        "필요 이상으로 세게 치지 않아도 돼요.",
+        "주요 구간만 반복해 보세요.",
+        "좋아요, 그리고 킥도 안정적이에요.",
+    ],
+)
+def test_명사의_요와_쉼표_뒤에는_마침표를_넣지_않는다(text):
+    assert punctuate(text) == text
+
+
+def test_죠와_니다로_끝나는_문장에도_마침표를_붙인다():
+    assert punctuate("잘 치셨죠 다음에도 연습합니다") == "잘 치셨죠. 다음에도 연습합니다."
+
+
+def test_마침표가_빠진_출력은_붙여서_한_번에_통과한다():
+    outcome = write_narrative(_facts(), lambda system, user: NO_PERIODS)
+
+    assert outcome.attempts == 1
+    assert outcome.punctuated is True and outcome.repaired is False
+    assert outcome.text == punctuate(NO_PERIODS)
+
+
+def test_한_문장뿐이면_이유를_알려_주고_다시_쓰게_한다():
+    prompts: list[str] = []
+
+    def generator(system: str, user: str) -> str:
+        prompts.append(user)
+        return "7~12초 구간을 느린 템포로 반복해 보세요." if len(prompts) == 1 else GOOD_TEXT
+
+    outcome = write_narrative(_facts(), generator)
+
+    assert outcome.attempts == 2
+    assert outcome.text == GOOD_TEXT
+    assert "문장이 2개 미만" in prompts[1]
+
+
+def test_두_번_모두_한_문장이면_총평을_내지_않는다():
+    outcome = write_narrative(_facts(), lambda system, user: "7~12초 구간을 반복해 보세요.")
+
+    assert outcome.text is None
+    assert outcome.violations == ["문장이 2개 미만"]
+
+
+def test_통과한_총평은_문장이_2개_이상이고_모두_부호로_끝난다():
+    for raw in (GOOD_TEXT, NO_PERIODS, GOOD_TEXT.rstrip(".")):
+        text = write_narrative(_facts(), lambda system, user, raw=raw: raw).text
+
+        assert len(_sentences(text)) >= 2
+        assert all(s[-1] in ".!?" for s in _sentences(text))
+
+
+def test_프롬프트에_문장_형식과_첫_문장_규칙이_있다():
+    assert "문장은 2개 이상" in SYSTEM_PROMPT and "마침표로 끝내세요" in SYSTEM_PROMPT
+    assert "첫 문장은" in SYSTEM_PROMPT and "격려 한마디" in SYSTEM_PROMPT
