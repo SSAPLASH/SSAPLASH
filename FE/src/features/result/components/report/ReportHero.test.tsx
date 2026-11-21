@@ -25,6 +25,14 @@ describe('ReportHero', () => {
     expect(h).not.toContain('rp-hero-rest');
   });
 
+  it('짧은 곡 템플릿 총평에는 「AI가 작성했어요」를 붙이지 않는다', () => {
+    const t: CoachSummary = { ...S, source: 'FE_TEMPLATE' };
+    const h = renderToStaticMarkup(<ReportHero summary={t} fallbackTitle="" score={1} accuracy={1} split={split} />);
+    expect(h).toContain('코치의 한마디');
+    expect(h).not.toContain('AI가 작성했어요');
+    expect(renderToStaticMarkup(<ReportHero summary={S} fallbackTitle="" score={1} accuracy={1} split={split} />)).toContain('AI가 작성했어요');
+  });
+
   it('총평이 없으면 곡 이름이 제목', () => {
     const h = renderToStaticMarkup(<ReportHero summary={null} fallbackTitle="기본 8비트 연주 리포트" score={0} accuracy={0} split={split} />);
     expect(h).toContain('<h1 class="rp-hero-title">기본 8비트 연주 리포트</h1>');

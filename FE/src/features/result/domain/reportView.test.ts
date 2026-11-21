@@ -26,6 +26,7 @@ import {
   OFF_BEAT_LABEL,
   padRows,
   recentAccuracies,
+  shortPlaySummary,
   reportGrid,
   splitSegments,
   splitSummary,
@@ -420,5 +421,35 @@ describe('recentAccuracies', () => {
     expect(recentAccuracies([row('p3', '2026-11-03', 90)], cur)).toBeNull();
     expect(recentAccuracies([row('p1', '2026-11-01', 80)], cur)).toBeNull();
     expect(recentAccuracies([row('p3', '2026-11-03', 90)], { ...cur, songId: null })).toBeNull();
+  });
+});
+
+describe('shortPlaySummary', () => {
+  const sp = (PERFECT: number, GOOD: number, MISS: number, early: number | null = null, late: number | null = null) => ({
+    ...judgementSplit({ PERFECT, GOOD, MISS }, null),
+    early,
+    late,
+  });
+  it('짧은 곡에 놓침이 없고 정확이 많으면 GOOD, 두 문장 이상이고 첫 마디로 나뉜다', () => {
+    const s = shortPlaySummary('DONE', null, sp(8, 2, 0));
+    expect(s?.level).toBe('GOOD');
+    expect(s?.source).toBe('FE_TEMPLATE');
+    expect(splitSummary(s?.text ?? '').rest).not.toBe('');
+  });
+  it('빠름이 많으면 기다렸다 치기를, 늦음이 많으면 제때 치기를 짚는다(FAIR)', () => {
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 4, 0))?.text).toContain('빨랐어요');
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 1, 3))?.text).toContain('늦었어요');
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0))?.level).toBe('FAIR');
+  });
+  it('놓침이 30% 이상이면 NEEDS_WORK', () => {
+    expect(shortPlaySummary('DONE', null, sp(4, 2, 4))?.level).toBe('NEEDS_WORK');
+  });
+  it('서버 총평이 있거나, 분석 전·실패거나, 노트 20개 이상이면 쓰지 않는다', () => {
+    const real = { level: 'GOOD', text: '좋아요.', focusPattern: null, source: 'RULE' };
+    expect(shortPlaySummary('DONE', real, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('PENDING', null, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('FAILED', null, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('DONE', null, sp(18, 2, 0))).toBeNull();
+    expect(shortPlaySummary('DONE', null, sp(0, 0, 0))).toBeNull();
   });
 });
