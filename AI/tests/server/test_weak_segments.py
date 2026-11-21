@@ -202,7 +202,7 @@ def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단
     status, body = _call(SAMPLES["A"]["request"])
 
     assert status == 200
-    assert body["analyzerVersion"] == "weak-rules-0.4"
+    assert body["analyzerVersion"] == "weak-rules-0.5"
     assert body["weakSegments"]
     for segment in body["weakSegments"]:
         assert segment["tip"]
@@ -210,12 +210,15 @@ def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단
         assert segment["severityLevel"] in ("LOW", "MEDIUM", "HIGH")
 
 
-def test_총평은_표본이_충분하면_붙고_부족하면_키가_빠진다():
+def test_총평은_노트가_있으면_붙고_없으면_키가_빠진다():
     _, enough = _call(SAMPLES["A"]["request"])
-    _, few = _call(SAMPLES["C"]["request"])
+    _, short = _call(SAMPLES["C"]["request"])
+    _, few = _call(build_request([]))
 
     assert set(enough["summary"]) == {"level", "text", "focusPattern", "source"}
     assert enough["summary"]["focusPattern"] == "MISS_CLUSTER"
+    assert short["reason"] == "NO_WEAKNESS"
+    assert set(short["summary"]) == {"level", "text", "source"}
     assert few["reason"] == "INSUFFICIENT_HITS"
     assert "summary" not in few
 

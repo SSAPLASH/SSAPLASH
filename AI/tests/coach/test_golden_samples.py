@@ -38,9 +38,10 @@ def test_샘플_A는_전체_지연과_놓침_몰림을_찾는다():
     assert cluster.description == "7~12초 구간에서 노트의 40%를 놓쳤어요."
 
 
-def test_샘플_B는_약점이_없고_샘플_C는_표본이_부족하다():
+def test_샘플_B는_약점이_없고_샘플_C는_짧은_곡이지만_분석한다():
     b = analyze(AnalysisRequest.model_validate(SAMPLES["B"]["request"]))
     c = analyze(AnalysisRequest.model_validate(SAMPLES["C"]["request"]))
 
     assert (b.reason, b.weakSegments) == ("NO_WEAKNESS", [])
-    assert (c.reason, c.weakSegments) == ("INSUFFICIENT_HITS", [])
+    assert (c.reason, c.weakSegments) == ("NO_WEAKNESS", [])
+    assert c.summary is not None
