@@ -11,13 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ANALYZER_VERSION = "weak-rules-0.4"
+ANALYZER_VERSION = "weak-rules-0.5"
 
 # 입력 상한 (BE 업로드 상한과 같다)
 MAX_HITS = 50_000
 MAX_BODY_BYTES = 5 * 1024 * 1024
 
-# 노트가 이보다 적으면 분석하지 않는다 (reason: INSUFFICIENT_HITS)
+# 노트가 이 이상이면 켜져 있는 패턴을 모두 본다. 이보다 적고 `Thresholds.short_min_notes` 이상이면
+# 짧은 곡 분석(전체 타이밍·한쪽 손만), 그보다 적으면 분석하지 않는다(reason: INSUFFICIENT_HITS)
 MIN_NOTES = 20
 
 # 응답에 담는 최대 개수와 같은 pattern의 최대 개수
@@ -40,7 +41,8 @@ SEVERITY_HIGH = 0.7
 # 종합 총평 등급 기준 (가정값). 골든 샘플과 실제 로그로 분포를 본 뒤 이 파일에서만 고친다.
 SUMMARY_GOOD_MISS_RATE = 0.10  # 놓침 비율이 이보다 낮고
 SUMMARY_GOOD_PERFECT_SHARE = 0.5  # PERFECT 비율이 이 이상이며 HIGH 약점이 없으면 GOOD
-SUMMARY_NEEDS_WORK_MISS_RATE = 0.30  # 놓침 비율이 이 이상이거나 HIGH 약점이 있으면 NEEDS_WORK
+# 놓침 비율이 이 이상이면 NEEDS_WORK. HIGH 약점만으로는 내리지 않는다(약점 카드가 따로 알린다)
+SUMMARY_NEEDS_WORK_MISS_RATE = 0.40
 # 잘한 점으로 꼽는 패드: 노트가 이만큼 이상이고 적중률(놓치지 않은 비율)이 이 이상인 패드 중 가장 높은 것
 STRENGTH_MIN_NOTES = 8
 STRENGTH_MIN_RATE = 0.9
@@ -86,6 +88,7 @@ class Thresholds:
     timing_min_valid: int = 20  # 유효 타격(PERFECT/GOOD) 수
     timing_mean_ratio: float = 0.3  # 평균 |오차| ≥ 0.3 × 기준 폭 (18ms)
     timing_same_sign: float = 0.65  # 평균과 같은 부호인 타격 비율
+    timing_min_se: float = 0.0  # 평균 |오차| ≥ 이 값 × 표준오차. 0이면 보지 않는다
 
     # --- PAD_* : 특정 패드에서 늦거나 빠르다 ---
     pad_min_valid: int = 8
@@ -111,6 +114,15 @@ class Thresholds:
     # --- UNSTEADY : 박자가 불안정하다 ---
     unsteady_min_valid: int = 20
     unsteady_std_ratio: float = 0.5  # 오차 표준편차 ≥ 0.5 × 기준 폭 (30ms)
+
+    # --- 짧은 곡: 노트가 short_min_notes 이상 MIN_NOTES 미만이면 TIMING_*·HAND_WEAK만 아래 값으로 본다 ---
+    # 표본이 적은 만큼 더 뚜렷해야 잡힌다. 나머지 패턴은 표본이 모자라 보지 않는다
+    short_min_notes: int = 8
+    short_timing_min_valid: int = 8
+    short_timing_same_sign: float = 0.75
+    short_timing_min_se: float = 2.5
+    short_hand_min_valid: int = 5  # 양손 각각
+    short_hand_ratio_max: float = 0.70
 
     # --- severity(0~1) 분모 ---
     severity_delta_ratio: float = 1.2  # min(1, |평균 오차| ÷ (1.2 × 기준 폭))

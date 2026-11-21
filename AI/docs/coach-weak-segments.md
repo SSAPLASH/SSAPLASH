@@ -69,7 +69,7 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 }
 ```
 
-- `reason`: `OK` / `NO_WEAKNESS`(약점 없음, 빈 배열) / `INSUFFICIENT_HITS`(노트 20개 미만, 빈 배열). 모두 200이다.
+- `reason`: `OK` / `NO_WEAKNESS`(약점 없음, 빈 배열) / `INSUFFICIENT_HITS`(노트 8개 미만, 빈 배열). 모두 200이다. 노트 8~19개는 일부 패턴만 본다(아래 "총평 등급과 짧은 곡").
 - BE 저장 규칙: `weakSegments` 배열 그대로 저장한다. **null = 미분석·실패, `[]` = 분석했으나 약점 없음.**
 - `fromMs`/`toMs`: 시작 포함·끝 미포함. 전체 플레이 패턴(`scope: WHOLE`)은 첫 노트 시각 ~ 마지막 노트 시각 + 1.
 - `description`은 FE가 그대로 표시하는 한국어 문장이다. `metrics`는 근거 수치(자유 객체)이며 `severity`(0~1)가 항상 있다.
@@ -141,13 +141,13 @@ BE는 연결 1초·응답 3초 제한으로 부르고, 5xx·시간 초과는 1�
 | --- | --- | --- |
 | `severityLevel` | 약점 항목 | `metrics.severity`(0~1)를 `LOW`(0.4 미만)·`MEDIUM`(0.7 미만)·`HIGH`로 옮긴 값. 경계값은 윗단계. FE는 "조금/보통/많이" |
 | `detail` | 약점 항목 | 그 약점이 무슨 뜻이고 얼마나 넓게 나타나는지 한두 문장(120자 이하). 숫자는 `metrics` 값이나 그 산술만 쓴다. 전체 경향(`scope: WHOLE`)이면 "곡 전체" 경향임을 밝힌다. 문구가 없는 `pattern`이거나 `metrics`가 없으면 키 생략 |
-| `summary` | 응답 루트 | 종합 총평. `INSUFFICIENT_HITS`이면 키가 없다 |
+| `summary` | 응답 루트 | 종합 총평. 노트가 하나도 없으면 키가 없다. `INSUFFICIENT_HITS`여도 노트가 있으면 간단 총평이 온다 |
 
 `summary` 객체
 
 | 필드 | 내용 |
 | --- | --- |
-| `level` | `GOOD`·`FAIR`·`NEEDS_WORK`. 놓침 비율 30% 이상이거나 `HIGH` 약점이 있으면 NEEDS_WORK, 놓침 10% 미만이고 PERFECT가 절반 이상이면 GOOD, 나머지 FAIR (가정값, `config.py`) |
+| `level` | `GOOD`·`FAIR`·`NEEDS_WORK`. 놓침 비율 40% 이상이면 NEEDS_WORK, 놓침 10% 미만이고 PERFECT가 절반 이상이며 `HIGH` 약점이 없으면 GOOD, 나머지 FAIR (가정값, `config.py`. `weak-rules-0.5`에서 바뀜) |
 | `text` | 200자 이하. 전체 인상 → 잘한 점 하나(노트 8개 이상·적중률 90% 이상인 패드 중 가장 높은 것, 약점으로 지목된 패드는 제외) → 먼저 연습할 것 하나. **점수·정확도 숫자는 쓰지 않는다**(BE 집계 값과 어긋날 수 있다) |
 | `focusPattern` | 가장 심한 약점의 `pattern`. 약점이 없으면 키 생략. 연습·곡 추천이 생기면 이 값으로 연결한다(지금은 표시용이 아니다) |
 | `strengthPad` | 잘한 점으로 꼽은 패드(정식 이름). 없으면 키 생략. LLM 총평 작업(`docs/coach-narrative.md`)의 사실로 쓰인다 |
@@ -183,11 +183,49 @@ uv run pytest tests/coach tests/server/test_weak_segments.py   # 이 기능 시�
 uv run ruff check . && uv run ruff format --check .
 ```
 
-- 합의 샘플 A(약점 있음)·B(없음)·C(표본 부족)의 요청과 기대 응답이 `tests/fixtures/coach/samples.json`에 있고, 골든 시험이 엔진 출력과 비교한다.
+- 합의 샘플 A(약점 있음)·B(없음)·C(짧은 곡)의 요청과 기대 응답이 `tests/fixtures/coach/samples.json`에 있고, 골든 시험이 엔진 출력과 비교한다.
   임계값을 조정하면 이 기대값도 함께 다시 만든다.
 - 시험용 합성 로그 빌더는 `tests/coach_helpers.py`다(`N(pad, delta, velocity, stick)`으로 노트를 쌓는다).
 - 일부 Windows PC에서는 이벤트 루프를 만들 때 `WinError 10014`가 나서 `TestClient` 라우팅 시험 3개가 건너뛰어진다. 처리 로직 시험은 이벤트 루프 없이 실행된다.
 - 성능 목표: 5,000건 1초, 50,000건 3초 이내(분석 기준). `tests/coach/test_performance.py`.
+
+## 총평 등급과 짧은 곡 (`weak-rules-0.5`)
+
+**등급.** `NEEDS_WORK`는 전체 놓침 비율로만 정한다. 이전에는 `HIGH` 약점이 하나만 있어도 `NEEDS_WORK`였는데, 놓침이 고르게 퍼진
+연주도 우연히 5초 창 하나에 몰리면 `MISS_CLUSTER`가 `HIGH`가 되어 놓침 15%인 합성 연주의 절반이 `NEEDS_WORK`로 나왔다.
+특정 대목의 문제는 약점 항목의 `severityLevel`이 따로 알린다.
+
+| 등급 | 조건 |
+| --- | --- |
+| `NEEDS_WORK` | 놓침 40% 이상 |
+| `GOOD` | 놓침 10% 미만, PERFECT 절반 이상, `HIGH` 약점 없음 |
+| `FAIR` | 나머지 |
+
+**짧은 곡.** 노트 수에 따라 세 갈래로 나눈다.
+
+| 노트 수 | `reason` | `weakSegments` | `summary` |
+| --- | --- | --- | --- |
+| 20개 이상 | `OK`·`NO_WEAKNESS` | 켜져 있는 패턴 전부 | 있다 |
+| 8~19개 | `OK`·`NO_WEAKNESS` | `TIMING_*`·`HAND_WEAK`만 | 있다 |
+| 1~7개 | `INSUFFICIENT_HITS` | 빈 배열 | 간단 총평(등급별 첫 문장 + 곡이 짧다는 안내) |
+| 0개 | `INSUFFICIENT_HITS` | 빈 배열 | 없다 |
+
+8~19개에서는 표본이 적은 만큼 더 뚜렷해야 잡는다(`Thresholds.short_*`).
+
+| 패턴 | 20개 이상 | 8~19개 |
+| --- | --- | --- |
+| `TIMING_*` | 유효 타격 20개, 같은 방향 65% | 유효 타격 8개, 같은 방향 75%, 평균 오차가 표준오차의 2.5배 이상 |
+| `HAND_WEAK` | 양손 각 15개, 세기 비율 0.75 미만 | 양손 각 5개, 세기 비율 0.70 미만 |
+
+나머지 패턴은 짧은 곡에서 보지 않는다. `PAD_*`·`TRANSITION_*`는 패드·전환별로 나누면 표본이 2~3개뿐이고, `MISS_CLUSTER`는 곡 전체가
+창 하나라 뜻이 없으며, `UNSTEADY`는 합성 측정에서 탐지율이 낮았다(노트 12개에서 16%).
+
+합성 측정(기준 폭 60ms, 가정한 연주 모델): 약점을 심지 않은 짧은 연주에서 잡힌 비율 0~2%, 노트 12~19개에서 평균 36ms 늦음과
+세기 비율 0.45를 96% 이상 찾았다. 노트 8~10개에서는 놓친 노트를 빼면 유효 타격이 모자라 탐지율이 47~94%다.
+
+- FE는 약점이 없고 노트가 20개 미만이면 "곡이 짧아 분석하지 않았어요"를 보인다. 8~19개는 이제 분석하므로 FE 기준을 8로 맞춰야 한다.
+- BE는 `reason`과 상관없이 `summary`를 저장한다. BE 변경은 없다.
+- `analyzerVersion`이 `weak-rules-0.5`로 오른다.
 
 ## 기준 폭 (`weak-rules-0.4`)
 

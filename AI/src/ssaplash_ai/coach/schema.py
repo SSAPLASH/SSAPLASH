@@ -124,5 +124,5 @@ class AnalysisResponse(BaseModel):
     analyzerVersion: str
     reason: Reason
     weakSegments: list[WeakSegment]
-    # INSUFFICIENT_HITS이면 None(응답에서 키를 생략한다)
+    # 노트가 하나도 없으면 None(응답에서 키를 생략한다). INSUFFICIENT_HITS여도 노트가 있으면 간단 총평이 온다
     summary: Summary | None = None
