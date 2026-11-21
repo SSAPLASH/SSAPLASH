@@ -35,6 +35,10 @@ def detect_timing(notes: NoteTable, th: Thresholds) -> list[Candidate]:
     same_sign = float(np.mean(np.sign(delta) == (1 if late else -1)))
     if same_sign < th.timing_same_sign:
         return []
+    if th.timing_min_se > 0:
+        standard_error = float(np.std(delta, ddof=1)) / float(np.sqrt(delta.size))
+        if abs(mean) < th.timing_min_se * standard_error:
+            return []
 
     start, end = whole_range(notes)
     pads = sorted_pads([p for p, ok in zip(notes.pad, notes.valid, strict=True) if ok])
