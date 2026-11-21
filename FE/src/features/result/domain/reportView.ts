@@ -420,6 +420,7 @@ export interface PlayAccuracyRow {
   songId: number | null;
   mode: string;
   difficulty: string | null;
+  /** 목록 API(GET /api/v1/plays) 그대로 0~100(퍼센트) */
   accuracy: number | null;
   endedAt: string;
 }
@@ -446,6 +447,9 @@ export function recentAccuracies(rows: readonly PlayAccuracyRow[], current: { pl
     .sort((a, b) => (a.endedAt < b.endedAt ? -1 : a.endedAt > b.endedAt ? 1 : 0))
     .slice(-RECENT_PLAY_COUNT);
   if (same.length < 2 || same[same.length - 1].playId !== current.playId) return null;
-  const values = same.map((r) => r.accuracy as number);
-  return { values, diffPoint: Math.round((values[values.length - 1] - values[values.length - 2]) * 100) };
+  // 목록 API의 정확도는 0~100(퍼센트)이다. 리포트 칸은 0~1로 그리므로 나눈다(곱셈 오차를 없애려 소수 넷째 자리에서 반올림)
+  const values = same.map((r) => Math.round((r.accuracy as number) * 100) / 10000);
+  // 변화는 화면에 보이는 반올림한 퍼센트끼리 뺀다(93% → 90%면 −3)
+  const shown = (v: number) => Math.round(v * 100);
+  return { values, diffPoint: shown(values[values.length - 1]) - shown(values[values.length - 2]) };
 }
