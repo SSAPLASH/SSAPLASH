@@ -10,12 +10,27 @@ const S: CoachSummary = { level: 'FAIR', text: '기본기는 잘 잡혀 있어�
 const split = judgementSplit({ PERFECT: 71, GOOD: 19, MISS: 6 }, null);
 
 describe('ReportHero', () => {
-  it('총평 첫 문장이 제목(h1), 나머지는 아래 문단, 레벨 뱃지', () => {
+  it('총평 첫 문장은 도입 줄(h1 is-lead), 나머지는 아래 본문, 레벨 뱃지', () => {
     const h = renderToStaticMarkup(<ReportHero summary={S} fallbackTitle="연주 리포트" score={87420} accuracy={0.912} split={split} />);
-    expect(h).toContain('<h1 class="rp-hero-title">기본기는 잘 잡혀 있어요.</h1>');
+    expect(h).toContain('<h1 class="rp-hero-title is-lead">기본기는 잘 잡혀 있어요.</h1>');
     expect(h).toContain('<p class="rp-hero-rest">스네어를 신경 써 보세요.</p>');
     expect(h).toContain('rp-level tone-good');
     expect(h).not.toContain('연주 리포트');
+  });
+
+  it('한 문장 총평이면 도입 줄로 낮추지 않는다', () => {
+    const one: CoachSummary = { ...S, text: '기본기는 잘 잡혀 있어요.' };
+    const h = renderToStaticMarkup(<ReportHero summary={one} fallbackTitle="" score={1} accuracy={1} split={split} />);
+    expect(h).toContain('<h1 class="rp-hero-title">기본기는 잘 잡혀 있어요.</h1>');
+    expect(h).not.toContain('rp-hero-rest');
+  });
+
+  it('짧은 곡 템플릿 총평에는 「AI가 작성했어요」를 붙이지 않는다', () => {
+    const t: CoachSummary = { ...S, source: 'FE_TEMPLATE' };
+    const h = renderToStaticMarkup(<ReportHero summary={t} fallbackTitle="" score={1} accuracy={1} split={split} />);
+    expect(h).toContain('코치의 한마디');
+    expect(h).not.toContain('AI가 작성했어요');
+    expect(renderToStaticMarkup(<ReportHero summary={S} fallbackTitle="" score={1} accuracy={1} split={split} />)).toContain('AI가 작성했어요');
   });
 
   it('총평이 없으면 곡 이름이 제목', () => {

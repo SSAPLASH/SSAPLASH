@@ -105,21 +105,32 @@
   --rp-level: var(--miss);
 }
 /* 총평 첫 문장 = 화면 제목 */
+/* 총평의 주인공은 본문(rest)이다. 첫 문장은 격려 한마디라 본문 위 도입 줄(is-lead)로 낮춘다.
+   본문이 없을 때(한 문장 총평·총평 없음)만 제목이 본문 크기로 주인공 자리를 맡는다. */
 .rp .rp-hero-title {
-  font-size: clamp(34px, 4.4vw, 52px);
+  font-size: clamp(22px, 2.3vw, 28px);
   font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.035em;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
   word-break: keep-all;
   text-wrap: balance;
 }
-.rp-hero-rest {
-  max-width: 34em;
-  margin-top: 18px;
+.rp .rp-hero-title.is-lead {
   color: var(--text-2);
-  font-size: 19px;
-  line-height: 1.6;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.rp-hero-rest {
+  max-width: 30em;
+  margin-top: 10px;
+  color: var(--text-1);
+  font-size: clamp(22px, 2.3vw, 28px);
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
   word-break: keep-all;
+  text-wrap: pretty;
 }
 .rp-score {
   display: flex;
@@ -667,7 +678,7 @@
 }
 .rp-focus-side {
   min-width: 0;
-  padding: 22px 22px 18px;
+  padding: 24px 24px 22px;
   border-radius: var(--rp-r);
   background: var(--surface-1);
 }
@@ -860,8 +871,8 @@
 .rp-note-controls {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 13px;
+  gap: 8px;
+  margin-top: 16px;
 }
 .rp-step,
 .rp-control {
@@ -896,17 +907,68 @@
   min-height: 22px;
   font-size: 13px;
 }
+/* 노트 표시 범례: 노트 흐름 범례(.rp-legend)처럼 그림 + 이름. 그림 모양·색은 레인의 .rp-mark와 같다 */
 .rp-note-key {
-  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 12px 0 0;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: 13px;
 }
+.rp-note-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rp-note-key-item i {
+  position: relative;
+  flex: none;
+  width: 9px;
+  height: 9px;
+}
+.rp-note-key-item i::before,
+.rp-note-key-item i::after {
+  content: '';
+  position: absolute;
+}
+.rp-note-key-item.perfect i::before {
+  inset: 0;
+  border-radius: 50%;
+  background: var(--perfect);
+}
+.rp-note-key-item.early i::before,
+.rp-note-key-item.late i::before {
+  inset: 0;
+  background: var(--good);
+}
+.rp-note-key-item.early i::before {
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.rp-note-key-item.late i::before {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.rp-note-key-item.miss i::before,
+.rp-note-key-item.miss i::after {
+  top: 3.5px;
+  left: -1px;
+  width: 11px;
+  height: 2px;
+  background: var(--miss);
+  transform: rotate(45deg);
+}
+.rp-note-key-item.miss i::after {
+  transform: rotate(-45deg);
+}
+/* 재생 조작은 노트 넘겨 보기와 구분선으로 나눈 아래 칸 */
 .rp-player {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 .rp .rp-control {
   min-height: 38px;
@@ -965,9 +1027,13 @@
   color: var(--text-1);
 }
 .rp-player-note {
-  margin-top: 9px;
+  margin-top: 12px;
   color: var(--text-3);
   font-size: 13px;
+  line-height: 1.5;
+}
+.rp-player-note + .rp-player-note {
+  margin-top: 4px;
 }
 
 /* ---- 관찰 · 패드별 기록: 둥근 면 안의 줄과 들여쓴 구분선(묶음 목록) ---- */
@@ -1178,8 +1244,12 @@
   .rp-hero {
     margin-top: 28px;
   }
+  .rp .rp-hero-title,
   .rp-hero-rest {
-    font-size: 17px;
+    font-size: 20px;
+  }
+  .rp .rp-hero-title.is-lead {
+    font-size: 18px;
   }
   .rp-score-value {
     font-size: 48px;
