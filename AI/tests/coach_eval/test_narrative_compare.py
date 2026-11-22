@@ -9,7 +9,7 @@ import pytest
 from ssaplash_ai.coach_eval import narrative_compare as nc
 
 GOOD = (
-    "전체적으로 기본기는 잘 잡혀 있어요. "
+    "전체적으로 기본기는 잘 잡혀 있어요. 스네어를 자주 놓쳤어요. "
     "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
 )
 

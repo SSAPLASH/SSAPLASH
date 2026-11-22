@@ -1,6 +1,6 @@
 """리포트 종합 총평(`summary`). 드럼 코치가 초보 연주자에게 직접 이야기해 주는 느낌의 규칙 문장이다.
 
-순서는 전체 인상 → 잘한 점 하나 → 먼저 연습할 것 하나다. 점수·정확도 숫자는 문장에 쓰지 않는다(BE가
+순서는 전체 인상 → 잘한 점 하나 → 가장 심한 약점이 어떻게 나타났는지 → 먼저 연습할 것 하나다. 점수·정확도 숫자는 문장에 쓰지 않는다(BE가
 따로 계산해 화면에 보여 주는 값과 어긋날 수 있다). 약점 목록과 노트 표에서 나온 값만 쓰는 순수 함수라
 같은 입력은 항상 같은 문장이다. LLM을 쓰지 않는다.
 
@@ -105,6 +105,41 @@ def _focus_phrase(segment: WeakSegment) -> str:
     return "가장 어려웠던 부분"
 
 
+def _headline(level: str) -> str:
+    """인상의 첫 문장. 화면이 이 문장을 제목으로 쓰고 나머지를 「자세한 분석」에 문장마다 한 줄로 보인다.
+
+    인상을 두 문장 다 쓰면 자세한 분석이 4줄까지 늘어난다. 제목 한 줄과 자세한 분석 2~3줄이 되게 첫 문장만 쓴다.
+    """
+    return _OPENING[level].split(". ")[0].rstrip(".") + "."
+
+
+def _what_happened(segment: WeakSegment) -> str:
+    """가장 심한 약점이 어떻게 나타났는지 한 문장. 숫자는 쓰지 않는다(약점 카드가 보여 준다)."""
+    pads = segment.pads
+    pattern = segment.pattern
+    if pattern == "TIMING_LATE":
+        return "전체적으로 박보다 조금 늦게 치고 있어요."
+    if pattern == "TIMING_EARLY":
+        return "전체적으로 박보다 조금 빠르게 치고 있어요."
+    if pattern == "PAD_LATE":
+        return f"{_label(pads, 0, '한 패드')}만 다른 패드보다 늦게 쳐요."
+    if pattern == "PAD_EARLY":
+        return f"{_label(pads, 0, '한 패드')}만 다른 패드보다 빠르게 쳐요."
+    if pattern in ("TRANSITION_LATE", "TRANSITION_MISS"):
+        move = f"{_label(pads, 0, '앞 패드')}에서 {_ro(_label(pads, 1, '다음 패드'))} 넘어갈 때"
+        tail = "박자가 늦어져요." if pattern == "TRANSITION_LATE" else "자주 놓쳐요."
+        return f"{move} {tail}"
+    if pattern == "HAND_WEAK":
+        weak = {0: "왼손이 오른손", 1: "오른손이 왼손"}.get(segment.metrics.get("weakStickId"))
+        return f"{weak or '한쪽 손이 다른 손'}보다 약하게 쳐요."
+    if pattern == "MISS_CLUSTER":
+        # 구간 위치는 바로 뒤 연습 문장("먼저 7~12초 구간부터")이 말한다. 같은 말을 두 번 하지 않는다
+        return "한 구간에서 놓친 노트가 몰려 있어요."
+    if pattern == "UNSTEADY":
+        return "박자가 일정하지 않고 조금씩 흔들려요."
+    return "아직 고르지 않은 부분이 있어요."
+
+
 def build_brief_summary(notes: NoteTable) -> Summary:
     """약점 분석을 하지 않는 아주 짧은 곡의 총평. 등급은 놓침·PERFECT 비율로만 정한다."""
     level = _level(notes, [])
@@ -131,14 +166,16 @@ def build_summary(notes: NoteTable, segments: Sequence[WeakSegment]) -> Summary:
     if focus is None:
         # 약점이 없으면 인상 대신 약점 없음 안내를 앞에 둔다(NEEDS_WORK에서 "정말 잘 쳤어요"가 나오지 않게)
         if level == "GOOD":
-            parts.append(_OPENING["GOOD"])
+            parts.append(_headline("GOOD"))
         if strength_line:
             parts.append(strength_line)
         parts.append(_NO_WEAKNESS_TAIL[level])
     else:
-        parts.append(_OPENING[level])
+        parts.append(_headline(level))
         if strength_line:
             parts.append(strength_line)
+        # 화면은 첫 문장 뒤를 「자세한 분석」에 문장마다 한 줄로 보인다. 무엇을 연습할지 앞에 왜인지를 한 문장 둔다
+        parts.append(_what_happened(focus))
         parts.append(f"먼저 {_focus_phrase(focus)}부터 연습해 보세요.")
 
     return Summary(
