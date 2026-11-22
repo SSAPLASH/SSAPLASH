@@ -224,3 +224,63 @@ def test_타이밍_손_일정함_약점의_문구는_것으로_끝난다():
 
     for pattern in ("TIMING_LATE", "TIMING_EARLY", "HAND_WEAK", "UNSTEADY"):
         assert _focus_phrase(_segment(pattern)).endswith("치는 것")
+
+
+# ---------- 자세한 분석 2~3문장 ----------
+
+
+def _split(text: str) -> list[str]:
+    return [p for p in re.split(r"(?<=[.!?])\s+", text) if p]
+
+
+def test_약점이_있으면_무슨_일인지_한_문장이_연습_문장_앞에_온다():
+    text = _run(same(40, delta=40.0)).summary.text  # 전체가 늦다
+
+    sentences = _split(text)
+    assert "전체적으로 박보다 조금 늦게 치고 있어요." in sentences
+    assert sentences.index("전체적으로 박보다 조금 늦게 치고 있어요.") == len(sentences) - 2
+    assert sentences[-1].startswith("먼저 ") and sentences[-1].endswith("연습해 보세요.")
+
+
+def test_약점이_있는_총평은_첫_문장_뒤에_2문장_이상이다():
+    for notes in (same(40, delta=40.0), same(40, delta=-40.0)):
+        text = _run(notes).summary.text
+
+        assert 3 <= len(_split(text)) <= 4
+        assert len(text) <= MAX_SUMMARY_CHARS
+
+
+def test_무슨_일_문장에는_숫자가_없다():
+    from ssaplash_ai.coach.summary import _what_happened
+
+    response = _run(same(40, delta=40.0))
+    for segment in response.weakSegments:
+        sentence = _what_happened(segment)
+        assert not re.search(r"\d", sentence), sentence
+        assert "%" not in sentence
+
+
+def test_패드_이동_약점은_어느_패드에서_어느_패드인지_말한다():
+    from types import SimpleNamespace as NS
+
+    from ssaplash_ai.coach.summary import _what_happened
+
+    miss = NS(pattern="TRANSITION_MISS", pads=["KICK", "HIHAT"], metrics={}, fromMs=0, toMs=0)
+    late = NS(pattern="TRANSITION_LATE", pads=["SNARE", "KICK"], metrics={}, fromMs=0, toMs=0)
+    hand = NS(pattern="HAND_WEAK", pads=[], metrics={"weakStickId": 0}, fromMs=0, toMs=0)
+    cluster = NS(pattern="MISS_CLUSTER", pads=[], metrics={}, fromMs=7000.0, toMs=12000.0)
+
+    assert _what_happened(miss) == "킥에서 하이햇으로 넘어갈 때 자주 놓쳐요."
+    assert _what_happened(late) == "스네어에서 킥으로 넘어갈 때 박자가 늦어져요."
+    assert _what_happened(hand) == "왼손이 오른손보다 약하게 쳐요."
+    assert _what_happened(cluster) == "한 구간에서 놓친 노트가 몰려 있어요."
+
+
+def test_약점이_없는_총평도_첫_문장_뒤가_2문장에서_3문장이다():
+    text = _run(_good_notes()).summary.text
+
+    assert text == (
+        "정말 잘 쳤어요. 스네어는 특히 안정적으로 쳤어요. "
+        "눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요."
+    )
+    assert 3 <= len(_split(text)) <= 4

@@ -9,10 +9,10 @@ from ssaplash_ai.coach.narrative import (
     SYSTEM_PROMPT,
     NarrativeFacts,
     build_user_prompt,
-    check,
     punctuate,
     write_narrative,
 )
+from ssaplash_ai.coach.narrative import check as strict_check
 
 GOOD_TEXT = (
     "전체적으로 기본기는 잘 잡혀 있어요. 킥은 특히 안정적으로 쳤어요. "
@@ -21,6 +21,14 @@ GOOD_TEXT = (
 
 # 문장 2개 조건을 채우려고 앞에 붙이는 첫 문장
 LEAD = "기본기는 잘 잡혀 있어요."
+
+
+def check(text: str, facts: NarrativeFacts) -> list[str]:
+    """문장 수 하한을 뺀 가드레일. 다른 규칙을 보는 시험이 두 문장짜리 예문을 쓸 수 있게 한다.
+
+    약점이 있으면 3문장 이상이어야 한다는 조건은 맨 아래 "자세한 분석" 시험이 `strict_check`로 본다.
+    """
+    return [p for p in strict_check(text, facts) if p != "문장이 3개 미만"]
 
 
 def _facts(**overrides) -> NarrativeFacts:
@@ -341,7 +349,7 @@ def test_이모지는_지우고_느낌표로_끝나는_문장도_통과한다():
     from ssaplash_ai.coach.narrative import clean
 
     assert clean("잘 쳤어요! 🎶 연습해 보세요! 💪") == "잘 쳤어요! 연습해 보세요!"
-    text = "기본기가 잘 잡혀 있어요. 7~12초 구간을 느린 템포로 반복해 보세요! 🎶💪"
+    text = "기본기가 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 7~12초 구간을 느린 템포로 반복해 보세요! 🎶💪"
     outcome = write_narrative(_facts(), lambda s, u: text)
 
     assert outcome.text is not None and "🎶" not in outcome.text
@@ -446,7 +454,7 @@ SNARE_PRAISE = "특히 스네어 연주가 좋았어요."
 
 def test_약점_패드를_칭찬한_문장만_덜어내고_통과한다():
     text = (
-        "전체적으로 기본기는 잘 잡혀 있어요. "
+        "전체적으로 기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. "
         + SNARE_PRAISE
         + " 7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
     )
@@ -464,7 +472,7 @@ def test_약점_패드를_칭찬한_문장만_덜어내고_통과한다():
 
 def test_사실에_없는_숫자가_든_문장도_덜어낸다():
     text = (
-        "전체적으로 기본기는 잘 잡혀 있어요. 노트 99개 중 77개를 놓쳤어요. "
+        "전체적으로 기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 노트 99개 중 77개를 놓쳤어요. "
         "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
     )
 
@@ -499,7 +507,7 @@ def test_문제가_없으면_보정하지_않는다():
 def test_보정해도_문장_단위_위반이_아니면_그대로_다시_쓰게_한다():
     # 영어 한 문장이 섞였지만 나머지가 충분하면 그 문장만 덜어낸다
     text = (
-        "기본기는 잘 잡혀 있어요. Good job everyone. "
+        "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. Good job everyone. "
         "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 느린 템포로 반복해 보세요."
     )
 
@@ -603,16 +611,16 @@ def test_부호_없이_이어_쓴_문장은_가드레일에_걸린다():
 
 
 def test_한_문장뿐이면_가드레일에_걸린다():
-    problems = check("7~12초 구간을 느린 템포로 반복해 보세요.", _facts())
+    problems = strict_check("7~12초 구간을 느린 템포로 반복해 보세요.", _facts())
 
-    assert problems == ["문장이 2개 미만"]
+    assert problems == ["문장이 3개 미만"]
 
 
 def test_숫자_속_점은_문장_끝으로_세지_않는다():
     facts = _facts()
     one = "놓침 비율이 0.4인 7~12초 구간을 느린 템포로 반복해 보세요."
 
-    assert check(one, facts) == ["문장이 2개 미만"]
+    assert strict_check(one, facts) == ["문장이 3개 미만"]
     assert check(f"{LEAD} {one}", facts) == []
 
 
@@ -666,14 +674,14 @@ def test_한_문장뿐이면_이유를_알려_주고_다시_쓰게_한다():
 
     assert outcome.attempts == 2
     assert outcome.text == GOOD_TEXT
-    assert "문장이 2개 미만" in prompts[1]
+    assert "문장이 3개 미만" in prompts[1]
 
 
 def test_두_번_모두_한_문장이면_총평을_내지_않는다():
     outcome = write_narrative(_facts(), lambda system, user: "7~12초 구간을 반복해 보세요.")
 
     assert outcome.text is None
-    assert outcome.violations == ["문장이 2개 미만"]
+    assert outcome.violations == ["문장이 3개 미만"]
 
 
 def test_통과한_총평은_문장이_2개_이상이고_모두_부호로_끝난다():
@@ -685,7 +693,7 @@ def test_통과한_총평은_문장이_2개_이상이고_모두_부호로_끝난
 
 
 def test_프롬프트에_문장_형식과_첫_문장_규칙이_있다():
-    assert "문장은 2~3개" in SYSTEM_PROMPT and "마침표로 끝내고" in SYSTEM_PROMPT
+    assert "문장은 3~4개" in SYSTEM_PROMPT and "마침표로 끝내고" in SYSTEM_PROMPT
     assert "첫 문장은" in SYSTEM_PROMPT and "짧은 격려" in SYSTEM_PROMPT
 
 
@@ -730,10 +738,10 @@ def test_운영에서_나온_긴_총평은_가드레일에_걸린다():
     assert "어색한 표현 '높임말'" in problems
 
 
-def test_문장이_3개를_넘으면_걸린다():
-    text = "잘 쳤어요. 킥이 안정적이에요. 박자도 좋아요. 7~12초 구간만 반복해 보세요."
+def test_문장이_4개를_넘으면_걸린다():
+    text = "잘 쳤어요. 킥이 안정적이에요. 박자도 좋아요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
 
-    assert "문장이 3개를 넘음" in check(text, _facts())
+    assert "문장이 4개를 넘음" in check(text, _facts())
 
 
 def test_한_문장이_너무_길면_걸린다():
@@ -758,24 +766,27 @@ def test_높임말은_걸리고_해_보세요는_걸리지_않는다():
 
 
 def test_문장이_많으면_뒤에서부터_덜어내고_통과한다():
-    text = "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 7~12초 구간만 반복해 보세요. 다음에도 화이팅해요."
+    text = "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요. 다음에도 해 봐요."
 
     outcome = write_narrative(_facts(), lambda system, user: text)
 
     assert outcome.repaired is True
     assert (
         outcome.text
-        == "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 7~12초 구간만 반복해 보세요."
+        == "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
     )
 
 
 def test_어색한_문장만_덜어내고_나머지로_통과한다():
-    text = "기본기는 잘 잡혀 있어요. 연주하는 모습이 인상적이에요. 7~12초 구간만 반복해 보세요."
+    text = "기본기는 잘 잡혀 있어요. 연주하는 모습이 인상적이에요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
 
     outcome = write_narrative(_facts(), lambda system, user: text)
 
     assert outcome.repaired is True
-    assert outcome.text == "기본기는 잘 잡혀 있어요. 7~12초 구간만 반복해 보세요."
+    assert (
+        outcome.text
+        == "기본기는 잘 잡혀 있어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
+    )
 
 
 def test_약점이_없으면_연습_안내가_없어도_보정이_통과한다():
@@ -816,5 +827,69 @@ def test_통과한_총평은_짧다():
         text = write_narrative(_facts(), lambda system, user, raw=raw: raw).text
 
         assert len(text) <= MAX_NARRATIVE_CHARS
-        assert 2 <= len(_sentences(text)) <= 3
+        assert 3 <= len(_sentences(text)) <= 4
         assert all(len(s) <= 50 for s in _sentences(text))
+
+
+# ---------- 자세한 분석 2~3문장 (화면이 첫 문장을 제목으로, 나머지를 문장마다 한 줄로 보인다) ----------
+
+
+def test_약점이_있으면_문장이_3개는_돼야_한다():
+    two = "기본기는 잘 잡혀 있어요. 7~12초 구간만 반복해 보세요."
+    three = "기본기는 잘 잡혀 있어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
+
+    assert strict_check(two, _facts()) == ["문장이 3개 미만"]
+    assert strict_check(three, _facts()) == []
+
+
+def test_약점이_없으면_2문장도_통과한다():
+    assert strict_check("정말 잘 쳤어요. 눈에 띄는 약점은 없었어요.", _clean_facts()) == []
+
+
+def test_4문장까지_통과한다():
+    text = "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
+
+    assert strict_check(text, _facts()) == []
+    assert len(text) <= MAX_NARRATIVE_CHARS
+
+
+def test_약점이_있는데_2문장이면_이유를_알려_주고_다시_쓰게_한다():
+    prompts: list[str] = []
+    good = "기본기는 잘 잡혀 있어요. 스네어를 자주 놓쳐요. 7~12초 구간만 반복해 보세요."
+
+    def generator(system: str, user: str) -> str:
+        prompts.append(user)
+        return (
+            "기본기는 잘 잡혀 있어요. 7~12초 구간만 반복해 보세요." if len(prompts) == 1 else good
+        )
+
+    outcome = write_narrative(_facts(), generator)
+
+    assert outcome.attempts == 2 and outcome.text == good
+    assert "문장이 3개 미만" in prompts[1]
+
+
+def test_덜어낸_뒤_3문장이_안_되면_보정하지_않는다():
+    # 어색한 문장을 빼면 2문장만 남는다. 약점이 있는 총평은 3문장이 돼야 하므로 다시 쓰게 한다
+    text = "기본기는 잘 잡혀 있어요. 연주하는 모습이 인상적이에요. 7~12초 구간만 반복해 보세요."
+
+    outcome = write_narrative(_facts(), lambda system, user: text)
+
+    assert outcome.text is None and outcome.attempts == 2
+
+
+def test_프롬프트가_약점이_어떻게_나타났는지와_연습_방법을_따로_쓰라고_한다():
+    assert "어디서 어떻게 나타났는지" in SYSTEM_PROMPT
+    assert "어떻게 연습할지" in SYSTEM_PROMPT
+
+
+def test_약점_패드가_안정적이라고_하면_걸린다():
+    # 평가에서 나온 문장: 스네어가 약점인데 "스네어 드럼 연주가 안정적이에요."라고 썼다
+    text = (
+        "괜찮게 연주했어요. 스네어 드럼 연주가 안정적이에요. "
+        "7~12초 구간에서 놓친 노트가 많아요. 그 부분을 천천히 다시 연습해 보세요."
+    )
+
+    assert any(p.startswith("약점 패드를 칭찬함") for p in strict_check(text, _facts()))
+    outcome = write_narrative(_facts(), lambda system, user: text)
+    assert outcome.repaired is True and "안정적" not in outcome.text

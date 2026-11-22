@@ -59,7 +59,7 @@ def test_들쭉날쭉함도_기준_폭으로_본다():
 
 def test_기본_분석_응답에_새_분석기_버전이_담긴다():
     request = AnalysisRequest.model_validate(build_request(same(24, delta=20)))
-    assert analyze(request).analyzerVersion == ANALYZER_VERSION == "weak-rules-0.5"
+    assert analyze(request).analyzerVersion == ANALYZER_VERSION == "weak-rules-0.6"
 
 
 def test_기준_폭_선택_메서드():
