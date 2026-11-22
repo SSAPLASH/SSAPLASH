@@ -46,8 +46,14 @@ export interface WeakSegment {
   metrics: Record<string, unknown>;
 }
 
-/** 판정 수 합(PERFECT+GOOD+MISS)이 이 값보다 적으면 서버가 짧은 곡으로 보고 분석하지 않는다(AI 확정, 10/28 회신 2) */
-export const MIN_NOTES_FOR_ANALYSIS = 20;
+/**
+ * 판정 수 합(PERFECT+GOOD+MISS)이 이 값보다 적으면 서버가 약점을 분석하지 않는다(AI weak-rules-0.5 `short_min_notes`).
+ * 이 값 이상 `FULL_ANALYSIS_MIN_NOTES` 미만은 짧은 곡 분석(전체 타이밍·한쪽 손만)을 한다
+ */
+export const MIN_NOTES_FOR_ANALYSIS = 8;
+
+/** 판정 수 합이 이 값 이상이면 서버가 모든 약점 패턴을 본다(AI `MIN_NOTES`). weak-rules-0.4까지는 이보다 적으면 분석·총평이 없었다 */
+export const FULL_ANALYSIS_MIN_NOTES = 20;
 
 /**
  * 구간을 마디 번호(0부터, 양쪽 포함)로 환산한다. bpm·박자가 없으면 null. feedback.ts의 barOf와 같은 식.
