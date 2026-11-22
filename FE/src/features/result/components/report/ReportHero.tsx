@@ -1,14 +1,17 @@
-// 리포트 머리 (설계 COACH-002-report-apple-redesign ①②). 왼쪽은 코치 총평 — 첫 문장이 화면 제목, 나머지는 그 아래.
-// 총평이 없으면(분석 전·옛 기록) 곡 이름이 제목이다. 오른쪽은 점수와 노트 판정 한 줄 막대(정확·빠름늦음·놓침).
-// 판정 개수는 서버 counts 그대로이고, 빠름·늦음 나누기는 노트를 받은 뒤에만 보인다. 계산은 reportView가 한다.
+// 리포트 머리 (설계 COACH-002-report-apple-redesign ①② · v0.3 H1~H3). 왼쪽은 코치 총평 — 첫 문장(코치 한마디)이 화면 제목,
+// 나머지는 구분선 아래 「자세한 분석」 칸에 문장마다 한 줄. 분석 중이면 자리 표시, 총평이 없으면(옛 기록·실패) 곡 이름이 제목이다.
+// 오른쪽은 점수와 노트 판정 한 줄 막대(정확·빠름늦음·놓침). 판정 개수는 서버 counts 그대로이고,
+// 빠름·늦음 나누기는 노트를 받은 뒤에만 보인다. 계산은 reportView가 한다.
 import { summaryBadge, type CoachSummary } from '@/domain/play/report';
-import { splitSummary, TEMPLATE_SUMMARY_SOURCE, VERDICT_LABEL, OFF_BEAT_LABEL, type JudgementSplit } from '@/features/result/domain/reportView';
+import { splitSentences, splitSummary, TEMPLATE_SUMMARY_SOURCE, VERDICT_LABEL, OFF_BEAT_LABEL, type JudgementSplit } from '@/features/result/domain/reportView';
 import './report.css';
 
 interface Props {
   summary: CoachSummary | null;
   /** 총평이 없을 때 제목 자리에 둘 글자(곡 이름) */
   fallbackTitle: string;
+  /** 서버가 아직 분석 중(PENDING)이면 참. 총평이 없을 때 곡 이름 대신 자리 표시를 둔다(H1) */
+  analyzing?: boolean;
   score: number;
   /** 0~1 */
   accuracy: number;
@@ -18,8 +21,23 @@ interface Props {
 /** 91.2% · 100% (소수 한 자리, 끝의 .0은 뺀다) */
 const pctText = (rate: number) => `${Number((rate * 100).toFixed(1))}%`;
 
-export function ReportHero({ summary, fallbackTitle, score, accuracy, split }: Props) {
+/** 분석 중 자리 표시. 곡 이름이 잠깐 보였다 총평으로 바뀌면 오류처럼 보여서, 총평이 올 자리를 미리 잡아 둔다 */
+export function HeroPending() {
+  return (
+    <div className="rp-hero-pending" role="status" aria-busy="true">
+      <div className="rp-hero-by">
+        <span>코치의 한마디</span>
+      </div>
+      <h1 className="rp-hero-wait">코치가 연주를 살펴보고 있어요</h1>
+      <span className="rp-hero-bone" aria-hidden="true" />
+      <span className="rp-hero-bone is-short" aria-hidden="true" />
+    </div>
+  );
+}
+
+export function ReportHero({ summary, fallbackTitle, analyzing = false, score, accuracy, split }: Props) {
   const { headline, rest } = splitSummary(summary?.text ?? '');
+  const details = splitSentences(rest);
   const badge = summary ? summaryBadge(summary.level) : null;
   const parts = [
     { key: 'p', label: VERDICT_LABEL.PERFECT, n: split.perfect },
@@ -39,10 +57,19 @@ export function ReportHero({ summary, fallbackTitle, score, accuracy, split }: P
               {/* 짧은 곡 템플릿(FE가 고른 문장)에는 붙이지 않는다 */}
               {summary.source !== TEMPLATE_SUMMARY_SOURCE && <span className="rp-hero-ai">AI가 작성했어요</span>}
             </div>
-            {/* 나머지 문장이 있으면 첫 문장은 도입 줄로 낮추고 본문을 크게 둔다 */}
-            <h1 className={rest ? 'rp-hero-title is-lead' : 'rp-hero-title'}>{headline}</h1>
-            {rest && <p className="rp-hero-rest">{rest}</p>}
+            {/* 코치 한마디가 주인공이고, 나머지 문장은 구분된 읽기용 칸에 문장마다 한 줄로 둔다 */}
+            <h1 className="rp-hero-title">{headline}</h1>
+            {details.length > 0 && (
+              <div className="rp-hero-detail">
+                <h2 className="rp-hero-detail-title">자세한 분석</h2>
+                {details.map((s, i) => (
+                  <p key={i}>{s}</p>
+                ))}
+              </div>
+            )}
           </>
+        ) : analyzing ? (
+          <HeroPending />
         ) : (
           <h1 className="rp-hero-title">{fallbackTitle}</h1>
         )}
