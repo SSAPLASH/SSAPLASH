@@ -69,6 +69,13 @@ def build_cases() -> dict[str, NarrativeFacts]:
     return {name: facts for name, facts in cases.items() if facts is not None}
 
 
+def _violation_key(violation: str) -> str:
+    """위반을 종류별로 세려고 값(따옴표·괄호 안, 숫자 목록)을 뗀 이름. "문장이 3개를 넘음"은 그대로 둔다."""
+    if violation.startswith("사실에 없는 숫자"):
+        return "사실에 없는 숫자"
+    return re.split(r"['(]", violation)[0].strip()
+
+
 def run_model(
     model: str,
     cases: dict[str, NarrativeFacts],
@@ -80,6 +87,8 @@ def run_model(
     violations: Counter[str] = Counter()
     passed = first_try = repaired = punctuated = errors = 0
     first_lengths: list[int] = []
+    total_lengths: list[int] = []
+    sentence_counts: Counter[int] = Counter()
     for case, facts in cases.items():
         for i in range(repeats):
             started = time.perf_counter()
@@ -92,10 +101,12 @@ def run_model(
             repaired += outcome.repaired
             punctuated += outcome.punctuated
             if outcome.text:
+                total_lengths.append(len(outcome.text))
+                sentence_counts[len(re.split(r"(?<=[.!?])\s+", outcome.text))] += 1
                 first_lengths.append(len(re.split(r"(?<=[.!?])\s+", outcome.text)[0]))
             errors += bool(outcome.violations) and outcome.violations[0].startswith("생성기 오류")
             for v in outcome.violations:
-                violations[re.sub(r"['\d].*", "", v).strip()] += 1
+                violations[_violation_key(v)] += 1
             rows.append(
                 {
                     "model": model,
@@ -122,6 +133,9 @@ def run_model(
         "punctuated": punctuated,
         "first_len_median": statistics.median(first_lengths) if first_lengths else 0,
         "first_len_max": max(first_lengths) if first_lengths else 0,
+        "total_len_median": statistics.median(total_lengths) if total_lengths else 0,
+        "total_len_max": max(total_lengths) if total_lengths else 0,
+        "sentence_counts": dict(sorted(sentence_counts.items())),
         "errors": errors,
         "median_sec": statistics.median(times) if times else 0.0,
         "max_sec": max(times) if times else 0.0,
@@ -136,8 +150,8 @@ def render(results: list[dict]) -> str:
         "# LLM 총평 후보 모델 비교",
         "",
         "| 모델 | 통과 | 그대로 통과 | 문장 덜어내고 통과 | 마침표 붙임 | 첫 문장 글자 수(중앙값/최대) "
-        "| 시간 중앙값(초) | 최대(초) | 가장 흔한 위반 |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| 전체 글자 수(중앙값/최대) | 문장 수별 건수 | 시간 중앙값(초) | 최대(초) | 가장 흔한 위반 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in results:
         top = ", ".join(f"{v}({n})" for v, n in r["violations"]) or "-"
@@ -145,6 +159,8 @@ def render(results: list[dict]) -> str:
             f"| {r['model']} | {r['passed']}/{r['total']} | {r['first_try']}/{r['total']} "
             f"| {r['repaired']}/{r['total']} | {r['punctuated']}/{r['total']} "
             f"| {r['first_len_median']:.0f}/{r['first_len_max']} "
+            f"| {r['total_len_median']:.0f}/{r['total_len_max']} "
+            f"| {', '.join(f'{k}문장 {v}' for k, v in r['sentence_counts'].items()) or '-'} "
             f"| {r['median_sec']:.1f} | {r['max_sec']:.1f} | {top} |"
         )
     lines += [
