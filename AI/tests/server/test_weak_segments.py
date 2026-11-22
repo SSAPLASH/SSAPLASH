@@ -202,7 +202,7 @@ def test_모든_약점_항목에_연습_조언과_상세_설명과_심각도_단
     status, body = _call(SAMPLES["A"]["request"])
 
     assert status == 200
-    assert body["analyzerVersion"] == "weak-rules-0.5"
+    assert body["analyzerVersion"] == "weak-rules-0.6"
     assert body["weakSegments"]
     for segment in body["weakSegments"]:
         assert segment["tip"]

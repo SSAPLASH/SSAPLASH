@@ -1,5 +1,5 @@
 {
- "_설명": "BE와 합의한 샘플 A(약점 있음)·B(없음)·C(짧은 곡)의 요청과 기대 응답. 설계 규칙으로 계산한 계약 예시(.claude/mail COACH-003 회신 3·5). v0.3(2026-11-04): severityLevel·detail·summary 추가분 포함, 기존 필드는 그대로. v0.5(2026-11-21): 노트 8~19개도 분석해 C는 NO_WEAKNESS와 summary가 온다.",
+ "_설명": "BE와 합의한 샘플 A(약점 있음)·B(없음)·C(짧은 곡)의 요청과 기대 응답. 설계 규칙으로 계산한 계약 예시(.claude/mail COACH-003 회신 3·5). v0.3(2026-11-04): severityLevel·detail·summary 추가분 포함, 기존 필드는 그대로. v0.5(2026-11-21): 노트 8~19개도 분석해 C는 NO_WEAKNESS와 summary가 온다. v0.6(2026-11-23): 약점이 있는 총평에 무슨 일이 있었는지 한 문장 추가(A의 summary.text).",
  "A": {
   "request": {
    "playId": "6f1c2d3e-0a1b-4c5d-8e9f-001122334455",
@@ -366,7 +366,7 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.5",
+   "analyzerVersion": "weak-rules-0.6",
    "reason": "OK",
    "weakSegments": [
     {
@@ -418,7 +418,7 @@
    ],
    "summary": {
     "level": "FAIR",
-    "text": "기본기는 잘 잡혀 있어요. 조금만 다듬으면 훨씬 좋아질 거예요. 먼저 7~12초 구간부터 연습해 보세요.",
+    "text": "기본기는 잘 잡혀 있어요. 한 구간에서 놓친 노트가 몰려 있어요. 먼저 7~12초 구간부터 연습해 보세요.",
     "focusPattern": "MISS_CLUSTER",
     "source": "RULE"
    }
@@ -751,12 +751,12 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.5",
+   "analyzerVersion": "weak-rules-0.6",
    "reason": "NO_WEAKNESS",
    "weakSegments": [],
    "summary": {
     "level": "GOOD",
-    "text": "정말 잘 쳤어요. 박자와 판정이 안정적이에요. 하이햇은 특히 안정적으로 쳤어요. 눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요.",
+    "text": "정말 잘 쳤어요. 하이햇은 특히 안정적으로 쳤어요. 눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요.",
     "strengthPad": "HIHAT",
     "source": "RULE"
    }
@@ -933,12 +933,12 @@
    ]
   },
   "response": {
-   "analyzerVersion": "weak-rules-0.5",
+   "analyzerVersion": "weak-rules-0.6",
    "reason": "NO_WEAKNESS",
    "weakSegments": [],
    "summary": {
     "level": "GOOD",
-    "text": "정말 잘 쳤어요. 박자와 판정이 안정적이에요. 눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요.",
+    "text": "정말 잘 쳤어요. 눈에 띄는 약점은 없었어요. 지금처럼 꾸준히 치면서 더 어려운 곡에도 도전해 보세요.",
     "source": "RULE"
    }
   }
