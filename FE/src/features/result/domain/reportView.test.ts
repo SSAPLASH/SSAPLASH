@@ -29,6 +29,7 @@ import {
   shortPlaySummary,
   reportGrid,
   splitSegments,
+  splitSentences,
   splitSummary,
   timingScalePos,
   timingSummary,
@@ -309,6 +310,20 @@ describe('선택(Focus)', () => {
     expect(initialFocus(splitSegments([t]), notes, 50000)?.kind).toBe('transition');
     expect(initialFocus(splitSegments([]), notes, 50000)).toMatchObject({ kind: 'bin', fromMs: 10000 });
     expect(initialFocus(splitSegments([]), [], 5000)).toBeNull();
+  });
+});
+
+describe('splitSentences', () => {
+  it('문장마다 나누고 끝 규칙은 splitSummary와 같다', () => {
+    expect(splitSentences('스네어를 신경 써 보세요.\n천천히 다시 쳐 봐요! 0.75배로 쳐요')).toEqual([
+      '스네어를 신경 써 보세요.',
+      '천천히 다시 쳐 봐요!',
+      '0.75배로 쳐요',
+    ]);
+    expect(splitSentences('킥이 안정적이에요 스네어를 연습해 보세요')).toEqual(['킥이 안정적이에요', '스네어를 연습해 보세요']);
+  });
+  it('빈 문자열이면 빈 목록', () => {
+    expect(splitSentences('   ')).toEqual([]);
   });
 });
 

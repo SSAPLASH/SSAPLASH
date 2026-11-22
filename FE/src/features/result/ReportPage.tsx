@@ -11,7 +11,7 @@ import { getChartAssets } from '@/api/song/charts';
 import { audioEngine } from '@/audio/AudioEngine';
 import { createAnalysisPoller } from './analysisPoller';
 import { loadAllReportNotes, prefetchReport, refreshReport, reportErrorKind } from '@/runtime/playSync';
-import { ReportHero } from '@/features/result/components/report/ReportHero';
+import { HeroPending, ReportHero } from '@/features/result/components/report/ReportHero';
 import { ReportHighlights } from '@/features/result/components/report/ReportHighlights';
 import { FocusPanel } from '@/features/result/components/report/FocusPanel';
 import { NoteFlowChart } from '@/features/result/components/report/NoteFlowChart';
@@ -256,10 +256,15 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   );
 
   if (report.s === 'loading') {
+    // 첫 응답 전에도 곡 이름을 제목으로 세우지 않고 총평 자리를 잡아 둔다(설계 v0.3 H1)
     return (
       <main className="main rp">
-        {header(true)}
-        <p className="rp-notice">분석을 불러오는 중…</p>
+        {header(false)}
+        <section className="rp-hero" aria-label="연주 요약">
+          <div className="rp-hero-say">
+            <HeroPending />
+          </div>
+        </section>
       </main>
     );
   }
@@ -324,6 +329,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
       <ReportHero
         summary={r.coachSummary ?? shortPlaySummary(r.analysisStatus, r.coachSummary, split)}
         fallbackTitle={title}
+        analyzing={r.analysisStatus === 'PENDING' && polling !== 'exhausted'}
         score={r.score}
         accuracy={r.accuracy}
         split={split}
