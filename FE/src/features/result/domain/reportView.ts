@@ -2,7 +2,7 @@
 // 노트 목록을 5초 칸으로 묶고, AI 약점을 화면 자리(놓친 구간·패드 전환·그 밖)로 나누고, 확대해서 볼 구간(Focus)과 그 문구를 만든다.
 // 약점 문구는 서버 값을 그대로 쓰고, 숫자(metrics)는 있으면 쓰고 없으면 그 문구만 뺀다(D5).
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import { isTooShortForAnalysis, segmentBars, type AnalysisStatus, type CoachSummary, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
+import { FULL_ANALYSIS_MIN_NOTES, segmentBars, type AnalysisStatus, type CoachSummary, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
 
 /** 전체 노트 흐름의 칸 폭(ms) */
 export const FLOW_BIN_MS = 5000;
@@ -377,23 +377,29 @@ export function judgementSplit(
 
 /** FE가 짧은 곡에 대신 쓰는 총평의 source. 머리는 이 값이면 「AI가 작성했어요」를 붙이지 않는다 */
 export const TEMPLATE_SUMMARY_SOURCE = 'FE_TEMPLATE';
+/** 템플릿 총평 레벨 기준. AI config.py의 SUMMARY_* 값과 같게 둔다 */
+const SUMMARY_NEEDS_WORK_MISS_RATE = 0.4;
+const SUMMARY_GOOD_MISS_RATE = 0.1;
+const SUMMARY_GOOD_PERFECT_SHARE = 0.5;
 
 /**
- * 짧은 곡 총평 템플릿. 판정 노트가 분석 최소 수(20) 미만이면 서버가 분석하지 않아 총평이 없다 — 시연용 15초 곡에서도 머리가 비지 않게
- * 판정 개수로 고른 문장을 낸다. 분석이 끝났고(DONE) 총평이 없고 짧은 곡일 때만 쓰며, 그 밖에는 null(분석 중·실패는 기존 안내 그대로).
- * 문장은 「첫 마디. 설명.」 두 문장 이상이고 점수·정확도 숫자는 쓰지 않는다(AI 규칙 총평과 같은 원칙). 레벨 경계는 이 함수의 가정값이다.
+ * 짧은 곡 총평 템플릿. AI weak-rules-0.4까지는 판정 노트가 20개 미만이면 분석·총평이 없었다 — 그때 친 기록과 AI가 총평을 주지 못한
+ * 판도 머리가 비지 않게 판정 개수로 고른 문장을 낸다. 분석이 끝났고(DONE) 총평이 없고 노트가 `FULL_ANALYSIS_MIN_NOTES` 미만일 때만 쓰며,
+ * 그 밖에는 null(분석 중·실패는 기존 안내 그대로). 0.5부터는 짧은 곡에도 서버 총평이 오므로 새 기록에는 대개 쓰이지 않는다.
+ * 문장은 「첫 마디. 설명.」 두 문장 이상이고 점수·정확도 숫자는 쓰지 않는다(AI 규칙 총평과 같은 원칙). 레벨 경계는 AI 규칙 총평과 같다.
  */
 export function shortPlaySummary(status: AnalysisStatus, summary: CoachSummary | null, split: JudgementSplit): CoachSummary | null {
   if (summary !== null || status !== 'DONE' || split.total === 0) return null;
-  if (!isTooShortForAnalysis({ PERFECT: split.perfect, GOOD: split.good, MISS: split.miss })) return null;
+  if (split.total >= FULL_ANALYSIS_MIN_NOTES) return null;
   const missRate = split.miss / split.total;
   const perfectShare = split.perfect / split.total;
   const make = (level: string, text: string): CoachSummary => ({ level, text, focusPattern: null, source: TEMPLATE_SUMMARY_SOURCE });
-  if (split.miss === 0 && perfectShare >= 0.7) {
-    return make('GOOD', '짧은 곡을 깔끔하게 마쳤어요. 놓친 노트 없이 박자를 잘 따라갔어요. 이 감각 그대로 조금 더 긴 곡에도 도전해 보세요.');
-  }
-  if (missRate >= 0.3) {
+  // 레벨 기준은 AI 규칙 총평(summary.py `_level`)과 같다: 놓침 40% 이상 NEEDS_WORK, 놓침 10% 미만·정확 50% 이상 GOOD
+  if (missRate >= SUMMARY_NEEDS_WORK_MISS_RATE) {
     return make('NEEDS_WORK', '짧은 곡이라 아직 손이 덜 풀렸을 수 있어요. 놓친 노트가 몇 개 있었어요. 연습 속도를 낮춰 천천히 익힌 뒤 원래 빠르기로 다시 쳐 보세요.');
+  }
+  if (missRate < SUMMARY_GOOD_MISS_RATE && perfectShare >= SUMMARY_GOOD_PERFECT_SHARE) {
+    return make('GOOD', '짧은 곡을 깔끔하게 마쳤어요. 거의 놓치지 않고 박자를 잘 따라갔어요. 이 감각 그대로 조금 더 긴 곡에도 도전해 보세요.');
   }
   // 그 사이: 빠름·늦음 방향을 알면 그쪽을, 모르거나 놓침이 더 많으면 놓침을 짚는다
   const early = split.early ?? 0;

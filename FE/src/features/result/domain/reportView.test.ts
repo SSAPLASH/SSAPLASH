@@ -430,19 +430,23 @@ describe('shortPlaySummary', () => {
     early,
     late,
   });
-  it('짧은 곡에 놓침이 없고 정확이 많으면 GOOD, 두 문장 이상이고 첫 마디로 나뉜다', () => {
+  it('놓침 10% 미만·정확 50% 이상이면 GOOD(AI 규칙과 같은 경계), 두 문장 이상이고 첫 마디로 나뉜다', () => {
     const s = shortPlaySummary('DONE', null, sp(8, 2, 0));
     expect(s?.level).toBe('GOOD');
     expect(s?.source).toBe('FE_TEMPLATE');
     expect(splitSummary(s?.text ?? '').rest).not.toBe('');
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0))?.level).toBe('GOOD');
+    expect(shortPlaySummary('DONE', null, sp(10, 1, 1))?.level).toBe('GOOD');
+    expect(shortPlaySummary('DONE', null, sp(9, 0, 1))?.level).toBe('FAIR');
   });
   it('빠름이 많으면 기다렸다 치기를, 늦음이 많으면 제때 치기를 짚는다(FAIR)', () => {
-    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 4, 0))?.text).toContain('빨랐어요');
-    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 1, 3))?.text).toContain('늦었어요');
-    expect(shortPlaySummary('DONE', null, sp(4, 4, 0))?.level).toBe('FAIR');
+    expect(shortPlaySummary('DONE', null, sp(3, 5, 0, 4, 1))?.text).toContain('빨랐어요');
+    expect(shortPlaySummary('DONE', null, sp(3, 5, 0, 1, 4))?.text).toContain('늦었어요');
+    expect(shortPlaySummary('DONE', null, sp(3, 5, 0))?.level).toBe('FAIR');
   });
-  it('놓침이 30% 이상이면 NEEDS_WORK', () => {
+  it('놓침이 40% 이상이면 NEEDS_WORK, 30%대는 FAIR', () => {
     expect(shortPlaySummary('DONE', null, sp(4, 2, 4))?.level).toBe('NEEDS_WORK');
+    expect(shortPlaySummary('DONE', null, sp(5, 2, 3))?.level).toBe('FAIR');
   });
   it('서버 총평이 있거나, 분석 전·실패거나, 노트 20개 이상이면 쓰지 않는다', () => {
     const real = { level: 'GOOD', text: '좋아요.', focusPattern: null, source: 'RULE' };

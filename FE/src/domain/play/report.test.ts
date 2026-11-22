@@ -29,10 +29,11 @@ describe('segmentBars', () => {
 });
 
 describe('isTooShortForAnalysis', () => {
-  it('판정 합 19는 짧고 20은 아니다', () => {
-    expect(MIN_NOTES_FOR_ANALYSIS).toBe(20);
-    expect(isTooShortForAnalysis({ PERFECT: 10, GOOD: 5, MISS: 4 })).toBe(true);
-    expect(isTooShortForAnalysis({ PERFECT: 10, GOOD: 5, MISS: 5 })).toBe(false);
+  it('판정 합 7은 짧고 8은 아니다(8~19는 AI가 짧은 곡 분석을 한다)', () => {
+    expect(MIN_NOTES_FOR_ANALYSIS).toBe(8);
+    expect(isTooShortForAnalysis({ PERFECT: 4, GOOD: 2, MISS: 1 })).toBe(true);
+    expect(isTooShortForAnalysis({ PERFECT: 4, GOOD: 2, MISS: 2 })).toBe(false);
+    expect(isTooShortForAnalysis({ PERFECT: 10, GOOD: 5, MISS: 4 })).toBe(false);
   });
 });
 
@@ -84,9 +85,10 @@ describe('analysisTeaser', () => {
   });
   it('DONE + 빈 배열 + 충분한 길이는 약점 없음', () => {
     expect(analysisTeaser(makeReport('DONE', [], 20))).toBe('AI 분석 완료 · 뚜렷한 약점 없음');
+    expect(analysisTeaser(makeReport('DONE', [], 8))).toBe('AI 분석 완료 · 뚜렷한 약점 없음');
   });
   it('DONE + 빈 배열 + 짧은 곡', () => {
-    expect(analysisTeaser(makeReport('DONE', [], 19))).toBe('곡이 짧아 분석하지 않았어요');
+    expect(analysisTeaser(makeReport('DONE', [], 7))).toBe('곡이 짧아 분석하지 않았어요');
   });
   it('DONE + null은 FAILED와 같이 취급', () => {
     expect(analysisTeaser(makeReport('DONE', null))).toBe(failed);
