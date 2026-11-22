@@ -104,10 +104,9 @@
 .rp-level.tone-miss {
   --rp-level: var(--miss);
 }
-/* 총평 첫 문장 = 화면 제목 */
-/* 총평의 주인공은 본문(rest)이다. 첫 문장은 격려 한마디라 본문 위 도입 줄(is-lead)로 낮춘다.
-   본문이 없을 때(한 문장 총평·총평 없음)만 제목이 본문 크기로 주인공 자리를 맡는다. */
+/* 총평 첫 문장(코치 한마디) = 화면 제목이자 머리의 주인공 (설계 v0.3 H2) */
 .rp .rp-hero-title {
+  color: var(--text-1);
   font-size: clamp(22px, 2.3vw, 28px);
   font-weight: 700;
   line-height: 1.4;
@@ -115,22 +114,55 @@
   word-break: keep-all;
   text-wrap: balance;
 }
-.rp .rp-hero-title.is-lead {
+/* 나머지 문장은 구분선 아래 읽기용 칸. 문장마다 한 줄, 보통 굵기 (H2·H3) */
+.rp-hero-detail {
+  max-width: 36em;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.rp .rp-hero-detail-title {
+  margin-bottom: 8px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rp-hero-detail p {
   color: var(--text-2);
-  font-size: 24px;
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.6;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.rp-hero-detail p + p {
+  margin-top: 6px;
+}
+/* 분석 중 자리 표시 (H1). 총평이 들어올 높이만큼 회색 줄을 둔다 */
+.rp .rp-hero-wait {
+  color: var(--text-2);
+  font-size: clamp(20px, 2vw, 24px);
   font-weight: 600;
   letter-spacing: -0.02em;
 }
-.rp-hero-rest {
+.rp-hero-bone {
+  display: block;
+  width: 90%;
   max-width: 30em;
+  height: 14px;
+  margin-top: 18px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  animation: rp-bone 1.4s ease-in-out infinite;
+}
+.rp-hero-bone.is-short {
+  width: 60%;
   margin-top: 10px;
-  color: var(--text-1);
-  font-size: clamp(22px, 2.3vw, 28px);
-  font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: -0.025em;
-  word-break: keep-all;
-  text-wrap: pretty;
+}
+@keyframes rp-bone {
+  50% {
+    opacity: 0.45;
+  }
 }
 .rp-score {
   display: flex;
@@ -1204,6 +1236,9 @@
   .rp-bin {
     transition: none;
   }
+  .rp-hero-bone {
+    animation: none;
+  }
 }
 @media (max-width: 860px) {
   .rp-hero,
@@ -1244,12 +1279,11 @@
   .rp-hero {
     margin-top: 28px;
   }
-  .rp .rp-hero-title,
-  .rp-hero-rest {
-    font-size: 20px;
+  .rp .rp-hero-title {
+    font-size: 22px;
   }
-  .rp .rp-hero-title.is-lead {
-    font-size: 18px;
+  .rp-hero-detail p {
+    font-size: 17px;
   }
   .rp-score-value {
     font-size: 48px;
