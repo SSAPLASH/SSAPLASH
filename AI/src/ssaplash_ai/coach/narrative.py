@@ -16,7 +16,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ssaplash_ai.coach.config import MAX_NARRATIVE_CHARS, PAD_LABELS_KO
+from ssaplash_ai.coach.config import (
+    MAX_NARRATIVE_CHARS,
+    MAX_NARRATIVE_SENTENCE_CHARS,
+    MAX_NARRATIVE_SENTENCES,
+    PAD_LABELS_KO,
+)
 from ssaplash_ai.coach.schema import AnalysisResponse
 
 # 시스템 프롬프트와 사용자 프롬프트를 받아 문장을 돌려주는 함수. 실제 모델은 이 모양으로 끼운다.
@@ -63,6 +68,27 @@ FORBIDDEN_WORDS = (
     "재능",
     "실력이 없",
 )
+# 번역투·꾸미는 말·다짐·응원. 평가에서 나온 문장을 읽으면서 더하거나 뺀다
+STIFF_WORDS = (
+    "인상적",
+    "모습",
+    "풍성",
+    "사운드",
+    "밸런스",
+    "믿어요",
+    "분명히",
+    "노력하면",
+    "유지되",
+    "살려내",
+    "집중하며",
+    "만들어낼 수",
+    "수 있을 거예요",
+    "해보시면",
+    "해 보시면",
+)
+# "살려내셨고"·"치셨어요" 같은 높임. 총평은 "~해요" 말투다("보세요"는 걸리지 않는다)
+_HONORIFIC = re.compile(r"[가-힣]셨")
+
 _PREVIOUS_WORDS = ("지난번", "저번", "이전", "예전", "전보다", "지난 연주", "지난 플레이")
 _BETTER_WORDS = ("나아", "나은", "좋아졌", "줄었", "줄어", "감소", "개선", "향상", "발전", "호전")
 _WORSE_WORDS = ("나빠", "늘었", "늘어", "악화", "떨어", "증가", "퇴보")
@@ -168,15 +194,24 @@ class NarrativeFacts(BaseModel):
 SYSTEM_PROMPT = (
     "당신은 초보 드럼 연주자를 가르치는 친절한 드럼 코치입니다. "
     "아래 '사실'만 근거로 연주 리포트 총평을 한국어로 씁니다.\n"
+    "쓸 내용(이 순서로, 해당하는 것만):\n"
+    "① 전체 인상 한마디. 첫 문장은 15자 안팎의 짧은 격려로 씁니다.\n"
+    "② 잘한 점 하나. '잘한 패드'가 사실에 있으면 그 패드를, 없고 '비교 결과'가 있으면 그 비교를 말합니다. "
+    "둘 다 없으면 건너뜁니다.\n"
+    "③ '먼저 연습할 약점'이 있으면 그것 하나와 연습 방법을, '약점 없음'이면 눈에 띄는 약점이 없었다는 말만 씁니다.\n"
     "규칙:\n"
-    "1. 사실에 없는 숫자·패드·곡 정보를 만들지 마세요. 숫자는 사실에 나온 값만 그대로 쓰세요.\n"
-    "2. 점수와 정확도는 말하지 마세요.\n"
-    "3. 비난하거나 단정하지 말고 격려하는 '~해요' 말투로 쓰세요.\n"
-    "4. 첫 문장은 전체 인상을 담은 짧은 격려 한마디로 쓰세요. "
-    "순서: 전체 인상 → 잘한 점 → 가장 먼저 연습할 것과 방법 → ('비교 결과' 줄이 사실에 있을 때만) 비교.\n"
-    "   '잘한 패드'로 적힌 패드만 칭찬하고, 약점에 나온 패드는 칭찬하지 마세요. 비교는 '비교 결과' 한 가지만 말하세요.\n"
-    f"5. {MAX_NARRATIVE_CHARS}자 이하의 한 문단. 목록·마크다운·이모지·영어를 쓰지 마세요. "
-    "문장은 2개 이상 쓰고, 문장마다 마침표로 끝내세요.\n"
+    f"1. 문장은 2~{MAX_NARRATIVE_SENTENCES}개. 한 문장에 한 가지만 말하고 쉼표로 여러 내용을 잇지 마세요. "
+    f"한 문장은 {MAX_NARRATIVE_SENTENCE_CHARS}자 이하, 전체는 {MAX_NARRATIVE_CHARS}자 이하.\n"
+    "2. 문장마다 마침표로 끝내고 '~해요' 말투로 쓰세요. '~하셨어요' 같은 높임말은 쓰지 마세요.\n"
+    "3. 사실에 없는 숫자·패드·조언을 만들지 마세요. 약점이 없으면 연습을 권하지 마세요.\n"
+    "4. 점수와 정확도는 말하지 마세요. 비난하거나 단정하지 마세요. 약점에 나온 패드는 칭찬하지 마세요.\n"
+    "5. 친구 같은 코치가 말하듯 쉬운 말로 쓰세요. 꾸미는 말과 다짐·응원('믿어요', '노력하면'), "
+    "'인상적'·'사운드'·'밸런스' 같은 말을 쓰지 마세요.\n"
+    "6. 목록·마크다운·이모지·영어를 쓰지 마세요.\n"
+    "좋은 예:\n"
+    "- 기본기는 잘 잡혀 있어요. 박자가 조금씩 늦으니 박을 끝까지 듣고 쳐 보세요.\n"
+    "- 정말 잘 쳤어요. 박자와 판정이 안정적이에요. 눈에 띄는 약점은 없었어요.\n"
+    "- 지난번보다 놓침이 줄었어요. 놓친 구간만 느리게 다시 쳐 보세요.\n"
     "총평 문장만 출력하세요."
 )
 
@@ -189,6 +224,14 @@ def _pct(rate: float) -> int:
     return round(rate * 100)
 
 
+def _focus_segments(facts: NarrativeFacts) -> list[FactSegment]:
+    """프롬프트에 넣을 약점: `focusPattern`과 같은 첫 항목, 없으면 맨 앞 항목 하나."""
+    for s in facts.segments:
+        if s.pattern == facts.focusPattern:
+            return [s]
+    return list(facts.segments[:1])
+
+
 def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
     c = facts.counts
     lines = [
@@ -199,8 +242,9 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
     if facts.strengthPad:
         lines.append(f"- 잘한 패드: {_pad_ko(facts.strengthPad)}")
     if not facts.segments:
-        lines.append("- 약점: 눈에 띄는 약점 없음")
-    for s in facts.segments:
+        lines.append("- 약점 없음: 눈에 띄는 약점이 없었음(연습을 권하지 마세요)")
+    # 약점을 여러 개 주면 모델이 다 말하려다 길어진다. 가장 먼저 연습할 것 하나만 준다(나머지는 리포트의 약점 카드가 보인다)
+    for s in _focus_segments(facts):
         where = (
             "곡 전체"
             if s.scope == "WHOLE"
@@ -211,22 +255,18 @@ def build_user_prompt(facts: NarrativeFacts, hint: str | None = None) -> str:
         nums = ", ".join(f"{METRIC_KO[k]} {v}" for k, v in s.metrics.items() if k in METRIC_KO)
         label = PATTERN_KO.get(s.pattern, s.pattern)
         lines.append(
-            f"- 약점: {label} / 심각도 {SEVERITY_KO[s.severityLevel]} / {where} / 패드 {pads} / {nums}"
+            f"- 먼저 연습할 약점: {label} / 심각도 {SEVERITY_KO[s.severityLevel]} / {where} "
+            f"/ 패드 {pads} / {nums}"
         )
-    if facts.focusPattern:
-        lines.append(
-            f"- 먼저 연습할 약점: {PATTERN_KO.get(facts.focusPattern, facts.focusPattern)}"
-        )
-    if facts.history:
+    # 놓침이 달라지지 않았으면 비교할 것이 없다("비슷하게 유지됐어요" 같은 문장만 늘어난다)
+    if facts.history and _trend(facts) in ("BETTER", "WORSE"):
         p = facts.history.previous.counts
         lines.append(
             f"- 지난 연주(같은 곡 이전 {facts.history.sameSongPlays}번 중 바로 직전): "
             f"완벽 {p.perfect}개, 좋음 {p.good}개, 놓침 {p.miss}개 (놓침 {_pct(p.miss_rate)}%)"
         )
         # 모델이 지난 연주의 약점이 나아졌는지를 짐작해 쓰지 않게, 비교는 놓침 비율 하나로 정해서 준다
-        trend = {"BETTER": "줄었음(좋아짐)", "WORSE": "늘었음(나빠짐)", "SAME": "비슷함"}[
-            _trend(facts)
-        ]
+        trend = {"BETTER": "줄었음(좋아짐)", "WORSE": "늘었음(나빠짐)"}[_trend(facts)]
         lines.append(
             f"- 비교 결과(비교는 이것만 말하세요): 놓침 비율이 지난번 {_pct(p.miss_rate)}%에서 "
             f"이번 {_pct(c.miss_rate)}%로 {trend}"
@@ -349,8 +389,20 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     # 화면이 첫 문장(제목)과 나머지(설명)를 부호로 나눈다. 부호 없이 이어 쓰거나 한 문장뿐이면 설명이 빈다
     if _RUN_ON.search(body):
         problems.append("문장이 부호 없이 이어짐")
-    if len([s for s in _SENTENCE_SPLIT.split(body) if s]) < 2:
+    sentences = [s for s in _SENTENCE_SPLIT.split(body) if s]
+    if len(sentences) < 2:
         problems.append("문장이 2개 미만")
+    if len(sentences) > MAX_NARRATIVE_SENTENCES:
+        problems.append(f"문장이 {MAX_NARRATIVE_SENTENCES}개를 넘음")
+    longest = max(len(s) for s in sentences)
+    if longest > MAX_NARRATIVE_SENTENCE_CHARS:
+        problems.append(f"문장이 김({longest}자)")
+    # 번역투·꾸미는 말·다짐. 프롬프트의 예시로 먼저 줄이고, 자주 나오는 것만 여기서 막는다
+    for word in STIFF_WORDS:
+        if word in body:
+            problems.append(f"어색한 표현 '{word}'")
+    if _HONORIFIC.search(body):
+        problems.append("어색한 표현 '높임말'")
     for word in FORBIDDEN_WORDS:
         if word in body:
             problems.append(f"금지 표현 '{word}'")
@@ -400,7 +452,7 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
 
 # ---------- 보정 ----------
 
-_WHOLE_TEXT_PROBLEMS = ("한국어 완성 문장", "문장이 2개 미만")
+_WHOLE_TEXT_PROBLEMS = ("한국어 완성 문장", "문장이 2개 미만", "문장이 3개를 넘음")
 
 
 def repair(text: str, facts: NarrativeFacts) -> str | None:
@@ -416,10 +468,17 @@ def repair(text: str, facts: NarrativeFacts) -> str | None:
         for s in sentences
         if not [p for p in check(s, facts) if not p.startswith(_WHOLE_TEXT_PROBLEMS)]
     ]
+    # 문장이 많거나 전체가 길면 뒤에서부터 덜어낸다(앞쪽이 전체 인상과 잘한 점이다)
+    kept = kept[:MAX_NARRATIVE_SENTENCES]
+    while len(kept) > 2 and len(" ".join(kept)) > MAX_NARRATIVE_CHARS:
+        kept = kept[:-1]
     if len(kept) == len(sentences) or len(kept) < 2:
         return None
     repaired = " ".join(kept)
-    if not re.search(r"연습|반복|해 보", repaired) or check(repaired, facts):
+    # 약점이 있는데 연습 안내 문장이 하나도 남지 않으면 쓰지 않는다. 약점이 없으면 안내가 없는 것이 맞다
+    if facts.segments and not re.search(r"연습|반복|해 보|쳐 보", repaired):
+        return None
+    if check(repaired, facts):
         return None
     return repaired
 
