@@ -20,6 +20,8 @@ from ssaplash_ai.coach.config import (
     MAX_NARRATIVE_CHARS,
     MAX_NARRATIVE_SENTENCE_CHARS,
     MAX_NARRATIVE_SENTENCES,
+    MIN_NARRATIVE_SENTENCES,
+    MIN_NARRATIVE_SENTENCES_NO_WEAKNESS,
     PAD_LABELS_KO,
 )
 from ssaplash_ai.coach.schema import AnalysisResponse
@@ -102,8 +104,7 @@ _PRAISE_WORDS = (
     "칭찬",
     "잘 쳤",
     "잘했",
-    "안정적으로 쳤",
-    "안정적이었",
+    "안정적",
 )
 _EMOJI = re.compile("[\U0001f000-\U0001ffff☀-➿️‍]")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
@@ -194,13 +195,17 @@ class NarrativeFacts(BaseModel):
 SYSTEM_PROMPT = (
     "당신은 초보 드럼 연주자를 가르치는 친절한 드럼 코치입니다. "
     "아래 '사실'만 근거로 연주 리포트 총평을 한국어로 씁니다.\n"
-    "쓸 내용(이 순서로, 해당하는 것만):\n"
+    "쓸 내용(이 순서로, 해당하는 것만. 문장마다 한 가지씩):\n"
     "① 전체 인상 한마디. 첫 문장은 15자 안팎의 짧은 격려로 씁니다.\n"
     "② 잘한 점 하나. '잘한 패드'가 사실에 있으면 그 패드를, 없고 '비교 결과'가 있으면 그 비교를 말합니다. "
     "둘 다 없으면 건너뜁니다.\n"
-    "③ '먼저 연습할 약점'이 있으면 그것 하나와 연습 방법을, '약점 없음'이면 눈에 띄는 약점이 없었다는 말만 씁니다.\n"
+    "③ '먼저 연습할 약점'이 있으면 그 약점이 어디서 어떻게 나타났는지 한 문장.\n"
+    "④ 이어서 그 약점을 어떻게 연습할지 한 문장.\n"
+    "'약점 없음'이면 ③④ 대신 눈에 띄는 약점이 없었다는 말만 씁니다.\n"
     "규칙:\n"
-    f"1. 문장은 2~{MAX_NARRATIVE_SENTENCES}개. 한 문장에 한 가지만 말하고 쉼표로 여러 내용을 잇지 마세요. "
+    f"1. 문장은 {MIN_NARRATIVE_SENTENCES}~{MAX_NARRATIVE_SENTENCES}개"
+    f"(약점이 없으면 {MIN_NARRATIVE_SENTENCES_NO_WEAKNESS}~3개). "
+    "한 문장에 한 가지만 말하고 쉼표로 여러 내용을 잇지 마세요. "
     f"한 문장은 {MAX_NARRATIVE_SENTENCE_CHARS}자 이하, 전체는 {MAX_NARRATIVE_CHARS}자 이하.\n"
     "2. 문장마다 마침표로 끝내고 '~해요' 말투로 쓰세요. '~하셨어요' 같은 높임말은 쓰지 마세요.\n"
     "3. 사실에 없는 숫자·패드·조언을 만들지 마세요. 약점이 없으면 연습을 권하지 마세요.\n"
@@ -209,9 +214,9 @@ SYSTEM_PROMPT = (
     "'인상적'·'사운드'·'밸런스' 같은 말을 쓰지 마세요.\n"
     "6. 목록·마크다운·이모지·영어를 쓰지 마세요.\n"
     "좋은 예:\n"
-    "- 기본기는 잘 잡혀 있어요. 박자가 조금씩 늦으니 박을 끝까지 듣고 쳐 보세요.\n"
+    "- 기본기는 잘 잡혀 있어요. 박자가 전체적으로 조금씩 늦어요. 박을 끝까지 듣고 쳐 보세요.\n"
     "- 정말 잘 쳤어요. 박자와 판정이 안정적이에요. 눈에 띄는 약점은 없었어요.\n"
-    "- 지난번보다 놓침이 줄었어요. 놓친 구간만 느리게 다시 쳐 보세요.\n"
+    "- 지난번보다 놓침이 줄었어요. 중간 구간에서 놓친 노트가 몰려 있어요. 그 구간만 느리게 다시 쳐 보세요.\n"
     "총평 문장만 출력하세요."
 )
 
@@ -365,6 +370,11 @@ def punctuate(text: str) -> str:
     return text + "." if _OPEN_END.search(text) else text
 
 
+def _min_sentences(facts: NarrativeFacts) -> int:
+    """약점이 있으면 인상·무슨 일·연습 방법까지 3문장, 없으면 2문장이면 된다."""
+    return MIN_NARRATIVE_SENTENCES if facts.segments else MIN_NARRATIVE_SENTENCES_NO_WEAKNESS
+
+
 def check(text: str, facts: NarrativeFacts) -> list[str]:
     """문장이 규칙을 어긴 곳의 목록. 비어 있으면 통과."""
     problems: list[str] = []
@@ -390,8 +400,9 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
     if _RUN_ON.search(body):
         problems.append("문장이 부호 없이 이어짐")
     sentences = [s for s in _SENTENCE_SPLIT.split(body) if s]
-    if len(sentences) < 2:
-        problems.append("문장이 2개 미만")
+    minimum = _min_sentences(facts)
+    if len(sentences) < minimum:
+        problems.append(f"문장이 {minimum}개 미만")
     if len(sentences) > MAX_NARRATIVE_SENTENCES:
         problems.append(f"문장이 {MAX_NARRATIVE_SENTENCES}개를 넘음")
     longest = max(len(s) for s in sentences)
@@ -452,7 +463,12 @@ def check(text: str, facts: NarrativeFacts) -> list[str]:
 
 # ---------- 보정 ----------
 
-_WHOLE_TEXT_PROBLEMS = ("한국어 완성 문장", "문장이 2개 미만", "문장이 3개를 넘음")
+_WHOLE_TEXT_PROBLEMS = (
+    "한국어 완성 문장",
+    f"문장이 {MIN_NARRATIVE_SENTENCES_NO_WEAKNESS}개 미만",
+    f"문장이 {MIN_NARRATIVE_SENTENCES}개 미만",
+    f"문장이 {MAX_NARRATIVE_SENTENCES}개를 넘음",
+)
 
 
 def repair(text: str, facts: NarrativeFacts) -> str | None:
@@ -469,10 +485,11 @@ def repair(text: str, facts: NarrativeFacts) -> str | None:
         if not [p for p in check(s, facts) if not p.startswith(_WHOLE_TEXT_PROBLEMS)]
     ]
     # 문장이 많거나 전체가 길면 뒤에서부터 덜어낸다(앞쪽이 전체 인상과 잘한 점이다)
+    minimum = _min_sentences(facts)
     kept = kept[:MAX_NARRATIVE_SENTENCES]
-    while len(kept) > 2 and len(" ".join(kept)) > MAX_NARRATIVE_CHARS:
+    while len(kept) > minimum and len(" ".join(kept)) > MAX_NARRATIVE_CHARS:
         kept = kept[:-1]
-    if len(kept) == len(sentences) or len(kept) < 2:
+    if len(kept) == len(sentences) or len(kept) < minimum:
         return None
     repaired = " ".join(kept)
     # 약점이 있는데 연습 안내 문장이 하나도 남지 않으면 쓰지 않는다. 약점이 없으면 안내가 없는 것이 맞다
