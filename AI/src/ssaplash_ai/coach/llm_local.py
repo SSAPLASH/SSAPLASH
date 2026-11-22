@@ -32,7 +32,7 @@ class LocalServerGenerator:
         api: str = API_OLLAMA,
         timeout_sec: float = 60.0,
         temperature: float = 0.3,
-        max_tokens: int = 400,
+        max_tokens: int = 160,
         num_ctx: int = DEFAULT_NUM_CTX,
         think: bool | None = False,
         json_output: bool = False,

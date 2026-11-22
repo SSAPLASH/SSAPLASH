@@ -52,7 +52,7 @@ def test_ollama_형식으로_부르고_내용을_꺼낸다():
     ]
     assert call["json"]["options"] == {
         "temperature": 0.3,
-        "num_predict": 400,
+        "num_predict": 160,
         "num_ctx": 4096,
     }
 
@@ -65,7 +65,7 @@ def test_openai_호환_형식으로_부르고_내용을_꺼낸다():
     assert gen("s", "u") == "좋아요."
     call = session.calls[0]
     assert call["url"] == "http://127.0.0.1:11434/v1/chat/completions"
-    assert call["json"]["max_tokens"] == 400 and call["json"]["temperature"] == 0.3
+    assert call["json"]["max_tokens"] == 160 and call["json"]["temperature"] == 0.3
 
 
 def test_연결_오류와_시간_초과는_GeneratorError이다():

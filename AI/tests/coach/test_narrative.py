@@ -174,7 +174,7 @@ def test_이력이_없으면_지난_연주_줄을_두지_않는다():
 
 
 def test_시스템_프롬프트는_규칙을_담는다():
-    for needle in ("사실에 없는", "점수와 정확도", "400자", "총평 문장만"):
+    for needle in ("사실에 없는", "점수와 정확도", f"{MAX_NARRATIVE_CHARS}자", "총평 문장만"):
         assert needle in SYSTEM_PROMPT
 
 
@@ -685,5 +685,136 @@ def test_통과한_총평은_문장이_2개_이상이고_모두_부호로_끝난
 
 
 def test_프롬프트에_문장_형식과_첫_문장_규칙이_있다():
-    assert "문장은 2개 이상" in SYSTEM_PROMPT and "마침표로 끝내세요" in SYSTEM_PROMPT
-    assert "첫 문장은" in SYSTEM_PROMPT and "격려 한마디" in SYSTEM_PROMPT
+    assert "문장은 2~3개" in SYSTEM_PROMPT and "마침표로 끝내고" in SYSTEM_PROMPT
+    assert "첫 문장은" in SYSTEM_PROMPT and "짧은 격려" in SYSTEM_PROMPT
+
+
+# ---------- 짧고 자연스럽게 (운영 피드백: 길고 번역투, 근거 없는 조언) ----------
+
+# 운영 화면에 나온 총평 원문(2026-11-22). 약점이 없고 지난번과 놓침이 같은 연주였다
+PRODUCTION_TEXT = (
+    "킥 소리를 아주 잘 살려내셨고, 전반적으로 안정적인 리듬을 유지하며 연주하는 모습이 인상적이에요. "
+    "눈에 띄는 약점은 없지만, 좀 더 다양한 패드 소리에 집중하며 전체적인 밸런스를 맞춰보는 연습을 해보시면 "
+    "더욱 풍성한 사운드를 만들어낼 수 있을 거예요. "
+    "이번 연주의 놓침 비율은 지난번과 비슷하게 0%로 유지되었으니, 꾸준히 노력하면 분명히 더 좋은 결과가 있을 거라 믿어요."
+)
+
+TIMING_SEGMENT = {
+    "pattern": "TIMING_LATE",
+    "severityLevel": "LOW",
+    "pads": ["KICK", "SNARE"],
+    "fromMs": 0.0,
+    "toMs": 30000.0,
+    "scope": "WHOLE",
+    "metrics": {"severity": 0.3, "meanDeltaMs": 21.5, "hitCount": 30},
+}
+
+
+def _clean_facts() -> NarrativeFacts:
+    """약점이 없고 지난번과 놓침이 같은 연주."""
+    return _facts(
+        level="GOOD",
+        focusPattern=None,
+        counts={"perfect": 30, "good": 10, "miss": 0},
+        segments=[],
+        history=_history(miss=0, perfect=30, good=10),
+    )
+
+
+def test_운영에서_나온_긴_총평은_가드레일에_걸린다():
+    problems = check(PRODUCTION_TEXT, _clean_facts())
+
+    assert any(p.startswith(f"{MAX_NARRATIVE_CHARS}자를 넘음") for p in problems)
+    assert any(p.startswith("문장이 김") for p in problems)
+    assert "어색한 표현 '인상적'" in problems and "어색한 표현 '사운드'" in problems
+    assert "어색한 표현 '높임말'" in problems
+
+
+def test_문장이_3개를_넘으면_걸린다():
+    text = "잘 쳤어요. 킥이 안정적이에요. 박자도 좋아요. 7~12초 구간만 반복해 보세요."
+
+    assert "문장이 3개를 넘음" in check(text, _facts())
+
+
+def test_한_문장이_너무_길면_걸린다():
+    long_sentence = "7~12초 구간에서 노트 10개 중 4개를 놓쳤으니 그 부분만 아주 느린 템포로 여러 번 천천히 반복해 보세요."
+
+    problems = check(f"{LEAD} {long_sentence}", _facts())
+
+    assert len(long_sentence) > 50
+    assert any(p.startswith("문장이 김") for p in problems)
+
+
+@pytest.mark.parametrize("word", ["인상적", "풍성", "밸런스", "믿어요", "분명히"])
+def test_어색한_표현이_있으면_걸린다(word):
+    text = f"{LEAD} 킥이 {word} 좋았어요."
+
+    assert f"어색한 표현 '{word}'" in check(text, _facts())
+
+
+def test_높임말은_걸리고_해_보세요는_걸리지_않는다():
+    assert "어색한 표현 '높임말'" in check(f"{LEAD} 킥을 잘 치셨어요.", _facts())
+    assert check(f"{LEAD} 7~12초 구간만 반복해 보세요.", _facts()) == []
+
+
+def test_문장이_많으면_뒤에서부터_덜어내고_통과한다():
+    text = "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 7~12초 구간만 반복해 보세요. 다음에도 화이팅해요."
+
+    outcome = write_narrative(_facts(), lambda system, user: text)
+
+    assert outcome.repaired is True
+    assert (
+        outcome.text
+        == "기본기는 잘 잡혀 있어요. 킥은 안정적으로 쳤어요. 7~12초 구간만 반복해 보세요."
+    )
+
+
+def test_어색한_문장만_덜어내고_나머지로_통과한다():
+    text = "기본기는 잘 잡혀 있어요. 연주하는 모습이 인상적이에요. 7~12초 구간만 반복해 보세요."
+
+    outcome = write_narrative(_facts(), lambda system, user: text)
+
+    assert outcome.repaired is True
+    assert outcome.text == "기본기는 잘 잡혀 있어요. 7~12초 구간만 반복해 보세요."
+
+
+def test_약점이_없으면_연습_안내가_없어도_보정이_통과한다():
+    text = "정말 잘 쳤어요. 킥이 안정적이에요. 연주하는 모습이 인상적이에요."
+
+    outcome = write_narrative(_clean_facts(), lambda system, user: text)
+
+    assert outcome.text == "정말 잘 쳤어요. 킥이 안정적이에요."
+
+
+def test_프롬프트의_약점은_먼저_연습할_것_하나뿐이다():
+    facts = _facts(segments=[TIMING_SEGMENT, _facts().segments[0].model_dump()])
+
+    prompt = build_user_prompt(facts)
+
+    assert prompt.count("먼저 연습할 약점") == 1
+    assert "구간에 몰린 놓침" in prompt or "놓침 비율 0.4" in prompt
+    assert "21.5" not in prompt
+
+
+def test_약점이_없으면_프롬프트가_연습을_권하지_말라고_한다():
+    prompt = build_user_prompt(_clean_facts())
+
+    assert "약점 없음" in prompt and "연습을 권하지 마세요" in prompt
+    assert "먼저 연습할 약점" not in prompt
+
+
+def test_놓침이_지난번과_비슷하면_프롬프트에_비교가_없다():
+    same = build_user_prompt(_clean_facts())
+    better = build_user_prompt(_facts(history=_history(miss=18)))
+
+    assert "지난 연주" not in same and "비교 결과" not in same
+    assert "비교 결과" in better and "줄었음" in better
+
+
+def test_통과한_총평은_짧다():
+    for raw in (GOOD_TEXT, NO_PERIODS):
+        text = write_narrative(_facts(), lambda system, user, raw=raw: raw).text
+
+        assert len(text) <= MAX_NARRATIVE_CHARS
+        assert 2 <= len(_sentences(text)) <= 3
+        assert all(len(s) <= 50 for s in _sentences(text))
