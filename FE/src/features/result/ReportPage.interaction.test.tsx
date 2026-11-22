@@ -297,7 +297,7 @@ describe('리포트 화면 구성', () => {
     setReport(report({ counts: { PERFECT: 8, GOOD: 0, MISS: 0 } }));
     show();
     expect(await screen.findByText('짧은 곡을 깔끔하게 마쳤어요.')).toBeTruthy();
-    expect(screen.getByText(/놓친 노트 없이 박자를 잘 따라갔어요/)).toBeTruthy();
+    expect(screen.getByText(/거의 놓치지 않고 박자를 잘 따라갔어요/)).toBeTruthy();
     expect(screen.queryByText('AI가 작성했어요')).toBeNull();
   });
 
