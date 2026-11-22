@@ -32,7 +32,10 @@ MAX_TIP_CHARS = 100
 MAX_DETAIL_CHARS = 120
 MAX_SUMMARY_CHARS = 200
 # LLM이 쓴 총평(summary.source=LLM)의 최대 글자 수. 규칙 총평(200자)보다 길게 쓸 수 있다
-MAX_NARRATIVE_CHARS = 400
+MAX_NARRATIVE_CHARS = 120
+# LLM 총평의 문장 수와 한 문장의 최대 글자 수. 화면이 첫 문장을 제목, 나머지를 설명으로 보인다
+MAX_NARRATIVE_SENTENCES = 3
+MAX_NARRATIVE_SENTENCE_CHARS = 50
 
 # 심각도 단계: severity(0~1)가 MEDIUM 미만이면 LOW, HIGH 미만이면 MEDIUM, 그 이상이면 HIGH (가정값)
 SEVERITY_MEDIUM = 0.4
