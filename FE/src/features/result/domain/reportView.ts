@@ -2,7 +2,7 @@
 // 노트 목록을 5초 칸으로 묶고, AI 약점을 화면 자리(놓친 구간·패드 전환·그 밖)로 나누고, 확대해서 볼 구간(Focus)과 그 문구를 만든다.
 // 약점 문구는 서버 값을 그대로 쓰고, 숫자(metrics)는 있으면 쓰고 없으면 그 문구만 뺀다(D5).
 import { PAD_META, type PadId } from '@/domain/kit/pads';
-import { segmentBars, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
+import { isTooShortForAnalysis, segmentBars, type AnalysisStatus, type CoachSummary, type PadStat, type ReportNote, type WeakSegment } from '@/domain/play/report';
 
 /** 전체 노트 흐름의 칸 폭(ms) */
 export const FLOW_BIN_MS = 5000;
@@ -335,11 +335,18 @@ export function focusBasis(focus: Focus, notes: readonly ReportNote[] | null): s
 /**
  * 코치 총평을 헤드라인(첫 문장)과 나머지로 나눈다(설계 COACH-002-coach-summary-emphasis).
  * 줄바꿈·연속 공백은 공백 하나로 잇는다. 문장 끝은 「. ! ?」 뒤에 공백이 올 때만 본다(「0.75배」의 점은 문장 끝이 아니다).
- * 문장 끝이 없으면 전체가 헤드라인이고 나머지는 빈 문자열이다.
+ * 문장부호가 없으면(LLM 총평은 「…요」로 끝나도 통과한다) 존댓말·평서 어미(「어요·세요·니다·었다」 등) 뒤 공백에서 나눈다.
+ * 「필요·중요」처럼 요로 끝나는 낱말은 어미 목록에 없어 나누지 않는다. 그래도 끝이 없으면 전체가 헤드라인이고 나머지는 빈 문자열이다.
  */
+const SENTENCE_PUNCT = /^(.+?[.!?])\s+(.+)$/;
+const SENTENCE_ENDING = /^(.+?(?:[어아여에예세해래네지게죠까데]요|[니습]다|[었았였겠있없]다))\s+(.+)$/;
+
 export function splitSummary(text: string): { headline: string; rest: string } {
   const flat = text.replace(/\s+/g, ' ').trim();
-  const m = /^(.+?[.!?])\s+(.+)$/.exec(flat);
+  // 문장부호 끝과 어미 끝 중 앞선 것을 첫 문장 끝으로 본다(「잘 쳤어요 연습해요. …」에서 첫 마디만 떼어 낸다)
+  const byPunct = SENTENCE_PUNCT.exec(flat);
+  const byEnding = SENTENCE_ENDING.exec(flat);
+  const m = byPunct && byEnding ? (byEnding[1].length < byPunct[1].length ? byEnding : byPunct) : (byPunct ?? byEnding);
   return m ? { headline: m[1], rest: m[2] } : { headline: flat, rest: '' };
 }
 
@@ -366,6 +373,36 @@ export function judgementSplit(
   const miss = Math.max(0, counts.MISS || 0);
   const v = notes ? verdictCounts(notes) : null;
   return { perfect, good, miss, total: perfect + good + miss, early: v ? v.EARLY : null, late: v ? v.LATE : null };
+}
+
+/** FE가 짧은 곡에 대신 쓰는 총평의 source. 머리는 이 값이면 「AI가 작성했어요」를 붙이지 않는다 */
+export const TEMPLATE_SUMMARY_SOURCE = 'FE_TEMPLATE';
+
+/**
+ * 짧은 곡 총평 템플릿. 판정 노트가 분석 최소 수(20) 미만이면 서버가 분석하지 않아 총평이 없다 — 시연용 15초 곡에서도 머리가 비지 않게
+ * 판정 개수로 고른 문장을 낸다. 분석이 끝났고(DONE) 총평이 없고 짧은 곡일 때만 쓰며, 그 밖에는 null(분석 중·실패는 기존 안내 그대로).
+ * 문장은 「첫 마디. 설명.」 두 문장 이상이고 점수·정확도 숫자는 쓰지 않는다(AI 규칙 총평과 같은 원칙). 레벨 경계는 이 함수의 가정값이다.
+ */
+export function shortPlaySummary(status: AnalysisStatus, summary: CoachSummary | null, split: JudgementSplit): CoachSummary | null {
+  if (summary !== null || status !== 'DONE' || split.total === 0) return null;
+  if (!isTooShortForAnalysis({ PERFECT: split.perfect, GOOD: split.good, MISS: split.miss })) return null;
+  const missRate = split.miss / split.total;
+  const perfectShare = split.perfect / split.total;
+  const make = (level: string, text: string): CoachSummary => ({ level, text, focusPattern: null, source: TEMPLATE_SUMMARY_SOURCE });
+  if (split.miss === 0 && perfectShare >= 0.7) {
+    return make('GOOD', '짧은 곡을 깔끔하게 마쳤어요. 놓친 노트 없이 박자를 잘 따라갔어요. 이 감각 그대로 조금 더 긴 곡에도 도전해 보세요.');
+  }
+  if (missRate >= 0.3) {
+    return make('NEEDS_WORK', '짧은 곡이라 아직 손이 덜 풀렸을 수 있어요. 놓친 노트가 몇 개 있었어요. 연습 속도를 낮춰 천천히 익힌 뒤 원래 빠르기로 다시 쳐 보세요.');
+  }
+  // 그 사이: 빠름·늦음 방향을 알면 그쪽을, 모르거나 놓침이 더 많으면 놓침을 짚는다
+  const early = split.early ?? 0;
+  const late = split.late ?? 0;
+  let tip = '같은 곡을 한 번 더 쳐 보며 감을 굳혀 보세요.';
+  if (split.miss > Math.max(early, late)) tip = '놓친 노트가 조금 있었어요. 같은 곡을 한 번 더 쳐 보며 감을 굳혀 보세요.';
+  else if (early > late) tip = '몇 노트가 박보다 조금 빨랐어요. 박을 기다렸다 치는 느낌으로 한 번 더 쳐 보세요.';
+  else if (late > early) tip = '몇 노트가 박보다 조금 늦었어요. 박에 맞춰 제때 치는 데 집중해 보세요.';
+  return make('FAIR', `짧은 곡을 무난하게 마쳤어요. ${tip}`);
 }
 
 /** 평균 박자 칸에 쓰는 오차 요약 */
@@ -420,6 +457,7 @@ export interface PlayAccuracyRow {
   songId: number | null;
   mode: string;
   difficulty: string | null;
+  /** 목록 API(GET /api/v1/plays) 그대로 0~100(퍼센트) */
   accuracy: number | null;
   endedAt: string;
 }
@@ -446,6 +484,9 @@ export function recentAccuracies(rows: readonly PlayAccuracyRow[], current: { pl
     .sort((a, b) => (a.endedAt < b.endedAt ? -1 : a.endedAt > b.endedAt ? 1 : 0))
     .slice(-RECENT_PLAY_COUNT);
   if (same.length < 2 || same[same.length - 1].playId !== current.playId) return null;
-  const values = same.map((r) => r.accuracy as number);
-  return { values, diffPoint: Math.round((values[values.length - 1] - values[values.length - 2]) * 100) };
+  // 목록 API의 정확도는 0~100(퍼센트)이다. 리포트 칸은 0~1로 그리므로 나눈다(곱셈 오차를 없애려 소수 넷째 자리에서 반올림)
+  const values = same.map((r) => Math.round((r.accuracy as number) * 100) / 10000);
+  // 변화는 화면에 보이는 반올림한 퍼센트끼리 뺀다(93% → 90%면 −3)
+  const shown = (v: number) => Math.round(v * 100);
+  return { values, diffPoint: shown(values[values.length - 1]) - shown(values[values.length - 2]) };
 }

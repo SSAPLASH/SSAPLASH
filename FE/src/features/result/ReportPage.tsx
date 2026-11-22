@@ -32,6 +32,7 @@ import {
   focusRangeText,
   initialFocus,
   judgementSplit,
+  shortPlaySummary,
   observationText,
   recentAccuracies,
   reportGrid,
@@ -276,6 +277,7 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
 
   const r = report.v;
   // 연주 시간: 이 브라우저 기록의 길이, 없으면 마지막 노트 시각
+  const split = judgementSplit(r.counts, noteList);
   const playedMs = log?.durationMs ?? (noteList && noteList.length > 0 ? noteList[noteList.length - 1].timeMs : null);
   const focus = picked ?? initialFocus(groups, noteList ?? [], totalMs);
   /** 구간을 고르고 확대 영역으로 화면을 옮긴다(관찰 목록의 버튼) */
@@ -318,7 +320,14 @@ function ReportView({ playId, similarKeys, onRetry }: { playId: string; similarK
   return (
     <main className="main rp">
       {header(false)}
-      <ReportHero summary={r.coachSummary} fallbackTitle={title} score={r.score} accuracy={r.accuracy} split={judgementSplit(r.counts, noteList)} />
+      {/* 짧은 곡은 서버가 분석하지 않아 총평이 없다 — 판정 개수로 고른 템플릿 문장을 대신 둔다 */}
+      <ReportHero
+        summary={r.coachSummary ?? shortPlaySummary(r.analysisStatus, r.coachSummary, split)}
+        fallbackTitle={title}
+        score={r.score}
+        accuracy={r.accuracy}
+        split={split}
+      />
       <ReportHighlights
         maxCombo={r.maxCombo}
         totalNotes={r.counts.PERFECT + r.counts.GOOD + r.counts.MISS}

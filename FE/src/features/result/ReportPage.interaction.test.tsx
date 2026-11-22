@@ -293,6 +293,14 @@ describe('약점 연계 연습', () => {
 
 // 화면 구성 (설계 COACH-002 리포트 화면 개편 A1·A3·A4·A7·A9): 약점을 자리별로 나눠 그리고, 고른 구간으로 확대 영역이 바뀐다
 describe('리포트 화면 구성', () => {
+  it('짧은 곡(노트 20개 미만)이라 총평이 없으면 템플릿 한마디와 설명을 머리에 둔다', async () => {
+    setReport(report({ counts: { PERFECT: 8, GOOD: 0, MISS: 0 } }));
+    show();
+    expect(await screen.findByText('짧은 곡을 깔끔하게 마쳤어요.')).toBeTruthy();
+    expect(screen.getByText(/놓친 노트 없이 박자를 잘 따라갔어요/)).toBeTruthy();
+    expect(screen.queryByText('AI가 작성했어요')).toBeNull();
+  });
+
   const N = (seq: number, timeMs: number, pad: 'KICK' | 'SNARE' | 'RIDE' | 'HIHAT', judgement: 'PERFECT' | 'GOOD' | 'MISS') => ({
     seq, noteId: null, timeMs, pad, judgement, deltaMs: judgement === 'MISS' ? null : -10, velocity: null,
   });
