@@ -26,6 +26,7 @@ import {
   OFF_BEAT_LABEL,
   padRows,
   recentAccuracies,
+  shortPlaySummary,
   reportGrid,
   splitSegments,
   splitSummary,
@@ -330,6 +331,19 @@ describe('splitSummary', () => {
       rest: '그다음 원래 빠르기로 쳐요.',
     });
   });
+  it('문장부호 없이 이어 쓴 LLM 총평은 어미 뒤에서 나눈다', () => {
+    expect(splitSummary('킥을 안정적으로 쳤어요 먼저 스네어 박자부터 연습해 보세요')).toEqual({
+      headline: '킥을 안정적으로 쳤어요',
+      rest: '먼저 스네어 박자부터 연습해 보세요',
+    });
+    expect(splitSummary('기본기가 좋습니다 다음엔 0.75배로 쳐 보세요.')).toEqual({ headline: '기본기가 좋습니다', rest: '다음엔 0.75배로 쳐 보세요.' });
+  });
+  it('어미 끝이 마침표보다 앞서면 어미에서 나눈다', () => {
+    expect(splitSummary('잘 쳤어요 스네어를 연습해요. 천천히 쳐 봐요.')).toEqual({ headline: '잘 쳤어요', rest: '스네어를 연습해요. 천천히 쳐 봐요.' });
+  });
+  it('「필요·중요」처럼 요로 끝나는 낱말에서는 나누지 않는다', () => {
+    expect(splitSummary('박자 연습이 중요 하니까 천천히 쳐 보세요')).toEqual({ headline: '박자 연습이 중요 하니까 천천히 쳐 보세요', rest: '' });
+  });
   it('빈 문자열', () => {
     expect(splitSummary('')).toEqual({ headline: '', rest: '' });
   });
@@ -387,20 +401,55 @@ describe('recentAccuracies', () => {
     ...over,
   });
   const cur = { playId: 'p3', songId: 7, mode: 'RHYTHM', difficulty: 'EASY' };
+  // 목록 API 정확도는 0~100(퍼센트)이고, 결과는 0~1이다
   it('같은 곡·모드·단계만 오래된 순으로, 직전 대비 %p', () => {
-    const rows = [row('p3', '2026-11-03', 0.91), row('x', '2026-11-02', 0.5, { difficulty: 'HARD' }), row('p2', '2026-11-02', 0.88), row('p1', '2026-11-01', 0.84), row('y', '2026-11-02', 0.2, { songId: 9 })];
+    const rows = [row('p3', '2026-11-03', 91), row('x', '2026-11-02', 50, { difficulty: 'HARD' }), row('p2', '2026-11-02', 88), row('p1', '2026-11-01', 84), row('y', '2026-11-02', 20, { songId: 9 })];
     expect(recentAccuracies(rows, cur)).toEqual({ values: [0.84, 0.88, 0.91], diffPoint: 3 });
   });
   it('이번 연주보다 나중 기록은 빼고 최대 5개', () => {
-    const rows = ['01', '02', '03', '04', '05', '06'].map((d, i) => row(`q${i}`, `2026-11-${d}`, 0.5 + i / 100));
-    rows.push(row('p3', '2026-11-07', 0.9), row('later', '2026-11-08', 0.1));
+    const rows = ['01', '02', '03', '04', '05', '06'].map((d, i) => row(`q${i}`, `2026-11-${d}`, 50 + i));
+    rows.push(row('p3', '2026-11-07', 90), row('later', '2026-11-08', 10));
     const r = recentAccuracies(rows, cur);
     expect(r?.values).toEqual([0.52, 0.53, 0.54, 0.55, 0.9]);
     expect(r?.diffPoint).toBe(35);
   });
+  it('소수 퍼센트(92.5 → 90)도 0~1로 바꾸고, 변화는 보이는 반올림 값끼리 뺀다', () => {
+    const r = recentAccuracies([row('p1', '2026-11-01', 92.5), row('p3', '2026-11-03', 90)], cur);
+    expect(r).toEqual({ values: [0.925, 0.9], diffPoint: -3 });
+  });
   it('기록이 하나뿐이거나 이번 연주가 없으면 null', () => {
-    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], cur)).toBeNull();
-    expect(recentAccuracies([row('p1', '2026-11-01', 0.8)], cur)).toBeNull();
-    expect(recentAccuracies([row('p3', '2026-11-03', 0.9)], { ...cur, songId: null })).toBeNull();
+    expect(recentAccuracies([row('p3', '2026-11-03', 90)], cur)).toBeNull();
+    expect(recentAccuracies([row('p1', '2026-11-01', 80)], cur)).toBeNull();
+    expect(recentAccuracies([row('p3', '2026-11-03', 90)], { ...cur, songId: null })).toBeNull();
+  });
+});
+
+describe('shortPlaySummary', () => {
+  const sp = (PERFECT: number, GOOD: number, MISS: number, early: number | null = null, late: number | null = null) => ({
+    ...judgementSplit({ PERFECT, GOOD, MISS }, null),
+    early,
+    late,
+  });
+  it('짧은 곡에 놓침이 없고 정확이 많으면 GOOD, 두 문장 이상이고 첫 마디로 나뉜다', () => {
+    const s = shortPlaySummary('DONE', null, sp(8, 2, 0));
+    expect(s?.level).toBe('GOOD');
+    expect(s?.source).toBe('FE_TEMPLATE');
+    expect(splitSummary(s?.text ?? '').rest).not.toBe('');
+  });
+  it('빠름이 많으면 기다렸다 치기를, 늦음이 많으면 제때 치기를 짚는다(FAIR)', () => {
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 4, 0))?.text).toContain('빨랐어요');
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0, 1, 3))?.text).toContain('늦었어요');
+    expect(shortPlaySummary('DONE', null, sp(4, 4, 0))?.level).toBe('FAIR');
+  });
+  it('놓침이 30% 이상이면 NEEDS_WORK', () => {
+    expect(shortPlaySummary('DONE', null, sp(4, 2, 4))?.level).toBe('NEEDS_WORK');
+  });
+  it('서버 총평이 있거나, 분석 전·실패거나, 노트 20개 이상이면 쓰지 않는다', () => {
+    const real = { level: 'GOOD', text: '좋아요.', focusPattern: null, source: 'RULE' };
+    expect(shortPlaySummary('DONE', real, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('PENDING', null, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('FAILED', null, sp(8, 2, 0))).toBeNull();
+    expect(shortPlaySummary('DONE', null, sp(18, 2, 0))).toBeNull();
+    expect(shortPlaySummary('DONE', null, sp(0, 0, 0))).toBeNull();
   });
 });
