@@ -2,7 +2,7 @@
 // 총평이 없으면(분석 전·옛 기록) 곡 이름이 제목이다. 오른쪽은 점수와 노트 판정 한 줄 막대(정확·빠름늦음·놓침).
 // 판정 개수는 서버 counts 그대로이고, 빠름·늦음 나누기는 노트를 받은 뒤에만 보인다. 계산은 reportView가 한다.
 import { summaryBadge, type CoachSummary } from '@/domain/play/report';
-import { splitSummary, VERDICT_LABEL, OFF_BEAT_LABEL, type JudgementSplit } from '@/features/result/domain/reportView';
+import { splitSummary, TEMPLATE_SUMMARY_SOURCE, VERDICT_LABEL, OFF_BEAT_LABEL, type JudgementSplit } from '@/features/result/domain/reportView';
 import './report.css';
 
 interface Props {
@@ -36,9 +36,11 @@ export function ReportHero({ summary, fallbackTitle, score, accuracy, split }: P
             <div className="rp-hero-by">
               {badge && <span className={`rp-level tone-${badge.tone}`}>{badge.text}</span>}
               <span>코치의 한마디</span>
-              <span className="rp-hero-ai">AI가 작성했어요</span>
+              {/* 짧은 곡 템플릿(FE가 고른 문장)에는 붙이지 않는다 */}
+              {summary.source !== TEMPLATE_SUMMARY_SOURCE && <span className="rp-hero-ai">AI가 작성했어요</span>}
             </div>
-            <h1 className="rp-hero-title">{headline}</h1>
+            {/* 나머지 문장이 있으면 첫 문장은 도입 줄로 낮추고 본문을 크게 둔다 */}
+            <h1 className={rest ? 'rp-hero-title is-lead' : 'rp-hero-title'}>{headline}</h1>
             {rest && <p className="rp-hero-rest">{rest}</p>}
           </>
         ) : (
