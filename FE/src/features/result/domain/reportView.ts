@@ -350,6 +350,18 @@ export function splitSummary(text: string): { headline: string; rest: string } {
   return m ? { headline: m[1], rest: m[2] } : { headline: flat, rest: '' };
 }
 
+/** 총평 나머지를 문장 목록으로 나눈다(「자세한 분석」 칸이 문장마다 줄을 나눈다). 끝 규칙은 `splitSummary`와 같다 */
+export function splitSentences(text: string): string[] {
+  const out: string[] = [];
+  let left = text.replace(/\s+/g, ' ').trim();
+  while (left !== '') {
+    const { headline, rest } = splitSummary(left);
+    out.push(headline);
+    left = rest;
+  }
+  return out;
+}
+
 
 // ---- 리포트 머리(애플 스타일 개편, 설계 COACH-002-report-apple-redesign 3장) ----
 

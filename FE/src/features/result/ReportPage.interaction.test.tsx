@@ -159,13 +159,13 @@ describe('리포트 하단 추천', () => {
   it('내장 곡 빌드나 비인증이면 요청이 없다', async () => {
     useSongs.setState({ source: 'builtin' });
     show();
-    await screen.findByText(/연주 리포트/);
+    await screen.findByLabelText('연주 요약');
     await waitFor(() => expect(loadAllReportNotes).toHaveBeenCalled());
     cleanup();
     useSongs.setState({ source: 'api' });
     useAuth.setState({ status: 'anonymous' });
     show();
-    await screen.findByText(/연주 리포트/);
+    await screen.findByLabelText('연주 요약');
     expect(fetchRecommendations).not.toHaveBeenCalled();
   });
 
@@ -222,7 +222,7 @@ describe('리포트 하단 비슷한 곡', () => {
     cleanup();
     useAuth.setState({ status: 'anonymous' });
     show();
-    await screen.findByText(/연주 리포트/);
+    await screen.findByLabelText('연주 요약');
     expect(fetchSimilarSongs).toHaveBeenCalledTimes(1);
   });
 
@@ -253,7 +253,7 @@ describe('약점 연계 연습', () => {
   it('인증 검사를 끈 빌드에서는 로그인 상태여도 DRILL을 조회하지 않는다', async () => {
     flags.authRequired = false;
     show();
-    await screen.findByText(/연주 리포트/);
+    await screen.findByLabelText('연주 요약');
     await waitFor(() => expect(loadAllReportNotes).toHaveBeenCalled());
     expect(fetchRecommendations).not.toHaveBeenCalled();
   });
@@ -325,8 +325,8 @@ describe('리포트 화면 구성', () => {
   it('머리말·요약 수치가 보이고, 처음에는 첫 놓친 구간이 확대된다', async () => {
     setReport(report({ accuracy: 0.383, maxCombo: 24, score: 26320, weakSegments: [WHOLE, TRANSITION, CLUSTER] }));
     show();
-    expect(await screen.findByRole('heading', { level: 1, name: '연주 리포트' })).toBeTruthy();
-    expect(screen.getByText('리듬 게임 · 키보드')).toBeTruthy();
+    // 짧은 판이라 머리 제목은 템플릿 총평이다. 곡 정보는 메타 줄에 있다
+    expect(await screen.findByText('리듬 게임 · 키보드')).toBeTruthy();
     expect(screen.getByLabelText('연주 요약').textContent).toContain('38.3%');
     await waitFor(() => expect(headline()).toBe('0:12–0:17놓친 노트 확인'));
     expect(screen.getByText('노트 3개 중 3개 놓침 · 100%')).toBeTruthy();
@@ -445,6 +445,19 @@ describe('리포트 화면 구성', () => {
     expect(await screen.findByText('AI가 연주를 분석하고 있어요')).toBeTruthy();
     await waitFor(() => expect(headline()).toBe('0:12–0:17놓친 노트 확인'), { timeout: 4000 });
     expect(screen.queryByText('AI가 연주를 분석하고 있어요')).toBeNull();
+  });
+
+  it('분석 대기 중에는 머리에 곡 이름 대신 자리 표시가 있고, 총평이 오면 바뀐다', async () => {
+    setReport(report({ analysisStatus: 'PENDING', weakSegments: null }));
+    vi.mocked(refreshReport).mockResolvedValue(
+      report({ coachSummary: { level: 'GOOD', text: '잘 쳤어요. 박자가 안정적이에요.', focusPattern: null, source: 'LLM' } }),
+    );
+    show();
+    expect(await screen.findByRole('heading', { level: 1, name: '코치가 연주를 살펴보고 있어요' })).toBeTruthy();
+    expect(screen.queryByText(/연주 리포트/)).toBeNull();
+    expect(await screen.findByRole('heading', { level: 1, name: '잘 쳤어요.' }, { timeout: 4000 })).toBeTruthy();
+    expect(screen.getByText('박자가 안정적이에요.')).toBeTruthy();
+    expect(screen.queryByText('코치가 연주를 살펴보고 있어요')).toBeNull();
   });
 
   it('분석 대기 중에 고른 구간은 분석이 도착해도 바뀌지 않는다', async () => {
