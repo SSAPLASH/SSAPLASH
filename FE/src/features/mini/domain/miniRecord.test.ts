@@ -98,14 +98,21 @@ describe('parseRecords', () => {
 });
 
 describe('강약중강약(dynamics) 기록', () => {
+  const FEEL = [42, 78, 109];
   const SHOTS = [
+    { target: 96, actual: 90 },
+    { target: 52, actual: 61 },
+    { target: 74, actual: 72 },
+  ];
+  // 예전(100점제) 모양: feel이 없고 shots에 level이 있다
+  const LEGACY_SHOTS = [
     { level: 'strong', target: 110, actual: 104 },
     { level: 'weak', target: 40, actual: 49 },
     { level: 'mid', target: 80, actual: 82 },
   ];
 
-  function dynRec(score: number, shots: unknown = SHOTS): unknown {
-    return { gameId: 'dynamics', score, at: AT, detail: { shots } };
+  function dynRec(score: number, shots: unknown = SHOTS, feel: unknown = FEEL): unknown {
+    return { gameId: 'dynamics', score, at: AT, detail: { feel, shots } };
   }
 
   it('recordKey는 게임 id다', () => {
@@ -113,23 +120,33 @@ describe('강약중강약(dynamics) 기록', () => {
   });
 
   it('cardRecord가 그 기록을 돌려준다', () => {
-    const records = parseRecords(raw({ dynamics: dynRec(94) }));
+    const records = parseRecords(raw({ dynamics: dynRec(17) }));
     expect(cardRecord(records, 'dynamics')).toEqual({ record: records.dynamics });
     expect(records.dynamics.gameId).toBe('dynamics');
   });
 
   it('맞는 dynamics 기록은 살린다', () => {
-    const parsed = parseRecords(raw({ dynamics: dynRec(94) }));
-    expect(parsed).toEqual({ dynamics: { gameId: 'dynamics', score: 94, at: AT, detail: { shots: SHOTS } } });
+    const parsed = parseRecords(raw({ dynamics: dynRec(17) }));
+    expect(parsed).toEqual({ dynamics: { gameId: 'dynamics', score: 17, at: AT, detail: { feel: FEEL, shots: SHOTS } } });
   });
 
   it('dynamics의 detail만 깨졌으면 그 기록만 버리고 speed는 살린다', () => {
-    const parsed = parseRecords(raw({ speed: rec(60), dynamics: dynRec(94, SHOTS.slice(0, 2)) }));
+    const parsed = parseRecords(raw({ speed: rec(60), dynamics: dynRec(17, SHOTS.slice(0, 2)) }));
     expect(parsed).toEqual({ speed: rec(60) });
   });
 
+  it('예전 모양(feel 없이 level이 든 shots)의 dynamics 기록은 그 기록만 버리고 speed는 살린다', () => {
+    const legacy = { gameId: 'dynamics', score: 94, at: AT, detail: { shots: LEGACY_SHOTS } };
+    const parsed = parseRecords(raw({ speed: rec(60), dynamics: legacy }));
+    expect(parsed).toEqual({ speed: rec(60) });
+  });
+
+  it('feel이 3개가 아닌 dynamics 기록은 버린다', () => {
+    expect(parseRecords(raw({ dynamics: dynRec(17, SHOTS, [42, 78]) }))).toEqual({});
+  });
+
   it('speed의 detail만 깨졌으면 그 기록만 버리고 dynamics는 살린다', () => {
-    const parsed = parseRecords(raw({ speed: { ...rec(60), detail: { perSecond: [1] } }, dynamics: dynRec(94) }));
+    const parsed = parseRecords(raw({ speed: { ...rec(60), detail: { perSecond: [1] } }, dynamics: dynRec(17) }));
     expect(Object.keys(parsed)).toEqual(['dynamics']);
   });
 
@@ -137,14 +154,20 @@ describe('강약중강약(dynamics) 기록', () => {
     const parsed = parseRecords(
       raw({
         dynamics: { ...rec(60), gameId: 'dynamics' },
-        speed: { ...(dynRec(94) as object), gameId: 'speed' },
+        speed: { ...(dynRec(17) as object), gameId: 'speed' },
       }),
     );
     expect(parsed).toEqual({});
   });
 
+  it('dynamics는 낮을수록 좋은 기록이다(17 → 14는 갱신, 17 → 17·20은 갱신 아님)', () => {
+    expect(isNewBest({ score: 17 }, 14, 'lower')).toBe(true);
+    expect(isNewBest({ score: 17 }, 17, 'lower')).toBe(false);
+    expect(isNewBest({ score: 17 }, 20, 'lower')).toBe(false);
+  });
+
   it('두 게임 기록이 serializeRecords → parseRecords로 왕복한다', () => {
-    const records = parseRecords(raw({ speed: rec(60), dynamics: dynRec(94) }));
+    const records = parseRecords(raw({ speed: rec(60), dynamics: dynRec(17) }));
     expect(Object.keys(records).sort()).toEqual(['dynamics', 'speed']);
     expect(parseRecords(serializeRecords(records))).toEqual(records);
   });

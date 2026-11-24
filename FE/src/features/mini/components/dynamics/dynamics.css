@@ -1,4 +1,31 @@
-/* 「강약중강약」 플레이 화면과 결과 판 (Figma 플레이 1183:38406, 결과 1183:38610). 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+/* 「강약중강약」 플레이 화면과 결과 판 (설계 MODE-006-minigame-dynamics-match). 예전 시안(Figma 1183:38406, 1183:38610)을 고쳐 쓴 것이다.
+   공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 내 세기 줄 (숫자 맞추기 화면 위·결과 판) ---- */
+.mini-dyn-feel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-xs) var(--space-l);
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: center;
+}
+.mini-dyn-feel-label {
+  color: var(--text-3);
+}
+.mini-dyn-feel-item strong {
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mini-dyn-result .mini-dyn-feel {
+  justify-content: flex-start;
+  margin-top: calc(var(--space-s) * -1);
+}
 
 /* ---- 플레이: 머리 문구 ---- */
 .mini-dyn-head {
@@ -14,6 +41,12 @@
   font-size: 36px;
   font-weight: 700;
   line-height: 1.25;
+}
+/* 숫자 맞추기 머리: 목표 숫자를 문구보다 크게 */
+.mini-dyn-prompt-num {
+  font-family: var(--font-num);
+  font-size: 1.6em;
+  font-variant-numeric: tabular-nums;
 }
 .mini-dyn-sub {
   margin: 0;
@@ -84,19 +117,41 @@
   background: var(--fill-track);
   border-radius: 16px;
 }
-.mini-dyn-band {
+/* 목표 선: 가는 실선 + 강조색. 내 타격 표시(굵은 흰 선·점)와 구분된다. 지금 칠 차례는 더 밝게 */
+.mini-dyn-target-line {
   position: absolute;
   left: 50%;
-  width: 56px;
+  width: 64px;
+  height: 2px;
+  margin-bottom: -1px;
   transform: translateX(-50%);
-  box-sizing: border-box;
-  background: var(--brand-tint);
-  border: 1px solid var(--brand-tint-line);
-  border-radius: var(--radius-control);
+  background: var(--brand-text);
+  opacity: 0.6;
 }
-.mini-dyn-gauge.is-current .mini-dyn-band {
-  background: color-mix(in srgb, var(--brand) 34%, transparent);
-  border-color: var(--brand);
+.mini-dyn-gauge.is-current .mini-dyn-target-line {
+  opacity: 1;
+  box-shadow: 0 0 6px var(--brand);
+}
+/* 내 세기 표시: 트랙 왼쪽의 흐린 짧은 눈금과 작은 글자 */
+.mini-dyn-mark {
+  position: absolute;
+  right: 50%;
+  width: 14px;
+  height: 1px;
+  margin-right: -7px;
+  background: var(--text-3);
+  opacity: 0.8;
+}
+.mini-dyn-mark-text {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  margin-right: 8px;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
 }
 .mini-dyn-marker {
   position: absolute;
@@ -207,13 +262,15 @@
   align-items: center;
   gap: 6px;
 }
-.mini-dyn-legend-band {
+.mini-dyn-legend-line {
   width: 18px;
-  height: 10px;
-  box-sizing: border-box;
-  background: var(--brand-tint);
-  border: 1px solid var(--brand);
-  border-radius: 3px;
+  height: 2px;
+  background: var(--brand-text);
+}
+.mini-dyn-legend-mark {
+  width: 2px;
+  height: 12px;
+  background: var(--text-3);
 }
 .mini-dyn-legend-dot {
   width: 10px;
@@ -230,7 +287,8 @@
 }
 .mini-dyn-row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto auto auto;
+  /* 오른쪽 세 칸의 폭을 고정한다. 글 길이에 따라 눈금 길이가 행마다 달라지면 같은 세기가 행마다 다른 자리에 그려진다 */
+  grid-template-columns: 96px minmax(0, 1fr) 64px 150px 64px;
   align-items: center;
   column-gap: var(--space-l);
   padding: var(--space-l) 0;
@@ -264,14 +322,22 @@
   background: var(--fill-track);
   border-radius: 3px;
 }
-.mini-dyn-row-band {
+.mini-dyn-row-target {
   position: absolute;
   top: 0;
+  width: 2px;
   height: 100%;
-  box-sizing: border-box;
-  background: var(--brand-tint);
-  border: 1px solid var(--brand);
-  border-radius: var(--radius-control);
+  transform: translateX(-50%);
+  background: var(--brand-text);
+}
+.mini-dyn-row-mark {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  background: var(--text-3);
+  opacity: 0.8;
 }
 .mini-dyn-row-dot {
   position: absolute;
@@ -284,6 +350,7 @@
 }
 .mini-dyn-row-actual {
   min-width: 2ch;
+  text-align: right;
   font-family: var(--font-num);
   font-size: 30px;
   font-weight: 700;
@@ -308,7 +375,7 @@
 
 @media (max-width: 1024px) {
   .mini-dyn-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
     row-gap: var(--space-s);
   }
   .mini-dyn-row-label {
@@ -319,6 +386,7 @@
   }
   .mini-dyn-row-actual {
     grid-column: 1;
+    text-align: left;
   }
   .mini-dyn-row-meta {
     grid-column: 2;
@@ -349,11 +417,23 @@
   .mini-dyn-track {
     width: 22px;
   }
-  .mini-dyn-band {
-    width: 38px;
+  .mini-dyn-target-line {
+    width: 44px;
   }
   .mini-dyn-marker {
     width: 54px;
+  }
+  .mini-dyn-mark {
+    width: 10px;
+    margin-right: -5px;
+  }
+  .mini-dyn-mark-text {
+    margin-right: 4px;
+    font-size: 10px;
+  }
+  .mini-dyn-feel {
+    gap: var(--space-xs) var(--space-m);
+    font-size: 13px;
   }
   /* 카드가 좁아 눈금 숫자를 옆에 둘 자리가 없다. 트랙 위·아래 가운데로 옮긴다 */
   .mini-dyn-scale {
@@ -379,6 +459,14 @@
   }
   .mini-dyn-gauge-status {
     font-size: 13px;
+  }
+  /* 폰 폭에서는 첫 칸과 간격을 줄여 「목표 · 차이」 글이 들어갈 자리를 남긴다 */
+  .mini-dyn-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    column-gap: var(--space-s);
+  }
+  .mini-dyn-row-score {
+    min-width: 0;
   }
   .mini-dyn-row-label {
     font-size: 14px;
