@@ -97,6 +97,59 @@ describe('parseRecords', () => {
   });
 });
 
+describe('강약중강약(dynamics) 기록', () => {
+  const SHOTS = [
+    { level: 'strong', target: 110, actual: 104 },
+    { level: 'weak', target: 40, actual: 49 },
+    { level: 'mid', target: 80, actual: 82 },
+  ];
+
+  function dynRec(score: number, shots: unknown = SHOTS): unknown {
+    return { gameId: 'dynamics', score, at: AT, detail: { shots } };
+  }
+
+  it('recordKey는 게임 id다', () => {
+    expect(recordKey('dynamics')).toBe('dynamics');
+  });
+
+  it('cardRecord가 그 기록을 돌려준다', () => {
+    const records = parseRecords(raw({ dynamics: dynRec(94) }));
+    expect(cardRecord(records, 'dynamics')).toEqual({ record: records.dynamics });
+    expect(records.dynamics.gameId).toBe('dynamics');
+  });
+
+  it('맞는 dynamics 기록은 살린다', () => {
+    const parsed = parseRecords(raw({ dynamics: dynRec(94) }));
+    expect(parsed).toEqual({ dynamics: { gameId: 'dynamics', score: 94, at: AT, detail: { shots: SHOTS } } });
+  });
+
+  it('dynamics의 detail만 깨졌으면 그 기록만 버리고 speed는 살린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(60), dynamics: dynRec(94, SHOTS.slice(0, 2)) }));
+    expect(parsed).toEqual({ speed: rec(60) });
+  });
+
+  it('speed의 detail만 깨졌으면 그 기록만 버리고 dynamics는 살린다', () => {
+    const parsed = parseRecords(raw({ speed: { ...rec(60), detail: { perSecond: [1] } }, dynamics: dynRec(94) }));
+    expect(Object.keys(parsed)).toEqual(['dynamics']);
+  });
+
+  it('게임 id와 detail 모양이 어긋나면 버린다', () => {
+    const parsed = parseRecords(
+      raw({
+        dynamics: { ...rec(60), gameId: 'dynamics' },
+        speed: { ...(dynRec(94) as object), gameId: 'speed' },
+      }),
+    );
+    expect(parsed).toEqual({});
+  });
+
+  it('두 게임 기록이 serializeRecords → parseRecords로 왕복한다', () => {
+    const records = parseRecords(raw({ speed: rec(60), dynamics: dynRec(94) }));
+    expect(Object.keys(records).sort()).toEqual(['dynamics', 'speed']);
+    expect(parseRecords(serializeRecords(records))).toEqual(records);
+  });
+});
+
 describe('cardRecord', () => {
   const variants = [
     { id: 'a', name: '갈래 A' },
