@@ -37,10 +37,11 @@ function dynamicsRecord(score: number): MiniRecord {
     score,
     at: '2026-11-24T10:00:00.000Z',
     detail: {
+      feel: [42, 78, 109],
       shots: [
-        { level: 'weak', target: 40, actual: 40 },
-        { level: 'strong', target: 100, actual: 100 },
-        { level: 'mid', target: 80, actual: 80 },
+        { target: 52, actual: 46 },
+        { target: 96, actual: 105 },
+        { target: 74, actual: 76 },
       ],
     },
   };
@@ -67,7 +68,7 @@ describe('미니게임 목록', () => {
     expect(screen.getByRole('heading', { name: '누구보다 빠르게' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '강약중강약' })).toBeTruthy();
     expect(screen.getByText('10초 동안 스네어 가장 많이 치기')).toBeTruthy();
-    expect(screen.getByText('제시한 세기에 맞춰 세 번 치기')).toBeTruthy();
+    expect(screen.getByText('내 세기를 재고 숫자에 맞춰 세 번 치기')).toBeTruthy();
     expect(screen.getByText('10초')).toBeTruthy();
     expect(screen.getByText('3타')).toBeTruthy();
   });
@@ -99,21 +100,21 @@ describe('미니게임 목록', () => {
     expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(1);
   });
 
-  it('두 게임의 기록이 있으면 카드마다 자기 최고 기록을 보인다(68타·94점)', () => {
-    localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68), dynamics: dynamicsRecord(94) }));
+  it('두 게임의 기록이 있으면 카드마다 자기 최고 기록을 보인다(68타·오차 17)', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68), dynamics: dynamicsRecord(17) }));
     const { container } = open();
     const values = Array.from(container.querySelectorAll('.mini-card-value')).map((el) => el.textContent);
-    expect(values).toEqual(['68타', '94점']);
+    expect(values).toEqual(['68타', '오차 17']);
     expect(screen.queryByText('아직 기록이 없어요')).toBeNull();
   });
 
   it('강약중강약의 기록만 있으면 그 카드만 값을 보이고 다른 카드는 「아직 기록이 없어요」', () => {
-    localStorage.setItem(STORAGE_KEY, serializeRecords({ dynamics: dynamicsRecord(94) }));
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ dynamics: dynamicsRecord(17) }));
     const { container } = open();
     const cards = Array.from(container.querySelectorAll('.mini-card'));
     expect(cards[0].textContent).toContain('아직 기록이 없어요');
     expect(cards[0].querySelector('.mini-card-value')).toBeNull();
-    expect(cards[1].querySelector('.mini-card-value')?.textContent).toBe('94점');
+    expect(cards[1].querySelector('.mini-card-value')?.textContent).toBe('오차 17');
     expect(cards[1].textContent).not.toContain('아직 기록이 없어요');
   });
 
