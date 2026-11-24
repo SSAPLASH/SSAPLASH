@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { formatDynamicsScore } from './dynamicsRound';
 import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
@@ -20,11 +21,18 @@ describe('miniGameInfo', () => {
     expect(miniGameInfo('dynamics')).toEqual({
       id: 'dynamics',
       name: '강약중강약',
-      rule: '제시한 세기에 맞춰 세 번 치기',
+      rule: '내 세기를 재고 숫자에 맞춰 세 번 치기',
       tag: '3타',
-      unit: '점',
-      better: 'higher',
+      unit: '',
+      better: 'lower',
+      format: formatDynamicsScore,
     });
+  });
+
+  it('단위가 빈 게임(강약중강약)은 표시 함수가 있다', () => {
+    for (const game of MINI_CATALOG) {
+      if (game.unit === '') expect(game.format).toBeTypeOf('function');
+    }
   });
 
   it('게임 id의 표 한 줄을 돌려준다', () => {
@@ -40,7 +48,10 @@ describe('formatMiniScore', () => {
   it('format이 없으면 숫자 그대로 글자로 돌려준다', () => {
     expect(formatMiniScore({}, 42)).toBe('42');
     expect(formatMiniScore(miniGameInfo('speed'), 7)).toBe('7');
-    expect(formatMiniScore(miniGameInfo('dynamics'), 94)).toBe('94');
+  });
+
+  it('강약중강약은 「오차 N」으로 보인다', () => {
+    expect(formatMiniScore(miniGameInfo('dynamics'), 14)).toBe('오차 14');
   });
 
   it('format이 있으면 그 함수 결과를 돌려준다', () => {
