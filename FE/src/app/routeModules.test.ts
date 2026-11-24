@@ -8,6 +8,7 @@ const KEYS: RouteKey[] = [
   'lessonRead',
   'miniList',
   'miniSpeed',
+  'miniDynamics',
   'studio',
   'settings',
   'history',
