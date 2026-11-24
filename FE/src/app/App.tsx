@@ -17,6 +17,8 @@ const SetupPage = lazy(() => loadRoute('setup'));
 const PlayPage = lazy(() => loadRoute('play'));
 const SheetPage = lazy(() => loadRoute('sheet'));
 const LessonReadPage = lazy(() => loadRoute('lessonRead'));
+const MiniListPage = lazy(() => loadRoute('miniList'));
+const SpeedGamePage = lazy(() => loadRoute('miniSpeed'));
 const StudioPage = lazy(() => loadRoute('studio'));
 const SettingsPage = lazy(() => loadRoute('settings'));
 const HistoryPage = lazy(() => loadRoute('history'));
@@ -78,6 +80,9 @@ export default function App() {
           <Route path="setup" element={<SetupPage />} />
           <Route path="calibration" element={<Navigate to="/setup" replace />} />
           <Route path="play" element={<PlayPage />} />
+          {/* 미니게임(MODE-006). `/play` 아래라 사이드바 「리듬 게임」이 활성으로 남는다. 안내·카운트다운·플레이·결과는 게임 경로 안의 단계다 */}
+          <Route path="play/mini" element={<MiniListPage />} />
+          <Route path="play/mini/speed" element={<SpeedGamePage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
           <Route path="sheet/lesson/:songId" element={<LessonReadPage />} />

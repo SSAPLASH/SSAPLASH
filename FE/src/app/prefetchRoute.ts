@@ -30,6 +30,7 @@ export function canPrefetch(): boolean {
 
 const ROUTE_OF: Record<string, RouteKey> = {
   '/play': 'play',
+  '/play/mini': 'miniList',
   '/sheet': 'sheet',
   '/studio': 'studio',
   '/history': 'history',
