@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useShell } from '@/components/shell/nav/useShell';
 import { miniGamePath, type MiniGameId } from '@/domain/play/miniGame';
+import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { MiniCard } from '@/features/mini/components/MiniCard';
 import { SpeedArt } from '@/features/mini/components/speed/SpeedArt';
 import { MINI_CATALOG } from '@/features/mini/domain/miniCatalog';
@@ -14,6 +15,7 @@ import './mini.css';
 /** 게임 id → 카드 그림. 뒤의 게임이 한 줄을 더한다 */
 const CARD_ART: Record<MiniGameId, ReactNode> = {
   speed: <SpeedArt size="card" />,
+  dynamics: <DynamicsArt size="card" />,
 };
 
 export function MiniListPage() {

@@ -1,6 +1,7 @@
 // 미니게임 최고 기록의 타입·갱신 판정·저장 값 검증 (설계 MODE-006-minigame-speed 3절). localStorage에는 접근하지 않는다(store가 한다).
 // 기록은 게임마다 하나, 갈래가 있는 게임은 갈래마다 하나다(D13). `detail`은 게임마다 모양이 달라 검증을 게임 id별 표로 둔다.
 import type { MiniGameId } from '@/domain/play/miniGame';
+import { isDynamicsDetail, type DynamicsDetail } from './dynamicsRound';
 import { isSpeedDetail, type SpeedDetail } from './speedRound';
 
 /** 값이 클수록 좋은 기록인가. 반응 시간·오차를 재는 게임은 `lower` */
@@ -9,11 +10,13 @@ export type MiniBetter = 'higher' | 'lower';
 /** 게임별 `detail` 모양. 뒤의 게임이 한 줄을 더한다 */
 interface MiniDetailMap {
   speed: SpeedDetail;
+  dynamics: DynamicsDetail;
 }
 
 /** 게임별 `detail` 검증. 뒤의 게임이 한 줄을 더한다 */
 const DETAIL_GUARDS: { [G in MiniGameId]: (detail: unknown) => detail is MiniDetailMap[G] } = {
   speed: isSpeedDetail,
+  dynamics: isDynamicsDetail,
 };
 
 /** 한 게임(또는 한 갈래)의 최고 기록 */
@@ -63,7 +66,8 @@ function parseRecord(value: unknown): MiniRecord | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) return null;
   if (!DETAIL_GUARDS[gameId](detail)) return null;
-  return variant === undefined ? { gameId, score, at, detail } : { gameId, variant, score, at, detail };
+  // 검증 표가 게임 id와 `detail` 모양의 짝을 보장한다(타입은 둘의 짝을 따라가지 못해 단언한다)
+  return (variant === undefined ? { gameId, score, at, detail } : { gameId, variant, score, at, detail }) as MiniRecord;
 }
 
 /**
