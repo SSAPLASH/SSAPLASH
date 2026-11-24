@@ -70,3 +70,15 @@
   border: 0;
   background: var(--line-strong);
 }
+
+/* 리듬 게임 범위 줄: 범위 버튼 + 오른쪽 끝 미니게임 링크. 좁으면 링크가 아래 줄로 내려간다 */
+.play-sp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-s);
+}
+.play-sp-mini {
+  margin-left: auto;
+}

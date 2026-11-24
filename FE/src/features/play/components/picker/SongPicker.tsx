@@ -9,12 +9,14 @@
 // 0곡이면 표 틀(머리글·「총 0곡」)을 두고 본문 자리에 안내를 둔다. 라이브러리 안내는 내 곡 범위 0곡일 때만 보인다.
 // 추천(설계 COACH-004-song-picker-ai-tab): 로그인·API 소스면 탭 [AI 추천곡]이 붙는다. 추천 곡(R1)은 진입 때 모드마다 한 번 읽고
 // AI 추천곡 탭 목록과 기본 곡 탭의 「✦ AI 추천」 라벨이 같은 결과를 쓴다. 선택한 곡 패널 아래는 그 곡과 비슷한 곡(R2) 한 건이다.
-// 범위(설계 MODE-003-악보-연습-하위-메뉴): 악보 연습은 주소(`?scope=MINE`·`?tab=recommend`·`?tab=lessons`, 없으면 기본 곡)가 범위의 단일 기준이다 —
-// 사이드바 하위 메뉴와 화면 위 버튼이 같은 주소 값을 바꾼다. 버튼은 사이드바가 펼쳐져 있어도 항상 그린다(설계 SETUP-학습-코스-중급 4-4).
-// 리듬 게임은 그대로다: 탭 상태를 갖고, 주소 값이 없으면 마지막에 본 범위로 연다.
+// 범위(설계 MODE-003-악보-연습-하위-메뉴, MODE-006-minigame-speed D2): 두 모드 모두 주소(`?scope=MINE`·`?tab=recommend`·`?tab=lessons`, 없으면 기본 곡)가
+// 범위의 단일 기준이다 — 사이드바 하위 메뉴와 화면 위 버튼이 같은 주소 값을 바꾼다. 버튼은 사이드바가 펼쳐져 있어도 항상 그린다(설계 SETUP-학습-코스-중급 4-4).
+// 리듬 게임에는 학습 코스가 없어 `?tab=lessons`는 기본 곡으로 본다. 주소 값 없이 들어오면 마지막에 본 범위가 아니라 기본 곡에서 시작한다.
+// 리듬 게임은 범위 줄 옆에 「미니게임」 링크를 둔다(사이드바가 접히거나 태블릿 폭이면 하위 메뉴가 안 보여서).
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/song/recommendation';
+import { MINI_PATH } from '@/domain/play/miniGame';
 import { SHEET_CATEGORY_LABEL, sheetCategoryOf, sheetCategoryQuery, type SheetCategory } from '@/domain/song/sheetCategory';
 import {
   chartFallback,
@@ -39,6 +41,7 @@ import { AUTH_REQUIRED } from '@/config/auth';
 import { useAuth } from '@/store/authStore';
 import { entryOf, useRecommendations } from '@/store/recommendationStore';
 import { useSettings } from '@/store/settingsStore';
+import { buttonClassName } from '@/components/ui/action/buttonStyle';
 import { Chip } from '@/components/ui/layout/Chip';
 import { EmptyState } from '@/components/ui/feedback/EmptyState';
 import { Input } from '@/components/ui/form/Input';
@@ -134,23 +137,19 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   const clearReco = useRecommendations((r) => r.clear);
   const [params, setParams] = useSearchParams();
   const sheet = mode === 'sheet';
-  // 리듬 게임의 탭 상태. `?scope=MINE`로 열면 내 곡 탭에서, 아니면 마지막에 본 범위에서 시작한다(곡 작업실 완료 → 플레이 진입)
-  const [playTab, setPlayTab] = useState<PickerTab>(params.get('scope') === 'MINE' ? 'MINE' : useSongs.getState().scope);
-  // 악보 연습은 주소가 범위의 기준이다: 사이드바 하위 메뉴·권유 카드·레슨 뒤로 가기가 주소만 바꿔도 범위가 따라 바뀐다
-  const wantedTab: PickerTab = sheet ? sheetCategoryOf({ tab: params.get('tab'), scope: params.get('scope') }) : playTab;
+  // 주소가 범위의 기준이다: 사이드바 하위 메뉴·권유 카드·레슨 뒤로 가기·곡 작업실 완료가 주소만 바꿔도 범위가 따라 바뀐다
+  const wantedTab: PickerTab = sheetCategoryOf({ tab: params.get('tab'), scope: params.get('scope') });
   // 학습 코스는 악보 연습에서만, 추천과 같은 조건(로그인·API 곡 소스)일 때 보인다(설계 SETUP-입문-코스 3-5)
   const lessonsEnabled = sheet && recoEnabled;
   // 로그인이 풀리면 AI 추천곡·학습 코스 버튼은 사라지므로 기본 곡으로 본다
   const tab: PickerTab = (wantedTab === 'RECOMMEND' && !recoEnabled) || (wantedTab === 'LESSONS' && !lessonsEnabled) ? 'BUILTIN' : wantedTab;
   const tabOptions = [...SCOPE_OPTIONS, ...(recoEnabled ? [AI_OPTION] : []), ...(lessonsEnabled ? [LESSONS_OPTION] : [])];
-  // 범위를 주소에 남긴다. 곡·단계 값은 그대로 두고 방문 기록은 쌓지 않는다.
-  // 리듬 게임은 지금처럼 라이브러리 탭만 주소에 남긴다(곡·단계를 골라 둔 채 돌아와도 같은 탭에서 열게)
+  // 범위를 주소에 남긴다. 곡·단계 값은 그대로 두고 방문 기록은 쌓지 않는다
   const setTab = (next: PickerTab) => {
-    if (!sheet) setPlayTab(next);
     setParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        const keep = sheet ? sheetCategoryQuery(next) : next === 'MINE' ? { scope: 'MINE' } : {};
+        const keep = sheetCategoryQuery(next);
         p.delete('tab');
         p.delete('scope');
         if (keep.tab) p.set('tab', keep.tab);
@@ -366,7 +365,18 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   );
   const copy = COPY[mode];
 
-  const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  const scopeTabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  // 리듬 게임은 범위 줄 오른쪽 끝에 미니게임 링크를 둔다. 범위 줄이 없는 내장 곡 출처에서도 링크는 보인다
+  const tabs = sheet ? (
+    scopeTabs
+  ) : (
+    <div className="play-sp-tabs">
+      {scopeTabs}
+      <Link to={MINI_PATH} className={buttonClassName({ variant: 'secondary', size: 'sm', className: 'play-sp-mini' })}>
+        미니게임
+      </Link>
+    </div>
+  );
   // 안내 접이 바(안내 줄·구분선)는 두 모드 모두 보인다. 악보 연습의 학습 코스는 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
   const showGuide = mode === 'play' || tab !== 'LESSONS';
 
