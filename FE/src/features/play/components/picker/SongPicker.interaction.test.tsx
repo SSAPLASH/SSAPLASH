@@ -459,8 +459,10 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(card.parentElement).toBe(grid);
     expect(list.parentElement).toBe(grid);
     expect(follows(list, card)).toBe(true);
-    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다
-    expect(list.firstElementChild).toBe(screen.getByRole('radiogroup', { name: '곡 범위' }));
+    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다. 리듬 게임은 미니게임 링크와 한 줄(.play-sp-tabs)로 묶여 있다
+    const tabs = screen.getByRole('radiogroup', { name: '곡 범위' });
+    expect(list.firstElementChild).toBe(mode === 'play' ? tabs.parentElement : tabs);
+    if (mode === 'play') expect(list.firstElementChild?.classList.contains('play-sp-tabs')).toBe(true);
     expect(list.querySelector('table')).not.toBeNull();
     expect(list.contains(card)).toBe(false);
   });
@@ -613,6 +615,9 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
         <Link to="/sheet?scope=MINE">go-mine</Link>
         <Link to="/sheet?tab=recommend">go-ai</Link>
         <Link to="/sheet?tab=lessons">go-lessons</Link>
+        <Link to="/play">go-play-builtin</Link>
+        <Link to="/play?scope=MINE">go-play-mine</Link>
+        <Link to="/play?tab=recommend">go-play-ai</Link>
       </>
     );
   }
@@ -640,11 +645,17 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     expect(lastScope()).toBe('BUILTIN');
   });
 
-  it('리듬 게임은 그대로 마지막에 본 범위로 연다', async () => {
+  it('리듬 게임도 주소가 범위를 정한다 — 값이 없으면 마지막에 본 범위가 아니라 기본 곡, scope=MINE은 내 곡', async () => {
     useSongs.setState({ scope: 'MINE' });
     open('/play', { mode: 'play' });
     await screen.findAllByText('목록곡');
+    expect(checked()).toBe('기본 곡');
+    expect(lastScope()).toBe('BUILTIN');
+    cleanup();
+    open('/play?scope=MINE', { mode: 'play' });
+    await screen.findAllByText('목록곡');
     expect(checked()).toBe('내 곡');
+    expect(lastScope()).toBe('MINE');
   });
 
   it('?scope=MINE은 내 곡, ?tab=recommend는 AI 추천곡, ?tab=lessons는 학습 코스로 연다', async () => {
@@ -702,20 +713,55 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     expect(checked()).toBe('기본 곡');
   });
 
-  it('리듬 게임의 AI 추천곡 탭은 주소에 값을 남기지 않는다(바뀌지 않음)', async () => {
-    open('/play', { mode: 'play' });
+  it('리듬 게임에서 범위를 누르면 주소가 바뀌고 곡·단계 값은 남는다(학습 코스 버튼은 없다)', async () => {
+    open('/play?song=1&chart=11', { mode: 'play' });
     await screen.findAllByText('목록곡');
+    expect(within(screen.getByRole('radiogroup', { name: '곡 범위' })).getAllByRole('radio').map((r) => r.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡']);
     fireEvent.click(screen.getByRole('radio', { name: 'AI 추천곡' }));
+    expect(loc()).toBe('/play?song=1&chart=11&tab=recommend');
     expect(checked()).toBe('AI 추천곡');
-    expect(loc()).toBe('/play');
     fireEvent.click(screen.getByRole('radio', { name: '내 곡' }));
-    expect(loc()).toBe('/play?scope=MINE');
+    expect(loc()).toBe('/play?song=1&chart=11&scope=MINE');
+    fireEvent.click(screen.getByRole('radio', { name: '기본 곡' }));
+    expect(loc()).toBe('/play?song=1&chart=11');
   });
 
-  it('리듬 게임은 ?tab=recommend를 범위로 읽지 않는다', async () => {
+  it('리듬 게임도 주소만 바뀌면(사이드바 하위 메뉴) 범위가 따라 바뀐다', async () => {
+    open('/play', { mode: 'play' });
+    await screen.findAllByText('목록곡');
+    fireEvent.click(screen.getByText('go-play-ai'));
+    await waitFor(() => expect(checked()).toBe('AI 추천곡'));
+    fireEvent.click(screen.getByText('go-play-mine'));
+    await waitFor(() => expect(checked()).toBe('내 곡'));
+    fireEvent.click(screen.getByText('go-play-builtin'));
+    await waitFor(() => expect(checked()).toBe('기본 곡'));
+  });
+
+  it('리듬 게임은 ?tab=recommend를 AI 추천곡으로, ?tab=lessons는 기본 곡으로 읽는다', async () => {
     open('/play?tab=recommend', { mode: 'play' });
+    await screen.findByText('추천곡', { selector: '.play-st-name' });
+    expect(checked()).toBe('AI 추천곡');
+    cleanup();
+    open('/play?tab=lessons', { mode: 'play' });
     await screen.findAllByText('목록곡');
     expect(checked()).toBe('기본 곡');
+  });
+
+  it('리듬 게임에는 「미니게임」 링크(/play/mini)가 있고 악보 연습에는 없다', async () => {
+    open('/play', { mode: 'play' });
+    await screen.findAllByText('목록곡');
+    expect(screen.getByRole('link', { name: '미니게임' }).getAttribute('href')).toBe('/play/mini');
+    cleanup();
+    open('/sheet');
+    await screen.findAllByText('목록곡');
+    expect(screen.queryByRole('link', { name: '미니게임' })).toBeNull();
+  });
+
+  it('내장 곡 출처(범위 줄 없음)에서도 리듬 게임에는 「미니게임」 링크가 보인다', async () => {
+    useSongs.setState({ source: 'builtin' });
+    open('/play', { mode: 'play' });
+    expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
+    expect(screen.getByRole('link', { name: '미니게임' }).getAttribute('href')).toBe('/play/mini');
   });
 
   // 학습 코스 설계 4-4절: 사이드바 하위 메뉴가 펼쳐져 있어도 화면 위 버튼을 다시 둔다

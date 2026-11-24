@@ -164,3 +164,110 @@ describe('Sidebar 악보 연습 하위 메뉴 (설계 MODE-003-악보-연습-하
     expect(sub()).toBeNull();
   });
 });
+
+describe('Sidebar 리듬 게임 하위 메뉴 (설계 MODE-006-minigame-speed D1)', () => {
+  const sub = () => screen.queryByRole('list', { name: '리듬 게임 메뉴' });
+  const items = () => [...(sub()?.querySelectorAll('a') ?? [])];
+  const currents = () => items().filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent);
+
+  const viewport = (tablet: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: tablet && query === '(max-width: 1024px)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+
+  beforeEach(() => {
+    viewport(false);
+    useAuth.setState({ status: 'authenticated', user: { id: 1, role: 'USER' } as UserMe });
+    useSongs.setState({ source: 'api' });
+    useSettings.setState({ sidebarCollapsed: false });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('리듬 게임 안에서는 「리듬 게임」 바로 아래에 범위 셋과 미니게임이 이 순서·이 주소로 보인다', () => {
+    const { container } = view('/play');
+    expect(items().map((a) => a.textContent)).toEqual(['기본 곡', '내 곡', 'AI 추천곡', '미니게임']);
+    expect(items().map((a) => a.getAttribute('href'))).toEqual(['/play', '/play?scope=MINE', '/play?tab=recommend', '/play/mini']);
+    expect(container.querySelector('.side-item[aria-label="리듬 게임"]')?.nextElementSibling).toBe(sub());
+  });
+
+  it('로그인하지 않았으면 AI 추천곡이 없다', () => {
+    useAuth.setState({ status: 'anonymous', user: null });
+    view('/play');
+    expect(items().map((a) => a.textContent)).toEqual(['기본 곡', '내 곡', '미니게임']);
+  });
+
+  it('주소의 범위에 aria-current가 하나 있다', () => {
+    for (const [path, label] of [
+      ['/play', '기본 곡'],
+      ['/play?scope=MINE&song=3', '내 곡'],
+      ['/play?tab=recommend', 'AI 추천곡'],
+      ['/play?tab=lessons', '기본 곡'],
+    ]) {
+      view(path);
+      expect(currents()).toEqual([label]);
+      cleanup();
+    }
+  });
+
+  it('미니게임 경로에서는 「미니게임」만 현재 표시이고 「리듬 게임」 메뉴가 활성이다', () => {
+    for (const path of ['/play/mini', '/play/mini/speed', '/play/mini?scope=MINE']) {
+      const { container } = view(path);
+      expect(currents()).toEqual(['미니게임']);
+      expect(container.querySelector('.side-item.active')?.getAttribute('aria-label')).toBe('리듬 게임');
+      cleanup();
+    }
+  });
+
+  it('하위 항목을 누르면 표시가 옮겨 가고 미니게임에서 범위를 누르면 곡 고르기로 돌아온다', () => {
+    view('/play');
+    fireEvent.click(screen.getByRole('link', { name: '미니게임' }));
+    expect(currents()).toEqual(['미니게임']);
+    fireEvent.click(screen.getByRole('link', { name: '내 곡' }));
+    expect(currents()).toEqual(['내 곡']);
+  });
+
+  it('내장 곡 출처(범위 없음)여도 미니게임 항목은 남는다', () => {
+    useSongs.setState({ source: 'builtin' });
+    view('/play');
+    expect(items().map((a) => a.textContent)).toEqual(['미니게임']);
+    expect(currents()).toEqual([]);
+  });
+
+  it('미니게임 링크에도 미리 받기가 붙는다', () => {
+    const onPrefetch = vi.fn();
+    view('/play', onPrefetch);
+    fireEvent.focus(screen.getByRole('link', { name: '미니게임' }));
+    expect(onPrefetch).toHaveBeenCalledWith('/play/mini');
+  });
+
+  it('접힘·태블릿·리듬 게임 밖에서는 하위 메뉴가 없다', () => {
+    useSettings.setState({ sidebarCollapsed: true });
+    view('/play');
+    expect(sub()).toBeNull();
+    cleanup();
+    useSettings.setState({ sidebarCollapsed: false });
+    viewport(true);
+    view('/play/mini');
+    expect(sub()).toBeNull();
+    cleanup();
+    viewport(false);
+    for (const path of ['/free', '/history', '/studio']) {
+      view(path);
+      expect(sub()).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('악보 연습 안에서는 리듬 게임 하위 메뉴가 없고 악보 연습 하위 메뉴만 있다', () => {
+    view('/sheet');
+    expect(sub()).toBeNull();
+    expect(screen.getByRole('list', { name: '악보 연습 범위' })).toBeTruthy();
+  });
+
+  it('리듬 게임 안에서는 악보 연습 하위 메뉴가 없다', () => {
+    view('/play');
+    expect(screen.queryByRole('list', { name: '악보 연습 범위' })).toBeNull();
+  });
+});
