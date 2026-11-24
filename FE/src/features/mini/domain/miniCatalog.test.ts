@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
-  it('지금은 speed 한 줄뿐이다', () => {
-    expect(MINI_CATALOG).toHaveLength(1);
+  it('speed, dynamics 두 줄이 이 순서로 있다', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics']);
     expect(MINI_CATALOG[0]).toEqual({
       id: 'speed',
       name: '누구보다 빠르게',
@@ -16,6 +16,17 @@ describe('MINI_CATALOG', () => {
 });
 
 describe('miniGameInfo', () => {
+  it('강약중강약 한 줄이 설계와 같다', () => {
+    expect(miniGameInfo('dynamics')).toEqual({
+      id: 'dynamics',
+      name: '강약중강약',
+      rule: '제시한 세기에 맞춰 세 번 치기',
+      tag: '3타',
+      unit: '점',
+      better: 'higher',
+    });
+  });
+
   it('게임 id의 표 한 줄을 돌려준다', () => {
     expect(miniGameInfo('speed').name).toBe('누구보다 빠르게');
   });
@@ -29,6 +40,7 @@ describe('formatMiniScore', () => {
   it('format이 없으면 숫자 그대로 글자로 돌려준다', () => {
     expect(formatMiniScore({}, 42)).toBe('42');
     expect(formatMiniScore(miniGameInfo('speed'), 7)).toBe('7');
+    expect(formatMiniScore(miniGameInfo('dynamics'), 94)).toBe('94');
   });
 
   it('format이 있으면 그 함수 결과를 돌려준다', () => {

@@ -34,6 +34,14 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
     unit: '타',
     better: 'higher',
   },
+  {
+    id: 'dynamics',
+    name: '강약중강약',
+    rule: '제시한 세기에 맞춰 세 번 치기',
+    tag: '3타',
+    unit: '점',
+    better: 'higher',
+  },
 ];
 
 /** 게임 id의 목록 표 한 줄 */

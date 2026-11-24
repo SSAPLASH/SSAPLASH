@@ -103,7 +103,7 @@ src/
 │   ├─ result/           결과·상세 리포트·곡 추천 (components/ + components/report/)
 │   ├─ history/          연주 기록 — 플레이 기록 탭·녹음 목록 탭
 │   ├─ lesson/           학습 코스 알아보기 레슨 화면
-│   ├─ mini/             미니게임 — 목록·게임 화면 (components/ 공용 부품 + components/speed/, store/ 최고 기록, domain/ 집계·기록·단계)
+│   ├─ mini/             미니게임 — 목록·게임 화면 (components/ 공용 부품 + 게임별 components/speed/·dynamics/, store/ 최고 기록, domain/ 집계·기록·단계)
 │   ├─ settings/         설정
 │   ├─ landing/          랜딩·로그인·가입 동의 (components/ + components/auth/, domain/)
 │   ├─ admin/            공용 곡 관리(관리자)
@@ -156,7 +156,7 @@ public/
 | `features/result` | `/result/:playId` · `/result/:playId/report` | COACH-002 · COACH-004 |
 | `features/history` | `/history` | COACH(기록 조회) · REC(녹음 목록) |
 | `features/lesson` | `/sheet/lesson/:songId` | 학습 코스 알아보기 레슨(331) |
-| `features/mini` | `/play/mini` · `/play/mini/speed` | MODE-006 미니게임(405) |
+| `features/mini` | `/play/mini` · `/play/mini/speed` · `/play/mini/dynamics` | MODE-006 미니게임(405·406) |
 | `features/settings` | `/settings` | ACCT |
 | `features/landing` | `/` · `/login` · `/signup` · `/welcome` · `/auth/callback` | ACCT · UX-353 |
 | `features/admin` | `/admin/songs` | 공용 곡 관리(262) |
@@ -309,11 +309,12 @@ public/
   - `domain/` — timingHistogram(타이밍 분포·평균 Δ) · feedback · reportView · confetti · celebrate · segmentPlayback
 - `features/history/` — 연주 기록 — HistoryPage · PlayLogTab·PlayLogRow·playLogRows(행에 보일 값)·usePlayLogList(서버 쪽 단위 조회)(플레이 기록 탭) · RecordingList·RecordingPlayBar(라이브러리와 같은 모양의 녹음 재생바)·useRecordingList·useRecordingPlayback·recordingPlayer(녹음 재생)·RecordingTitleDialog·RecordingDeleteDialog·recordingMutation(녹음 목록 탭) · `media/downloadFile`(Blob 내려받기) · `domain/`(recordingMidi · midiFile)
 - `features/lesson/` — LessonReadPage(학습 코스 알아보기 레슨 화면)
-- `features/mini/` — 미니게임(MODE-006, 아래 「미니게임」 절) — MiniListPage(목록) · SpeedGamePage(「누구보다 빠르게」) · useMiniFlow(안내 → 카운트다운 → 플레이 → 마무리 → 결과 단계 훅, 다섯 게임 공용) · mini.css(`mini-` 접두사)
+- `features/mini/` — 미니게임(MODE-006, 아래 「미니게임」 절) — MiniListPage(목록) · SpeedGamePage(「누구보다 빠르게」) · DynamicsGamePage(「강약중강약」) · useMiniFlow(안내 → 카운트다운 → 플레이 → 마무리 → 결과 단계 훅, 다섯 게임 공용) · mini.css(`mini-` 접두사)
   - `components/` — 게임 공용 부품 — MiniCard(목록 카드) · MiniIntro(시작 전 안내: 시작을 막는 사유·[시작하기] 줄의 조작·안내 한 줄을 게임이 넘긴다) · MiniResultHero(결과 머리: 제목 두 줄·점수 칸·꼬리표·가운데 버튼을 게임이 넘긴다) · StatCells(숫자 칸 묶음)
   - `components/speed/` — 「누구보다 빠르게」 — SpeedStage(플레이 화면) · SpeedResult(결과 본문) · SecondBars(초별 타수 막대) · SpeedArt(카드·안내 그림)
+  - `components/dynamics/` — 「강약중강약」 — DynamicsStage(플레이 화면) · VelocityGauge(세로 세기 눈금 하나: 목표 띠·내 타격·상태 문구) · DynamicsResult(결과 본문 「타격별 세기」) · DynamicsArt(카드·안내 그림, 스타일은 mini.css) · dynamics.css(`mini-dyn-` 접두사, 이 게임 화면에서만 받는다)
   - `store/` — miniRecordStore(최고 기록, localStorage 계정별 키)
-  - `domain/` — miniCatalog(게임 목록 표) · miniFlow(단계 상태 기계·카운트다운 길이) · miniRecord(기록 타입·갱신 판정·저장 값 검증·카드에 보일 기록) · hitTime(집계에 쓸 타격 시각) · speedRound(타수 집계·결과 문구)
+  - `domain/` — miniCatalog(게임 목록 표) · miniFlow(단계 상태 기계·카운트다운 길이) · miniRecord(기록 타입·갱신 판정·저장 값 검증·카드에 보일 기록) · hitTime(집계에 쓸 타격 시각) · speedRound(타수 집계·결과 문구) · dynamicsRound(목표 뽑기·받을 타격·점수·문구·눈금 위치·시작 가능 판정)
 - `features/settings/` — SettingsPage · SettingRow · `components/`(HitFxPicker · KitSkinCarousel · WithdrawDialog) · `domain/`(carouselStep: 캐러셀 순환 이동)
 - `features/landing/` — 랜딩(설계 UX-353)·로그인·가입 동의 — LandingPage · AuthCallbackPage
   - `components/` — landing.css(전부 `.lp` 아래·`lp-` 접두사) · HeroScene(히어로+와이프) · StatementScene(점 글자 채움) · StickScene(센서 스틱 3단계 글·진행 막대) · StickStage(스틱 캔버스 무대) · stickStageDraw(캔버스 그리기, 순수) · ChartScene(음원→드럼→채보) · ModesScene(카드 비행·전광판 네온) · ResultSection · CtaSection(둘 다 reveal) · LandingNav · ScrollCue · useSceneProgress(스크롤 진행도 0~1) · useStickSwing(rAF 루프, 경과 초 전달) · useReveal(화면 진입 시 나타남) · landingArt(파형·채보·악보 SVG 데이터) · landingContent(모드·문구·이미지 경로. 히어로 제목은 `h1` 안의 워드마크 이미지로 그리고 `alt`가 서비스명이며, 뒤에 청록·자홍 흐린 네온이 6초 주기로 숨 쉰다. 모션 줄이기면 멈춤) · LandingView(전체 조립)
@@ -1037,18 +1038,24 @@ meta의 `inputMode`(`direct`/`follow`)는 녹화 시작 시점의 입력 방식�
 npx vitest run src/domain/play/lesson.test.ts src/components/lesson src/features/play/components/picker/lesson src/features/lesson/LessonReadPage.interaction.test.tsx
 ```
 
-## 미니게임 (MODE-006, 405번)
+## 미니게임 (MODE-006, 405·406번)
 
-리듬 게임과 별개로 혼자 기록을 깨거나 친구와 번갈아 겨루는 가벼운 게임이다. 405는 다섯 게임이 같이 쓰는 틀과 첫 게임 「누구보다 빠르게」를 넣었다(나머지 넷은 406~409). 서버 API를 부르지 않는다. 설계는 개인 문서 `.claude/plans/MODE-006-minigame-speed.md`.
+리듬 게임과 별개로 혼자 기록을 깨거나 친구와 번갈아 겨루는 가벼운 게임이다. 405는 다섯 게임이 같이 쓰는 틀과 첫 게임 「누구보다 빠르게」를, 406은 「강약중강약」을 넣었다(나머지 셋은 407~409). 서버 API를 부르지 않는다. 설계는 개인 문서 `.claude/plans/MODE-006-minigame-speed.md`·`MODE-006-minigame-dynamics.md`.
 
 - **진입·경로:** 사이드바 「리듬 게임」 하위 메뉴의 「미니게임」, 접힘·태블릿에서는 리듬 게임 곡 고르기 범위 줄 옆의 「미니게임」 링크. 목록은 `/play/mini`(`features/mini/MiniListPage`), 게임은 `/play/mini/{게임 id}`(`domain/play/miniGame`: `MINI_PATH`·`miniGamePath`·`isMiniPath`). 한 게임의 안내·카운트다운·플레이·결과는 한 경로 안의 단계이고 새로 고침하면 안내로 돌아온다. 상단 바 제목은 「미니게임」.
-- **목록:** 목록 표(`features/mini/domain/miniCatalog.MINI_CATALOG`)의 게임마다 카드(`MiniCard`: 그림·꼬리표·이름·한 줄 규칙·최고 기록·[시작])를 그린다. 구현된 게임만 표에 둔다(지금은 한 장). 뒤의 게임은 표에 한 줄, 카드 그림 표(`MiniListPage`)에 한 줄을 더하면 나타난다. 기록이 없으면 「아직 기록이 없어요」. 갈래가 있는 게임은 갈래 순서대로 처음 있는 기록을 보이고 첫 갈래가 아니면 갈래 이름을 붙인다(`miniRecord.cardRecord`).
+- **목록:** 목록 표(`features/mini/domain/miniCatalog.MINI_CATALOG`)의 게임마다 카드(`MiniCard`: 그림·꼬리표·이름·한 줄 규칙·최고 기록·[시작])를 그린다. 구현된 게임만 표에 둔다(지금은 두 장). 뒤의 게임은 표에 한 줄, 카드 그림 표(`MiniListPage`)에 한 줄을 더하면 나타난다. 기록이 없으면 「아직 기록이 없어요」. 갈래가 있는 게임은 갈래 순서대로 처음 있는 기록을 보이고 첫 갈래가 아니면 갈래 이름을 붙인다(`miniRecord.cardRecord`).
 - **공용 흐름(`features/mini/useMiniFlow`):** `intro`(시작 전 안내) → `countdown`(3·2·1, 숫자마다 1초) → `playing` → `closing`(마무리) → `result`. 제한 시간(`playMs`)을 넘긴 게임은 그 시간이 지나면, 넘기지 않은 게임은 화면이 `finish()`를 부르면 마무리로 간다. 마무리 시간(`closingMs`)은 게임이 넘긴다. [다시 하기]는 목록을 거치지 않고 카운트다운으로, [그만하기]는 어느 단계에서든 안내로 돌리고 그 판을 버린다. `startedAt`은 플레이로 넘어온 순간의 `performance.now()`라 타격 시각과 바로 견준다. 전이표는 순수 함수 `domain/miniFlow.nextPhase`.
 - **「누구보다 빠르게」(`SpeedGamePage`):** 10초(`SPEED_DURATION_MS`) 동안 **스네어를 친 횟수**를 센다. 다른 패드·페달·패드를 판정하지 못한 타격은 소리만 나고 세지 않는다. 타이머는 카운트다운이 끝난 순간부터 흐르고, 플레이가 시작되면 「시작!」을 0.6초(`GO_SHOW_MS`), 끝나면 「끝!」을 보인다.
   - 집계는 단계가 아니라 **시각**으로 가린다(`domain/speedRound.acceptsHit`): 타격의 집계 시각(`domain/hitTime` — 타격 시각 `tHit`과 받은 시각 `tRecv` 중 이른 값)이 시작 시각 이상, 시작 + 10초 미만이면 센다. 카운트다운 중이나 끝난 뒤에 친 타격은 여기서 걸러진다. 제한 시간이 끝난 뒤 250ms(`LATE_GRACE_MS`, 마무리 단계) 동안 늦게 도착한 타격을 더 받는다. 같은 타격은 `id`로 한 번만 센다.
   - 화면: 남은 시간(막대는 10초짜리 CSS 전환 하나, 숫자와 「지금 속도」는 0.1초마다) · 큰 타수 · 지금 속도(최근 1초 타수) · 초별 막대 · 최고 기록. 모션 줄이기면 타수 숫자의 튀는 모션을 뺀다.
   - 입력·소리: 스틱이 전제이고 화면을 눌러 치는 자리는 없다. 키보드 드럼 스위치(`useKeyboardDrum`)는 카운트다운·플레이 단계에서만 켜서 안내·결과에서는 Space·Enter로 버튼을 누를 수 있다. 화면에 있는 동안 공용 타격음(`setSoundOnHit`)을 켜고 화면이 따로 소리를 내지 않는다. 스틱이 연결돼 있지 않으면 안내에 「스틱이 연결돼 있지 않아요」와 [드럼 세팅]을 보이되 시작은 막지 않는다.
   - 결과: 제목 두 줄은 `speedRound.speedResultTitle`(첫 기록·갱신·동점·못 미침·0타 다섯 경우), 칸은 초당 평균·가장 빨랐던 1초·최고 기록, 아래에 1초마다 친 횟수 막대. 0타면 기록을 남기지 않는다.
+- **「강약중강약」(`DynamicsGamePage`):** 한 판은 **3타**이고 강·약·중이 한 번씩, 순서와 목표 값은 판마다 다르다(`domain/dynamicsRound.makeTargets`, 후보 약 35~55·중 70~85·강 100~115의 5 단위). 세기는 스틱이 내는 1~127 눈금이다. **제한 시간이 없고** 3타째를 받으면 화면이 `finish()`를 불러 1.2초(`DYNAMICS_CLOSING_MS`) 뒤 결과로 간다.
+  - 받는 타격(`acceptsShot`): **센서 소스로 친 스네어**만. 키보드·화면 터치(세기 고정)·다른 패드·페달·패드를 판정하지 못한 타격은 받지 않는다. 받은 타격 뒤와 플레이가 시작된 직후 300ms(`SHOT_GUARD_MS`)는 다음 타격을 받지 않는다(한 번 친 것이 두 타로 들어가는 것을 막는다). 그 판에 받은 타격을 받은 순서대로 담아 두고 `collectShots`가 시각으로 가리므로 카운트다운 중 타격은 빠진다. 센서로 다른 패드를 치면 지금 차례 눈금에 「스네어를 쳐 주세요」가 1.5초 보인다.
+  - 점수: 타격 점수 = 100 − 목표와의 차이(0 미만은 0), 판 점수 = 세 타 평균의 반올림(`shotScore`·`roundScore`). 띠(목표 ±12, `TARGET_BAND`)는 겨누는 기준이고 점수에 쓰지 않는다 — 결과 한 줄 평의 「조금」·「많이」만 가른다.
+  - 화면: 눈금 카드 3장(`VelocityGauge`: 친 것·지금 칠 차례·다음). 친 뒤에는 실제 값·목표·차이 문구가 나온다. 결과는 판 점수와 한 줄 평(`roundRemark`), 타격별 행(목표 띠·내 타격·실제 값·「목표 110 · 6 약함」·타격 점수)이고 차이가 가장 큰 행을 주의 색으로 보인다.
+  - 입력·소리: 세기를 재는 입력이 준비되지 않았으면(`canStartDynamics` — 키보드 전용, 또는 연결이 필요한 센서인데 양손 다 미연결) **[시작하기]를 끄고** 안내와 [드럼 세팅]을 보인다. 포인터 모의 스틱은 받는다(세기 100·127 두 값, 개발용). 키보드 드럼 스위치는 켜지 않아 어느 단계에서든 Space·Enter로 버튼을 누른다. 공용 타격음은 켠다.
+  - 기록: 판 점수(높을수록 좋음), `detail.shots`에 세 타의 단계·목표·실제 세기. 세 타를 다 친 판만 남긴다. 목표 구간·띠 폭·보호 시간은 스틱 실기 뒤 상수만 고친다.
 - **최고 기록(`features/mini/store/miniRecordStore`):** 게임마다 하나(갈래가 있는 게임은 갈래마다 하나), 브라우저 `localStorage`에 계정별로 둔다 — 키 `ssaplash.mini.v1.u{userId}`(로그인 계정이 없으면 `ssaplash.mini.v1`), 값 `{ v: 1, records: { [게임 id 또는 게임 id:갈래]: { gameId, variant?, score, at, detail } } }`. 결과가 확정되고 더 좋은 기록일 때만 쓴다(동점은 갱신이 아니다. 높을수록 좋은지는 목록 표의 `better`). 중간에 나간 판은 남지 않는다. 화면이 열릴 때와 계정이 바뀔 때 다시 읽는다. 깨진 값은 기록 없음으로 보되 한 기록의 `detail`만 깨졌으면 그 기록만 버린다(`miniRecord.parseRecords`, 게임 id별 검증 표). 저장하지 못해도 예외를 삼키고 결과 화면은 그대로 보인다. 입력 수단을 가르지 않는다.
 - **뒤의 게임이 더할 곳:** `MiniGameId`(`domain/play/miniGame`), 목록 표 한 줄(`miniCatalog`), `detail` 모양과 검증 한 줄(`miniRecord`), 카드 그림 한 줄(`MiniListPage`), 화면과 라우트(`app/routeModules`·`app/App.tsx`).
 

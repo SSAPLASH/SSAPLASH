@@ -5,6 +5,7 @@ describe('miniGamePath', () => {
   it('목록 경로 아래에 게임 id를 붙인다', () => {
     expect(MINI_PATH).toBe('/play/mini');
     expect(miniGamePath('speed')).toBe('/play/mini/speed');
+    expect(miniGamePath('dynamics')).toBe('/play/mini/dynamics');
   });
 });
 
@@ -12,6 +13,7 @@ describe('isMiniPath', () => {
   it('목록 경로와 그 아래 경로는 참', () => {
     expect(isMiniPath('/play/mini')).toBe(true);
     expect(isMiniPath('/play/mini/speed')).toBe(true);
+    expect(isMiniPath('/play/mini/dynamics')).toBe(true);
     expect(isMiniPath('/play/mini/speed/result')).toBe(true);
   });
 

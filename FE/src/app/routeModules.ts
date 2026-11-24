@@ -17,6 +17,7 @@ const routeImports = {
   /** 미니게임 목록과 게임 화면(MODE-006). 게임마다 화면을 하나씩 더한다 */
   miniList: () => import('@/features/mini/MiniListPage').then((m) => ({ default: m.MiniListPage })),
   miniSpeed: () => import('@/features/mini/SpeedGamePage').then((m) => ({ default: m.SpeedGamePage })),
+  miniDynamics: () => import('@/features/mini/DynamicsGamePage').then((m) => ({ default: m.DynamicsGamePage })),
   studio: () => import('@/features/studio/StudioPage').then((m) => ({ default: m.StudioPage })),
   settings: () => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
   history: () => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })),
