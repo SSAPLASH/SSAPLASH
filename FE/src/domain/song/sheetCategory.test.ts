@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isPlayPath,
   isSheetPath,
   resolveSheetCategory,
   sheetCategoryAt,
@@ -7,6 +8,7 @@ import {
   sheetCategoryOf,
   sheetCategoryQuery,
   sheetCategorySearch,
+  visiblePlayCategories,
   visibleSheetCategories,
   type SheetCategory,
 } from './sheetCategory';
@@ -112,5 +114,31 @@ describe('isSheetPath·sheetCategoryAt: 지금 주소 → 악보 연습 안인�
 
   it('알아보기 레슨 화면(/sheet/lesson/…)은 입문 코스다', () => {
     expect(sheetCategoryAt('/sheet/lesson/12', '')).toBe('LESSONS');
+  });
+});
+
+describe('isPlayPath: 리듬 게임 경로', () => {
+  it('/play와 그 아래만 참이다', () => {
+    expect(isPlayPath('/play')).toBe(true);
+    expect(isPlayPath('/play/mini')).toBe(true);
+    expect(isPlayPath('/play/mini/speed')).toBe(true);
+    expect(isPlayPath('/playground')).toBe(false);
+    expect(isPlayPath('/sheet')).toBe(false);
+    expect(isPlayPath('/')).toBe(false);
+  });
+});
+
+describe('visiblePlayCategories: 리듬 게임에서 보일 범위', () => {
+  it('내장 곡 출처(개발용)는 빈 목록이다', () => {
+    expect(visiblePlayCategories({ source: 'builtin', authed: true, authRequired: true })).toEqual([]);
+  });
+
+  it('로그인하지 않았거나 로그인 검사를 안 하는 빌드면 기본 곡·내 곡', () => {
+    expect(visiblePlayCategories({ source: 'api', authed: false, authRequired: true })).toEqual(['BUILTIN', 'MINE']);
+    expect(visiblePlayCategories({ source: 'api', authed: true, authRequired: false })).toEqual(['BUILTIN', 'MINE']);
+  });
+
+  it('로그인했으면 AI 추천곡이 붙고 학습 코스는 어느 경우에도 없다', () => {
+    expect(visiblePlayCategories({ source: 'api', authed: true, authRequired: true })).toEqual(['BUILTIN', 'MINE', 'RECOMMEND']);
   });
 });

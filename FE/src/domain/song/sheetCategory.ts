@@ -1,4 +1,5 @@
-// 악보 연습 곡 고르기의 범위(기본 곡·내 곡·AI 추천곡·학습 코스)와 주소 값 변환 (설계 MODE-003-악보-연습-하위-메뉴).
+// 악보 연습·리듬 게임 곡 고르기의 범위(기본 곡·내 곡·AI 추천곡·학습 코스)와 주소 값 변환 (설계 MODE-003-악보-연습-하위-메뉴, MODE-006-minigame-speed D2).
+// 리듬 게임도 악보 연습처럼 주소 값(`tab`·`scope`)이 범위의 기준이고, 학습 코스만 없다(visiblePlayCategories).
 // 사이드바 하위 메뉴(components/shell/Sidebar)와 곡 고르기(features/play SongPicker)가 서로를 모른 채 같은 주소 값을 보도록 여기에 둔다.
 // 순수 함수만 둔다. React·스토어·라우터에 접근하지 않는다.
 import type { SongScope } from './songCatalog';
@@ -8,6 +9,8 @@ export type SheetCategory = SongScope | 'RECOMMEND' | 'LESSONS';
 
 /** 악보 연습 경로. 곡 고르기는 이 경로이고 알아보기 레슨 화면은 `/sheet/lesson/:songId`다 */
 export const SHEET_PATH = '/sheet';
+/** 리듬 게임 경로. 곡 고르기는 이 경로이고 미니게임은 그 아래(`/play/mini`)다 */
+export const PLAY_PATH = '/play';
 const SHEET_LESSON_PREFIX = `${SHEET_PATH}/lesson/`;
 
 /** 주소 `tab` 값 */
@@ -66,9 +69,19 @@ export function visibleSheetCategories(cond: { source: 'api' | 'builtin'; authed
   return ORDER.filter((c) => personal || c === 'BUILTIN' || c === 'MINE');
 }
 
+/** 리듬 게임에서 보일 범위. 악보 연습과 같은 규칙에서 학습 코스만 뺀다(리듬 게임에는 학습 코스가 없다) */
+export function visiblePlayCategories(cond: { source: 'api' | 'builtin'; authed: boolean; authRequired: boolean }): SheetCategory[] {
+  return visibleSheetCategories(cond).filter((c) => c !== 'LESSONS');
+}
+
 /** 보이지 않는 범위(로그인이 풀려 사라진 탭 등)는 기본 곡으로 본다 */
 export function resolveSheetCategory(category: SheetCategory, visible: readonly SheetCategory[]): SheetCategory {
   return visible.includes(category) ? category : 'BUILTIN';
+}
+
+/** 지금 경로가 리듬 게임 안인가(곡 고르기·미니게임 등 `/play` 아래 전부) */
+export function isPlayPath(pathname: string): boolean {
+  return pathname === PLAY_PATH || pathname.startsWith(`${PLAY_PATH}/`);
 }
 
 /** 지금 경로가 악보 연습 안인가(곡 고르기·알아보기 레슨 화면) */

@@ -2,17 +2,23 @@
 // 실제 접힘 = settingsStore.sidebarCollapsed || 태블릿(≤1024). 접기/펼치기는 헤더(로고 옆)에 두고 태블릿에서는 숨긴다. 메뉴는 그룹 없이 평평하다(UX-19).
 // 예외 하나: 「악보 연습」에 들어와 있고 펼쳐져 있으면 그 아래에 곡 범위 하위 메뉴(기본 곡·내 곡·AI 추천곡·학습 코스)를 보인다
 // (설계 MODE-003-악보-연습-하위-메뉴). 범위는 주소 값이 기준이라 곡 고르기와 서로를 모른 채 같은 값을 본다. 접힘·태블릿에서는 화면 위 탭이 대신한다.
+// 「리듬 게임」에도 같은 조건으로 하위 메뉴(기본 곡·내 곡·AI 추천곡 + 미니게임)를 보인다(설계 MODE-006-minigame-speed D1).
 import { useEffect, useRef, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { isAdmin } from '@/domain/account/auth';
+import { isMiniPath, MINI_PATH } from '@/domain/play/miniGame';
 import {
+  isPlayPath,
   isSheetPath,
+  PLAY_PATH,
   resolveSheetCategory,
   SHEET_CATEGORY_LABEL,
   SHEET_PATH,
   sheetCategoryAt,
+  sheetCategoryOf,
   sheetCategorySearch,
+  visiblePlayCategories,
   visibleSheetCategories,
 } from '@/domain/song/sheetCategory';
 import { AUTH_REQUIRED } from '@/config/auth';
@@ -125,6 +131,13 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
       ? visibleSheetCategories({ source: songSource, authed, authRequired: AUTH_REQUIRED })
       : [];
   const sheetCurrent = resolveSheetCategory(sheetCategoryAt(pathname, search), sheetCategories);
+  // 리듬 게임 하위 메뉴: 범위 항목 뒤에 「미니게임」이 항상 붙는다(내장 곡 출처라 범위가 비어도 진입점은 남긴다).
+  // 미니게임 경로에서는 「미니게임」만 현재 표시이고, 그 밖에는 주소의 범위 하나만 표시한다
+  const playOpen = !collapsed && isPlayPath(pathname);
+  const playCategories = playOpen ? visiblePlayCategories({ source: songSource, authed, authRequired: AUTH_REQUIRED }) : [];
+  const inMini = isMiniPath(pathname);
+  const playParams = new URLSearchParams(search);
+  const playCurrent = resolveSheetCategory(sheetCategoryOf({ tab: playParams.get('tab'), scope: playParams.get('scope') }), playCategories);
 
   // 메뉴에 커서가 100ms 머물거나 키보드 포커스가 오면 그 화면을 미리 받는다(설계 TECH-351)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,7 +199,29 @@ export function Sidebar({ onPrefetch }: { onPrefetch?: (to: string) => void } = 
 
       <nav className="side-menu">
         {item({ to: '/free', label: '자유 연습', icon: ICONS.free })}
-        {item({ to: '/play', label: '리듬 게임', icon: ICONS.rhythm })}
+        {item({ to: PLAY_PATH, label: '리듬 게임', icon: ICONS.rhythm })}
+        {playOpen && (
+          <ul className="side-sub" aria-label="리듬 게임 메뉴">
+            {playCategories.map((category) => (
+              <li key={category}>
+                {/* 곡 고르기 안에서 범위만 바꿀 때는 방문 기록을 쌓지 않는다(악보 연습과 같은 규칙) */}
+                <Link
+                  to={{ pathname: PLAY_PATH, search: sheetCategorySearch(category) }}
+                  replace={pathname === PLAY_PATH}
+                  className="side-sub-item"
+                  aria-current={!inMini && category === playCurrent ? 'page' : undefined}
+                >
+                  {SHEET_CATEGORY_LABEL[category]}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link to={MINI_PATH} className="side-sub-item" aria-current={inMini ? 'page' : undefined} {...prefetchProps(MINI_PATH)}>
+                미니게임
+              </Link>
+            </li>
+          </ul>
+        )}
         {item({ to: SHEET_PATH, label: '악보 연습', icon: ICONS.sheet })}
         {sheetCategories.length > 0 && (
           <ul className="side-sub" aria-label="악보 연습 범위">

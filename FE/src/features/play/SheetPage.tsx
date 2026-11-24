@@ -21,7 +21,7 @@ import { kitSoundStage, type PlayStageName } from '@/features/play/components/st
 import { LazyChartAutoplayRunner } from '@/features/play/components/diag/lazyChartAutoplay';
 import { PlayHud } from '@/features/play/components/stage/PlayHud';
 import { AudioWaitNotice } from '@/features/play/components/stage/AudioWaitNotice';
-import { Countdown } from '@/features/play/components/stage/Countdown';
+import { Countdown } from '@/components/ui/feedback/Countdown';
 import { useAudioClockGate } from '@/features/play/components/stage/useAudioClockGate';
 import { countdownValue } from '@/domain/time/leadIn';
 import { resolveSubdivision, type SubdivisionPref } from '@/domain/time/metronome';

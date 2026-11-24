@@ -74,6 +74,12 @@ describe('prefetchRoute', () => {
     await vi.waitFor(() => expect(listAllSongs).toHaveBeenCalled());
     expect(vi.mocked(listAllSongs).mock.calls[0][0]).toMatchObject({ source: 'MINE', playableOnly: true });
   });
+  it('미니게임 목록: 목록 화면 코드만 받는다', () => {
+    prefetchRoute('/play/mini');
+    expect(loadRoute).toHaveBeenCalledWith('miniList');
+    expect(listAllSongs).not.toHaveBeenCalled();
+    expect(listSheets).not.toHaveBeenCalled();
+  });
   it('연주 기록: 기본 조건의 첫 쪽만 받고, 30초 안 두 번째 미리 받기는 요청하지 않는다', async () => {
     prefetchRoute('/history');
     await vi.waitFor(() => expect(listPlays).toHaveBeenCalledTimes(1));
