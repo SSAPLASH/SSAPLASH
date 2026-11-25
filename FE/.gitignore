@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 미니게임 「정적 뒤 한 방」 이벤트 음원. 저장소에 넣지 않는다(README 「미니게임」 절)
+public/event-audio/
