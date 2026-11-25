@@ -3,8 +3,8 @@ import { formatDynamicsScore } from './dynamicsRound';
 import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
-  it('speed, dynamics, sight 세 줄이 이 순서로 있다', () => {
-    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight']);
+  it('speed, dynamics, sight, tempo 네 줄이 이 순서로 있다', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo']);
     expect(MINI_CATALOG[0]).toEqual({
       id: 'speed',
       name: '누구보다 빠르게',
@@ -72,5 +72,26 @@ describe('악보 보고 빨리 치기(sight)', () => {
 
   it('점수는 초 소수 둘째 자리로 보인다', () => {
     expect(formatMiniScore(miniGameInfo('sight'), 420)).toBe('0.42');
+  });
+});
+
+describe('인간 메트로놈(tempo)', () => {
+  it('목록은 speed, dynamics, sight, tempo 순서', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo']);
+  });
+
+  it('표 한 줄이 설계와 같다', () => {
+    const info = miniGameInfo('tempo');
+    expect(info.name).toBe('인간 메트로놈');
+    expect(info.rule).toBe('소리가 꺼져도 같은 빠르기로 치기');
+    expect(info.tag).toBe('16타');
+    expect(info.unit).toBe('ms');
+    expect(info.better).toBe('lower');
+    expect(info.format).toBeUndefined();
+    expect(info.variants).toBeUndefined();
+  });
+
+  it('점수는 숫자 그대로 보인다', () => {
+    expect(formatMiniScore(miniGameInfo('tempo'), 14)).toBe('14');
   });
 });

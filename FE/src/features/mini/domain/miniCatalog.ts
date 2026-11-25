@@ -58,6 +58,14 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
     // 힌트를 끈 쪽이 본 기록이라 먼저 둔다
     variants: SIGHT_VARIANTS,
   },
+  {
+    id: 'tempo',
+    name: '인간 메트로놈',
+    rule: '소리가 꺼져도 같은 빠르기로 치기',
+    tag: '16타',
+    unit: 'ms',
+    better: 'lower',
+  },
 ];
 
 /** 게임 id의 목록 표 한 줄 */

@@ -31,3 +31,9 @@ describe('miniGamePath: sight', () => {
     expect(miniGamePath('sight')).toBe('/play/mini/sight');
   });
 });
+
+describe('miniGamePath: tempo', () => {
+  it('인간 메트로놈 경로', () => {
+    expect(miniGamePath('tempo')).toBe('/play/mini/tempo');
+  });
+});

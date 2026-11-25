@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// MiniListPage 검증: /play/mini의 카드 셋(카탈로그 순서), 최고 기록 유무에 따른 문구, 저장소 읽기, [시작] 이동.
+// MiniListPage 검증: /play/mini의 카드 넷(카탈로그 순서), 최고 기록 유무에 따른 문구, 저장소 읽기, [시작] 이동.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -57,6 +57,10 @@ function sightRecord(variant: 'hint-on' | 'hint-off', score: number): MiniRecord
   };
 }
 
+function tempoRecord(score: number): MiniRecord {
+  return { gameId: 'tempo', score, at: '2026-11-24T10:00:00.000Z', detail: { bpm: 96, errors: [0, ...Array.from({ length: 15 }, () => score)] } };
+}
+
 function reset() {
   localStorage.clear();
   useAuth.setState({ status: 'unknown', user: null });
@@ -70,11 +74,14 @@ afterEach(() => {
 });
 
 describe('미니게임 목록', () => {
-  it('카드가 셋이고 카탈로그 순서대로 이름·규칙·꼬리표가 보인다', () => {
+  it('카드가 넷이고 카탈로그 순서대로 이름·규칙·꼬리표가 보인다', () => {
     const { container } = open();
-    expect(container.querySelectorAll('.mini-card')).toHaveLength(3);
+    expect(container.querySelectorAll('.mini-card')).toHaveLength(4);
     const names = Array.from(container.querySelectorAll('.mini-card-name')).map((el) => el.textContent);
-    expect(names).toEqual(['누구보다 빠르게', '강약중강약', '악보 보고 빨리 치기']);
+    expect(names).toEqual(['누구보다 빠르게', '강약중강약', '악보 보고 빨리 치기', '인간 메트로놈']);
+    expect(screen.getByRole('heading', { name: '인간 메트로놈' })).toBeTruthy();
+    expect(screen.getByText('소리가 꺼져도 같은 빠르기로 치기')).toBeTruthy();
+    expect(screen.getByText('16타')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '누구보다 빠르게' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '강약중강약' })).toBeTruthy();
     expect(screen.getByText('10초 동안 스네어 가장 많이 치기')).toBeTruthy();
@@ -85,12 +92,12 @@ describe('미니게임 목록', () => {
     expect(screen.getByText('음표가 뜨면 맞는 패드를 바로 치기')).toBeTruthy();
     expect(screen.getByText('10문제')).toBeTruthy();
     const tags = Array.from(container.querySelectorAll('.mini-card-tag')).map((el) => el.textContent);
-    expect(tags).toEqual(['10초', '3타', '10문제']);
+    expect(tags).toEqual(['10초', '3타', '10문제', '16타']);
   });
 
-  it('저장된 최고 기록이 없으면 세 카드 모두 「아직 기록이 없어요」', () => {
+  it('저장된 최고 기록이 없으면 네 카드 모두 「아직 기록이 없어요」', () => {
     const { container } = open();
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(3);
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(4);
     expect(container.querySelector('.mini-card-value')).toBeNull();
   });
 
@@ -100,19 +107,19 @@ describe('미니게임 목록', () => {
     expect(useMiniRecords.getState().best('speed')).toBeNull();
     const { container } = open();
     expect(container.querySelector('.mini-card-value')?.textContent).toBe('68타');
-    // 속도 카드는 값이 보이고, 나머지 두 카드는 비어 있다
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(2);
+    // 속도 카드는 값이 보이고, 나머지 세 카드는 비어 있다
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(3);
     expect(useMiniRecords.getState().best('speed')?.score).toBe(68);
   });
 
   it('열려 있는 동안 스토어의 기록이 바뀌면 카드가 따라간다', () => {
     const { container } = open();
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(3);
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(4);
     act(() => {
       useMiniRecords.getState().submit(speedRecord(41));
     });
     expect(container.querySelector('.mini-card-value')?.textContent).toBe('41타');
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(2);
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(3);
   });
 
   it('두 게임의 기록이 있으면 카드마다 자기 최고 기록을 보인다(68타·오차 17)', () => {
@@ -120,18 +127,39 @@ describe('미니게임 목록', () => {
     const { container } = open();
     const values = Array.from(container.querySelectorAll('.mini-card-value')).map((el) => el.textContent);
     expect(values).toEqual(['68타', '오차 17']);
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(1);
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(2);
   });
 
-  it('세 게임의 기록이 모두 있으면 빈 카드가 없다', () => {
+  it('네 게임의 기록이 모두 있으면 빈 카드가 없다', () => {
     localStorage.setItem(
       STORAGE_KEY,
-      serializeRecords({ speed: speedRecord(68), dynamics: dynamicsRecord(17), 'sight:hint-off': sightRecord('hint-off', 610) }),
+      serializeRecords({
+        speed: speedRecord(68),
+        dynamics: dynamicsRecord(17),
+        'sight:hint-off': sightRecord('hint-off', 610),
+        tempo: tempoRecord(14),
+      }),
     );
     const { container } = open();
     const values = Array.from(container.querySelectorAll('.mini-card-value')).map((el) => el.textContent);
-    expect(values).toEqual(['68타', '오차 17', '0.61초']);
+    expect(values).toEqual(['68타', '오차 17', '0.61초', '14ms']);
     expect(screen.queryByText('아직 기록이 없어요')).toBeNull();
+  });
+
+  it('인간 메트로놈: 기록이 있으면 그 카드만 ms 값을 보이고 나머지는 비어 있다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ tempo: tempoRecord(14) }));
+    const { container } = open();
+    const cards = Array.from(container.querySelectorAll('.mini-card'));
+    expect(cards[3].querySelector('.mini-card-value')?.textContent).toBe('14ms');
+    expect(cards[3].textContent).not.toContain('아직 기록이 없어요');
+    for (const card of cards.slice(0, 3)) expect(card.textContent).toContain('아직 기록이 없어요');
+  });
+
+  it('인간 메트로놈: 기록이 없으면 「아직 기록이 없어요」', () => {
+    const { container } = open();
+    const card = container.querySelectorAll('.mini-card')[3];
+    expect(card.textContent).toContain('아직 기록이 없어요');
+    expect(card.querySelector('.mini-card-value')).toBeNull();
   });
 
   it('악보 보고 빨리 치기: 두 갈래가 있으면 힌트 끔 기록을 갈래 이름 없이 보인다', () => {
@@ -152,8 +180,8 @@ describe('미니게임 목록', () => {
     const card = container.querySelectorAll('.mini-card')[2];
     expect(card.querySelector('.mini-card-value')?.textContent).toBe('0.42초힌트 켬');
     expect(card.querySelector('.mini-card-variant')?.textContent).toBe('힌트 켬');
-    // 다른 두 카드는 비어 있다
-    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(2);
+    // 다른 세 카드는 비어 있다
+    expect(screen.getAllByText('아직 기록이 없어요')).toHaveLength(3);
   });
 
   it('악보 보고 빨리 치기: 기록이 없으면 「아직 기록이 없어요」', () => {
@@ -200,5 +228,11 @@ describe('미니게임 목록', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: '악보 보고 빨리 치기 시작' }));
     expect(screen.getByTestId('where').textContent).toBe('/play/mini/sight');
+  });
+
+  it('[인간 메트로놈 시작]을 누르면 /play/mini/tempo로 간다', () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: '인간 메트로놈 시작' }));
+    expect(screen.getByTestId('where').textContent).toBe('/play/mini/tempo');
   });
 });

@@ -8,6 +8,7 @@ import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { MiniCard } from '@/features/mini/components/MiniCard';
 import { SightArt } from '@/features/mini/components/sight/SightArt';
 import { SpeedArt } from '@/features/mini/components/speed/SpeedArt';
+import { TempoArt } from '@/features/mini/components/tempo/TempoArt';
 import { MINI_CATALOG } from '@/features/mini/domain/miniCatalog';
 import { cardRecord } from '@/features/mini/domain/miniRecord';
 import { useMiniRecords } from '@/features/mini/store/miniRecordStore';
@@ -18,6 +19,7 @@ const CARD_ART: Record<MiniGameId, ReactNode> = {
   speed: <SpeedArt size="card" />,
   dynamics: <DynamicsArt size="card" />,
   sight: <SightArt size="card" />,
+  tempo: <TempoArt size="card" />,
 };
 
 export function MiniListPage() {
