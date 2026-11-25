@@ -43,78 +43,310 @@
   color: var(--brand-text);
 }
 
-/* ---- 목록 ---- */
-.mini-list-hero {
+/* ---- 목록 (설계 MODE-006-minigame-list-ui) ----
+ * 큰 카드(고른 게임) + 고르기 카드 줄. 모서리 34·26·18과 캡슐 버튼, 게임별 색은 이 화면에서만 쓴다(D9·D11).
+ */
+.mini-page {
+  /* 게임별 색. 초록·빨강은 판정색(Good·Miss)이라 쓰지 않는다 */
+  --mini-c-speed: #ff9230;
+  --mini-c-dynamics: #ff8ac4;
+  --mini-c-sight: #0091ff;
+  --mini-c-tempo: #96a0ff;
+  --mini-c-crescendo: #00c3d0;
+  --mini-c-oneshot: #fedf43;
+}
+.mini-page [data-game='speed'] {
+  --mini-c: var(--mini-c-speed);
+}
+.mini-page [data-game='dynamics'] {
+  --mini-c: var(--mini-c-dynamics);
+}
+.mini-page [data-game='sight'] {
+  --mini-c: var(--mini-c-sight);
+}
+.mini-page [data-game='tempo'] {
+  --mini-c: var(--mini-c-tempo);
+}
+.mini-page [data-game='crescendo'] {
+  --mini-c: var(--mini-c-crescendo);
+}
+.mini-page [data-game='oneshot'] {
+  --mini-c: var(--mini-c-oneshot);
+}
+.mini-list-head {
   display: flex;
   flex-direction: column;
   gap: var(--space-m);
-  padding: var(--space-m) 0 var(--space-s);
+  padding-bottom: var(--space-s);
 }
-/* 카드 한 장일 때도 화면을 꽉 채우지 않도록 칸 폭 하한을 두고 빈 칸을 남긴다(auto-fill) */
+/* 큰 제목의 둘째 줄은 한 단계 낮춘다(목록에서만) */
+.mini-list .mini-headline > span:last-child {
+  color: var(--text-2);
+}
+.mini-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+}
+.mini-list-note {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 큰 카드: 게임 색 면 위에 어두운 잉크(--brand-on)로 그린다. 흰 글자는 주황·노랑에서 대비가 모자란다(D10) */
+.mini-hero {
+  --mini-ink: var(--brand-on);
+  --mini-ink-2: color-mix(in srgb, var(--brand-on) 72%, transparent);
+  --mini-art-base: color-mix(in srgb, var(--brand-on) 55%, transparent);
+  --mini-art-mid: color-mix(in srgb, var(--brand-on) 75%, transparent);
+  --mini-art-strong: var(--brand-on);
+  --mini-art-hot: var(--brand-on);
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  box-sizing: border-box;
+  background: var(--mini-c);
+  border-radius: 34px;
+  color: var(--mini-ink);
+  transition: background-color var(--motion-fade) var(--ease-out);
+}
+.mini-hero-main {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+  min-height: 280px;
+  padding: 20px 12px 20px 20px;
+  box-sizing: border-box;
+}
+.mini-hero-tag {
+  align-self: flex-start;
+  padding: 5px 12px;
+  background: color-mix(in srgb, var(--mini-ink) 12%, transparent);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.mini-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-s);
+  word-break: keep-all;
+}
+.mini-hero-name {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.mini-hero-rule {
+  margin: 0;
+  color: var(--mini-ink-2);
+  font-size: 17px;
+  line-height: 1.5;
+}
+.mini-hero-art {
+  margin-top: auto;
+  padding-top: var(--space-m);
+}
+/* 오른쪽 칸. 모서리 = 바깥 모서리(34) − 안쪽 여백(12) */
+.mini-hero-side {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  padding: var(--space-l);
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--mini-ink) 8%, transparent);
+  border-radius: 22px;
+}
+.mini-hero-how {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mini-hero-label {
+  margin: 0;
+  color: var(--mini-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.mini-hero-desc {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.mini-hero-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.mini-hero-row {
+  display: flex;
+  align-items: baseline;
+  /* 이름과 값이 한 줄에 다 들어가지 않으면(좁은 화면·긴 곡 이름) 값이 다음 줄로 내려간다. 이름을 글자 사이에서 끊지 않는다 */
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 12px;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--mini-ink) 16%, transparent);
+}
+.mini-hero-row-label {
+  min-width: 0;
+  word-break: keep-all;
+  color: var(--mini-ink-2);
+  font-size: 15px;
+  line-height: 1.4;
+}
+.mini-hero-row-value {
+  flex: none;
+  margin: 0;
+}
+.mini-hero-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-num);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.mini-hero-unit {
+  color: var(--mini-ink-2);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.mini-hero-empty {
+  color: var(--mini-ink-2);
+  font-size: 15px;
+  line-height: 41px;
+}
+/* [시작]: 공용 Button의 모양은 그대로 두고 이 자리에서만 캡슐·잉크 면으로 바꾼다(D11) */
+.mini-hero .mini-hero-start {
+  align-self: flex-end;
+  min-width: 128px;
+  margin-top: auto;
+  background: var(--mini-ink);
+  border-color: transparent;
+  border-radius: 999px;
+  color: var(--text-1);
+  font-size: 16px;
+}
+.mini-hero .mini-hero-start:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mini-ink) 86%, var(--text-1));
+}
+.mini-hero .mini-hero-start:focus-visible {
+  outline-color: var(--mini-ink);
+}
+
+/* 고르기 카드 줄. 다섯 장이면 한 줄에 다섯 칸, 좁아지면 줄이 나뉜다 */
 .mini-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: var(--space-m);
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.mini-grid-item {
+  display: flex;
+  min-width: 0;
+}
+/* 카드 전체가 버튼이다. 전역 button 규칙(테두리·모서리·여백)을 이 값으로 덮는다 */
 .mini-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-l);
+  gap: var(--space-m);
   min-width: 0;
-  min-height: 266px;
-  padding: 28px;
+  padding: 10px 10px 18px;
   box-sizing: border-box;
   background: var(--surface-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
+  border: 0;
+  border-radius: 26px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-1);
+  font-family: var(--font);
+  text-align: left;
+  word-break: keep-all;
+  transition:
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    transform var(--motion-press);
 }
-.mini-card-top {
+.mini-card:hover {
+  background: var(--surface-2);
+}
+/* 고름 표시: 게임 색 안쪽 선(색만으로 알리지 않도록 aria-pressed를 같이 둔다) */
+.mini-card.is-selected {
+  box-shadow: inset 0 0 0 2px var(--mini-c);
+}
+/* 그림 칸. 그림은 왼쪽 아래, 꼬리표는 오른쪽 위에 둔다 */
+.mini-card-art {
+  --mini-art-base: color-mix(in srgb, var(--text-1) 50%, transparent);
+  --mini-art-mid: color-mix(in srgb, var(--text-1) 75%, transparent);
+  --mini-art-strong: var(--mini-c);
+  --mini-art-hot: var(--mini-c);
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-m);
-  min-height: 48px;
+  align-items: flex-end;
+  height: 110px;
+  padding: 0 18px 18px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--mini-c) 16%, var(--surface-1));
+  border-radius: 18px;
 }
 .mini-card-tag {
-  flex: none;
-  padding: 5px 12px;
-  background: var(--fill-soft);
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--text-1) 14%, transparent);
   border-radius: 999px;
-  color: var(--text-2);
-  font-size: 13px;
-  line-height: 1.3;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 .mini-card-text {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  padding: 0 8px;
 }
 .mini-card-name {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.45;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 .mini-card-rule {
-  margin: 0;
   color: var(--text-2);
-  font-size: 15px;
-  line-height: 1.5;
-}
-.mini-card-record {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-m);
-  margin-top: auto;
+  font-size: 14px;
+  line-height: 1.45;
 }
 .mini-card-best {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  margin-top: auto;
+  padding: 0 8px;
 }
 .mini-card-label {
   color: var(--text-2);
@@ -127,9 +359,9 @@
   flex-wrap: wrap;
   gap: 4px 6px;
   font-family: var(--font-num);
-  font-size: 40px;
+  font-size: 30px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -144,10 +376,7 @@
 .mini-card-empty {
   color: var(--text-2);
   font-size: 15px;
-  line-height: 1.6;
-}
-.mini-card-record .ui-btn {
-  flex: none;
+  line-height: 36px;
 }
 
 /* ---- 숫자 칸 묶음 (안내·결과) ---- */
@@ -617,6 +846,18 @@
 
 /* ---- 반응형: 본문이 좁아지면 쌓는다(태블릿 ≤1024) ---- */
 @media (max-width: 1024px) {
+  /* 큰 카드: 오른쪽 칸이 아래로 내려간다 */
+  .mini-hero {
+    flex-direction: column;
+  }
+  /* 세로로 쌓으면 두 칸은 내용 높이만큼 차지한다(가로 배치의 flex: 1 1 0이 남으면 높이가 0에서 시작해 겹친다) */
+  .mini-hero-main,
+  .mini-hero-side {
+    flex: none;
+  }
+  .mini-hero-main {
+    min-height: 0;
+  }
   .mini-intro-hero {
     flex-direction: column;
     align-items: flex-start;
@@ -664,8 +905,15 @@
   .mini-stage-top {
     flex-wrap: wrap;
   }
-  .mini-card {
-    padding: var(--space-l);
+  /* 큰 카드의 큰 그림은 폭이 모자라 숨긴다. 이름·꼬리표·색으로 게임을 알아본다 */
+  .mini-hero-art {
+    display: none;
+  }
+  .mini-hero-main {
+    padding: var(--space-m) var(--space-s) var(--space-s) var(--space-m);
+  }
+  .mini-hero-side {
+    padding: var(--space-m);
   }
   .mini-chart-panel {
     padding: var(--space-m);
@@ -704,7 +952,10 @@
   }
 }
 
-/* ---- 그림 ---- */
+/* ---- 그림 ----
+ * 색은 문맥별 변수로 받는다(설계 MODE-006-minigame-list-ui D13). 변수를 주지 않은 자리(시작 전 안내)는 기본값으로 전과 같이 보인다.
+ * --mini-art-base 옅은 바탕 도형 · --mini-art-mid 중간 · --mini-art-strong 또렷한 도형 · --mini-art-hot 강조
+ */
 .mini-art {
   display: block;
   flex: none;
@@ -712,60 +963,60 @@
   height: auto;
 }
 .mini-art-bar {
-  fill: var(--text-3);
+  fill: var(--mini-art-base, var(--text-3));
 }
 .mini-art-bar.is-hot {
-  fill: var(--brand);
+  fill: var(--mini-art-hot, var(--brand));
 }
 /* 「강약중강약」: 큰 원(강)·작은 원(약)·중간 원(중) */
 .mini-art-dot.is-strong {
-  fill: var(--text-1);
+  fill: var(--mini-art-strong, var(--text-1));
 }
 .mini-art-dot.is-weak {
-  fill: var(--text-3);
+  fill: var(--mini-art-base, var(--text-3));
 }
 .mini-art-dot.is-mid {
-  fill: var(--text-2);
+  fill: var(--mini-art-mid, var(--text-2));
 }
 /* 「악보 보고 빨리 치기」: 오선과 파란 음표 */
 .mini-art-staff {
-  stroke: var(--text-3);
+  stroke: var(--mini-art-base, var(--text-3));
   stroke-width: 2;
 }
 .mini-art-note {
-  fill: var(--brand);
+  fill: var(--mini-art-hot, var(--brand));
 }
 .mini-art-stem {
-  stroke: var(--brand);
+  stroke: var(--mini-art-hot, var(--brand));
   stroke-width: 4;
   stroke-linecap: round;
 }
 /* 「인간 메트로놈」: 켜진 박(채운 점)과 꺼진 박(빈 고리) */
 .mini-art-beat.is-on {
-  fill: var(--text-1);
+  fill: var(--mini-art-strong, var(--text-1));
 }
 .mini-art-beat.is-off {
   fill: none;
-  stroke: var(--text-3);
+  stroke: var(--mini-art-base, var(--text-3));
   stroke-width: 3;
 }
 /* 「정적 뒤 한 방」: 노래 막대 · 정적(점선) · 한 방 */
 .mini-art-song {
-  fill: var(--text-3);
+  fill: var(--mini-art-base, var(--text-3));
 }
 .mini-art-rest {
-  stroke: var(--text-3);
+  stroke: var(--mini-art-base, var(--text-3));
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 2 12;
 }
 .mini-art-shot {
-  fill: var(--brand);
+  fill: var(--mini-art-hot, var(--brand));
 }
 /* 「어디까지 올라가는 거예요?」: 점점 커지는 원 넷, 가장 큰 원만 강조 */
 .mini-art-step {
-  fill: var(--text-3);
+  fill: var(--mini-art-base, var(--text-3));
 }
 .mini-art-step.is-top {
-  fill: var(--brand);
+  fill: var(--mini-art-hot, var(--brand));
 }
