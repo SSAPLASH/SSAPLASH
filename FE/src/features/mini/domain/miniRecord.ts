@@ -132,3 +132,22 @@ export function cardRecord(
   }
   return null;
 }
+
+/** 목록의 큰 카드에 보일 기록 한 줄. 기록이 없는 줄은 `record`가 null이다 */
+export interface HeroRecordRow {
+  /** 줄 이름. 갈래가 없는 게임은 「최고 기록」, 있는 게임은 갈래 이름 */
+  label: string;
+  record: MiniRecord | null;
+}
+
+/** 갈래가 없는 게임의 큰 카드 기록 줄 이름 */
+const HERO_LABEL = '최고 기록';
+
+/**
+ * 목록의 큰 카드에 보일 기록 줄(설계 MODE-006-minigame-list-ui D7). 갈래가 없는 게임은 한 줄이고,
+ * 갈래가 있는 게임은 갈래 순서대로 갈래마다 한 줄이다(카드와 달리 모든 갈래를 보인다)
+ */
+export function heroRecords(records: MiniRecords, gameId: MiniGameId, variants?: readonly { id: string; name: string }[]): HeroRecordRow[] {
+  if (!variants || variants.length === 0) return [{ label: HERO_LABEL, record: records[recordKey(gameId)] ?? null }];
+  return variants.map((variant) => ({ label: variant.name, record: records[recordKey(gameId, variant.id)] ?? null }));
+}

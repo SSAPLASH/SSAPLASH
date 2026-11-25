@@ -1,10 +1,11 @@
 // 결과 화면 머리 (Figma 1182:38353). 위 작은 글·「새 최고 기록」·제목 두 줄·[다시 하기]·[미니게임 목록]·오른쪽 점수 칸.
 // [다시 하기]는 결과가 뜰 때 포커스를 받는다(키보드로 바로 재도전).
+// 「← 미니게임」·[미니게임 목록]은 이 게임을 고른 목록으로 돌아간다(설계 MODE-006-minigame-list-ui D5).
 import { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/action/Button';
 import { buttonClassName } from '@/components/ui/action/buttonStyle';
-import { MINI_PATH } from '@/domain/play/miniGame';
+import { miniGameOfPath, miniListPath } from '@/domain/play/miniGame';
 
 interface Props {
   /** 위 작은 글(게임 이름) */
@@ -21,6 +22,9 @@ interface Props {
 
 export function MiniResultHero({ overline, tag, newBest, title, score, onRetry, extraAction }: Props) {
   const retryRef = useRef<HTMLButtonElement>(null);
+  const { pathname } = useLocation();
+  // 게임 화면 경로가 아니면(게임 id를 읽지 못하면) 주소 값 없는 목록이다
+  const listPath = miniListPath(miniGameOfPath(pathname));
 
   useEffect(() => {
     retryRef.current?.focus({ preventScroll: true });
@@ -28,7 +32,7 @@ export function MiniResultHero({ overline, tag, newBest, title, score, onRetry, 
 
   return (
     <>
-      <Link to={MINI_PATH} className={`${buttonClassName({ variant: 'text', size: 'sm' })} mini-back`}>
+      <Link to={listPath} className={`${buttonClassName({ variant: 'text', size: 'sm' })} mini-back`}>
         ← 미니게임
       </Link>
       <div className="mini-result-hero">
@@ -51,7 +55,7 @@ export function MiniResultHero({ overline, tag, newBest, title, score, onRetry, 
                 {extraAction.label}
               </Button>
             ) : null}
-            <Link to={MINI_PATH} className={buttonClassName({ variant: 'secondary' })}>
+            <Link to={listPath} className={buttonClassName({ variant: 'secondary' })}>
               미니게임 목록
             </Link>
           </div>

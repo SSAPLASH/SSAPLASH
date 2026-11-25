@@ -11,6 +11,7 @@ import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
 import { CrescendoArt } from '@/features/mini/components/crescendo/CrescendoArt';
 import { CrescendoResult } from '@/features/mini/components/crescendo/CrescendoResult';
 import { CrescendoStage } from '@/features/mini/components/crescendo/CrescendoStage';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import { CRESCENDO_CLOSING_MS, bestNote, collectRun, runRemark, runScore, type CrescendoRun } from '@/features/mini/domain/crescendoRound';
 import { VELOCITY_PAD, WRONG_PAD_HINT_MS, canStartVelocityGame, isWrongPad } from '@/features/mini/domain/velocityShot';
 import { useMiniRecords } from '@/features/mini/store/miniRecordStore';
@@ -125,7 +126,7 @@ export function CrescendoGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['약하게 시작해서', '칠 때마다 더 세게.']}
-          description="앞에 친 것보다 조금이라도 세게 쳐야 이어져요. 같거나 약하면 끝나요."
+          description={miniGameInfo('crescendo').description}
           art={<CrescendoArt size="hero" />}
           cells={[
             { label: '규칙', value: '점점 세게', note: '같거나 약하면 끝' },

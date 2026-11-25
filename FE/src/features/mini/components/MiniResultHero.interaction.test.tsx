@@ -9,10 +9,10 @@ afterEach(cleanup);
 
 type Props = Partial<Parameters<typeof MiniResultHero>[0]>;
 
-function open(props: Props = {}) {
+function open(props: Props = {}, path = '/play/mini/speed') {
   const onRetry = props.onRetry ?? vi.fn();
   const view = render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <MiniResultHero
         overline="누구보다 빠르게"
         newBest={false}
@@ -92,8 +92,20 @@ describe('MiniResultHero 버튼', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '다시 하기' }));
   });
 
-  it('[미니게임 목록]과 「← 미니게임」의 href가 /play/mini', () => {
+  it('[미니게임 목록]과 「← 미니게임」은 이 게임을 고른 목록(/play/mini?game=speed)으로 간다', () => {
     open();
+    expect(screen.getByRole('link', { name: '미니게임 목록' }).getAttribute('href')).toBe('/play/mini?game=speed');
+    expect(screen.getByRole('link', { name: '← 미니게임' }).getAttribute('href')).toBe('/play/mini?game=speed');
+  });
+
+  it('다른 게임 화면이면 그 게임을 고른 목록으로 간다', () => {
+    open({}, '/play/mini/tempo');
+    expect(screen.getByRole('link', { name: '미니게임 목록' }).getAttribute('href')).toBe('/play/mini?game=tempo');
+    expect(screen.getByRole('link', { name: '← 미니게임' }).getAttribute('href')).toBe('/play/mini?game=tempo');
+  });
+
+  it('게임 화면 경로가 아니면 주소 값 없는 목록(/play/mini)으로 간다', () => {
+    open({}, '/');
     expect(screen.getByRole('link', { name: '미니게임 목록' }).getAttribute('href')).toBe('/play/mini');
     expect(screen.getByRole('link', { name: '← 미니게임' }).getAttribute('href')).toBe('/play/mini');
   });

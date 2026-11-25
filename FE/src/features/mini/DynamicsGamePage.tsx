@@ -9,6 +9,7 @@ import { useShell } from '@/components/shell/nav/useShell';
 import type { ResolvedHit } from '@/domain/events';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { DynamicsResult } from '@/features/mini/components/dynamics/DynamicsResult';
 import { DynamicsStage } from '@/features/mini/components/dynamics/DynamicsStage';
@@ -166,7 +167,7 @@ export function DynamicsGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['내 세기를 재고', '숫자에 맞춰 치세요.']}
-          description="먼저 약·중·강을 한 번씩 쳐서 내 세기를 재요. 그다음 숫자 세 개에 맞춰 칩니다."
+          description={miniGameInfo('dynamics').description}
           art={<DynamicsArt size="hero" />}
           cells={[
             { label: '한 판', value: `${DYNAMICS_SHOTS}+${DYNAMICS_SHOTS}`, unit: '타', note: '재기 3타, 맞추기 3타' },

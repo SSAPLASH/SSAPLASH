@@ -9,6 +9,7 @@ import type { PadId } from '@/domain/kit/pads';
 import { metronome } from '@/engine/Metronome';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import type { StatCell } from '@/features/mini/components/StatCells';
 import { TempoArt } from '@/features/mini/components/tempo/TempoArt';
 import { TempoResult } from '@/features/mini/components/tempo/TempoResult';
@@ -207,7 +208,7 @@ export function TempoGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['소리가 꺼져도', '같은 빠르기로 치세요.']}
-          description={`예비 박 ${COUNT_IN_BEATS}개를 듣고, 소리가 꺼지면 같은 빠르기로 ${TEMPO_HITS}번 치세요. 어느 패드를 쳐도 돼요.`}
+          description={miniGameInfo('tempo').description}
           art={<TempoArt size="hero" />}
           cells={[
             { label: '한 판', value: String(TEMPO_HITS), unit: '타', note: `예비 박 ${COUNT_IN_BEATS}개 뒤에 시작해요` },

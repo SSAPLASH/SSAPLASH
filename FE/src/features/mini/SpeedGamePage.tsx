@@ -8,6 +8,7 @@ import { useShell } from '@/components/shell/nav/useShell';
 import type { ResolvedHit } from '@/domain/events';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import type { StatCell } from '@/features/mini/components/StatCells';
 import { SpeedArt } from '@/features/mini/components/speed/SpeedArt';
 import { SpeedResult } from '@/features/mini/components/speed/SpeedResult';
@@ -148,7 +149,7 @@ export function SpeedGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['10초 동안 스네어를', '가장 많이 치세요.']}
-          description="스네어를 친 것만 셉니다. 카운트다운이 끝나면 바로 시작해요."
+          description={miniGameInfo('speed').description}
           art={<SpeedArt size="hero" />}
           cells={[
             { label: '제한 시간', value: String(SPEED_DURATION_MS / 1000), unit: '초', note: '끝나면 자동으로 멈춰요' },
