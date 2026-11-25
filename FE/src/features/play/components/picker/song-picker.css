@@ -71,14 +71,9 @@
   background: var(--line-strong);
 }
 
-/* 리듬 게임 범위 줄: 범위 버튼 + 오른쪽 끝 미니게임 링크. 좁으면 링크가 아래 줄로 내려간다 */
-.play-sp-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-s);
-}
-.play-sp-mini {
-  margin-left: auto;
+/* 리듬 게임 제목 줄의 「미니게임」 링크: 이동임을 알리는 꺾쇠. 글자보다 한 단계 옅게, 글자와의 간격은 버튼 기본(8)보다 좁게 */
+.play-sp-mini-chev {
+  flex: none;
+  margin-left: -2px;
+  color: var(--text-2);
 }

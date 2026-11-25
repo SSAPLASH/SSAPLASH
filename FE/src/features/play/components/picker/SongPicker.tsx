@@ -12,7 +12,8 @@
 // 범위(설계 MODE-003-악보-연습-하위-메뉴, MODE-006-minigame-speed D2): 두 모드 모두 주소(`?scope=MINE`·`?tab=recommend`·`?tab=lessons`, 없으면 기본 곡)가
 // 범위의 단일 기준이다 — 사이드바 하위 메뉴와 화면 위 버튼이 같은 주소 값을 바꾼다. 버튼은 사이드바가 펼쳐져 있어도 항상 그린다(설계 SETUP-학습-코스-중급 4-4).
 // 리듬 게임에는 학습 코스가 없어 `?tab=lessons`는 기본 곡으로 본다. 주소 값 없이 들어오면 마지막에 본 범위가 아니라 기본 곡에서 시작한다.
-// 리듬 게임은 범위 줄 옆에 「미니게임」 링크를 둔다(사이드바가 접히거나 태블릿 폭이면 하위 메뉴가 안 보여서).
+// 리듬 게임은 제목 줄 오른쪽에 「미니게임」 링크를 둔다(설계 MODE-006-minigame-list-ui D1). 범위 줄은 범위 버튼만 가진다.
+// 링크는 사이드바가 펼쳐져 있어도 항상 그린다(접히거나 태블릿 폭이면 하위 메뉴가 안 보여서).
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/song/recommendation';
@@ -365,24 +366,22 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   );
   const copy = COPY[mode];
 
-  const scopeTabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
-  // 리듬 게임은 범위 줄 오른쪽 끝에 미니게임 링크를 둔다. 범위 줄이 없는 내장 곡 출처에서도 링크는 보인다
-  const tabs = sheet ? (
-    scopeTabs
-  ) : (
-    <div className="play-sp-tabs">
-      {scopeTabs}
-      <Link to={MINI_PATH} className={buttonClassName({ variant: 'secondary', size: 'sm', className: 'play-sp-mini' })}>
-        미니게임
-      </Link>
-    </div>
+  const tabs = source === 'api' ? <Segmented label="곡 범위" options={tabOptions} value={tab} onChange={setTab} /> : null;
+  // 리듬 게임만 제목 줄 오른쪽에 미니게임 링크를 둔다. 범위 줄이 없는 내장 곡 출처에서도 링크는 보인다
+  const miniLink = sheet ? undefined : (
+    <Link to={MINI_PATH} className={buttonClassName({ variant: 'secondary', size: 'sm' })}>
+      미니게임
+      <svg className="play-sp-mini-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+        <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
   );
   // 안내 접이 바(안내 줄·구분선)는 두 모드 모두 보인다. 악보 연습의 학습 코스는 코스 자체가 안내라 숨긴다(설계 MODE-003 안내 영역 U4)
   const showGuide = mode === 'play' || tab !== 'LESSONS';
 
   return (
     <div className="play-sp">
-      <PageHeader title={copy.title} />
+      <PageHeader title={copy.title} actions={miniLink} />
 
       {showGuide && <GuideFold mode={mode} />}
 
