@@ -40,6 +40,14 @@ const StickMonitorPage = MONITOR_ENABLED
   ? lazy(() => import('@/features/monitor/StickMonitorPage').then((m) => ({ default: m.StickMonitorPage })))
   : null;
 
+/**
+ * 미니게임 「정적 뒤 한 방」(이벤트용, 설계 MODE-006-minigame-oneshot D19). VITE_MINI_ONESHOT_AUDIO(음원 폴더 주소)를 준 빌드에만 라우트·코드가 들어간다.
+ * 모니터와 같이 빌드 값을 여기서 직접 읽고 삼항으로 감싸, 값이 없는 빌드에는 화면 청크가 만들어지지 않게 한다
+ */
+const OneShotGamePage = import.meta.env.VITE_MINI_ONESHOT_AUDIO
+  ? lazy(() => import('@/features/mini/OneShotGamePage').then((m) => ({ default: m.OneShotGamePage })))
+  : null;
+
 /** FX 랩(개발 전용, 설계 MODE-002-hit-fx-theme D7). 개발 서버에서만 라우트·청크가 생긴다 */
 const FxLabPage = import.meta.env.DEV
   ? lazy(() => import('@/features/dev/FxLabPage').then((m) => ({ default: m.FxLabPage })))
@@ -89,6 +97,7 @@ export default function App() {
           <Route path="play/mini/dynamics" element={<DynamicsGamePage />} />
           <Route path="play/mini/sight" element={<SightGamePage />} />
           <Route path="play/mini/tempo" element={<TempoGamePage />} />
+          {OneShotGamePage && <Route path="play/mini/oneshot" element={<OneShotGamePage />} />}
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
           <Route path="sheet/lesson/:songId" element={<LessonReadPage />} />
