@@ -115,12 +115,13 @@ export function serializeRecords(records: MiniRecords): string {
 
 /**
  * 목록 카드에 보일 기록. 갈래가 없는 게임은 그 게임의 기록이고, 갈래가 있는 게임은 갈래 순서대로 처음 있는 기록이다.
+ * 갈래 표에서 id가 없는 줄은 갈래 없는 기록을 가리킨다(「누구보다 빠르게」의 10초).
  * 첫 갈래가 아닌 기록이면 카드가 꼬리말로 붙일 갈래 이름(`variantName`)을 같이 돌려준다
  */
 export function cardRecord(
   records: MiniRecords,
   gameId: MiniGameId,
-  variants?: readonly { id: string; name: string }[],
+  variants?: readonly { id?: string; name: string }[],
 ): { record: MiniRecord; variantName?: string } | null {
   if (!variants || variants.length === 0) {
     const record = records[recordKey(gameId)];
@@ -147,7 +148,7 @@ const HERO_LABEL = '최고 기록';
  * 목록의 큰 카드에 보일 기록 줄(설계 MODE-006-minigame-list-ui D7). 갈래가 없는 게임은 한 줄이고,
  * 갈래가 있는 게임은 갈래 순서대로 갈래마다 한 줄이다(카드와 달리 모든 갈래를 보인다)
  */
-export function heroRecords(records: MiniRecords, gameId: MiniGameId, variants?: readonly { id: string; name: string }[]): HeroRecordRow[] {
+export function heroRecords(records: MiniRecords, gameId: MiniGameId, variants?: readonly { id?: string; name: string }[]): HeroRecordRow[] {
   if (!variants || variants.length === 0) return [{ label: HERO_LABEL, record: records[recordKey(gameId)] ?? null }];
   return variants.map((variant) => ({ label: variant.name, record: records[recordKey(gameId, variant.id)] ?? null }));
 }

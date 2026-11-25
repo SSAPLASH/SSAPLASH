@@ -6,11 +6,13 @@ import { formatDynamicsScore } from './dynamicsRound';
 import type { MiniBetter } from './miniRecord';
 import { ONE_SHOT_VARIANTS } from './oneShotSongs';
 import { SIGHT_VARIANTS, formatSeconds } from './sightRound';
+import { SPEED_VARIANTS } from './speedRound';
 import { COUNT_IN_BEATS, TEMPO_HITS } from './tempoRound';
 
-/** 기록이 갈래별로 따로인 게임의 갈래(407은 힌트 켬·끔, 409는 곡) */
+/** 기록이 갈래별로 따로인 게임의 갈래(407은 힌트 켬·끔, 409는 곡, 「누구보다 빠르게」는 제한 시간) */
 export interface MiniVariant {
-  id: string;
+  /** 갈래 id. 없으면 갈래 없는 기록을 가리킨다(「누구보다 빠르게」의 10초) */
+  id?: string;
   name: string;
 }
 
@@ -36,11 +38,13 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
   {
     id: 'speed',
     name: '누구보다 빠르게',
-    rule: '10초 동안 스네어 가장 많이 치기',
-    tag: '10초',
+    rule: '제한 시간 동안 스네어 가장 많이 치기',
+    tag: '5초 · 10초',
     description: '스네어를 친 것만 셉니다. 카운트다운이 끝나면 바로 시작해요.',
     unit: '타',
     better: 'higher',
+    // 기록은 제한 시간별이다. 10초가 본 기록이라 먼저 둔다
+    variants: SPEED_VARIANTS,
   },
   {
     id: 'dynamics',

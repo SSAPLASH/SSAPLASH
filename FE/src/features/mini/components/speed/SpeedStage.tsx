@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/action/Button';
 import { Countdown } from '@/components/ui/feedback/Countdown';
 import type { MiniPhase } from '@/features/mini/domain/miniFlow';
-import { SPEED_DURATION_MS } from '@/features/mini/domain/speedRound';
+import { speedDurationMs, type SpeedSeconds } from '@/features/mini/domain/speedRound';
 import { SecondBars } from '@/features/mini/components/speed/SecondBars';
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   countdown: number | null;
   /** 플레이가 시작된 뒤 「시작!」을 보이는 동안 참 */
   showGo: boolean;
+  /** 그 판의 제한 시간(초) */
+  seconds: SpeedSeconds;
   remainingMs: number;
   count: number;
   /** 지금 속도(최근 1초의 타수) */
@@ -21,7 +23,7 @@ interface Props {
   onQuit: () => void;
 }
 
-export function SpeedStage({ phase, countdown, showGo, remainingMs, count, rate, perSecond, best, onQuit }: Props) {
+export function SpeedStage({ phase, countdown, showGo, seconds, remainingMs, count, rate, perSecond, best, onQuit }: Props) {
   // 같은 자리의 같은 요소에서 값만 바뀌도록 한 번만 그린다(3·2·1 → 시작!)
   const overlay: { value: number | 'go'; backdrop: 'dim' | 'clear' } | null =
     phase === 'countdown' && countdown !== null
@@ -54,7 +56,7 @@ export function SpeedStage({ phase, countdown, showGo, remainingMs, count, rate,
           <div className="mini-time-track" aria-hidden="true">
             <div
               className={`mini-time-fill${phase === 'playing' || closing || phase === 'result' ? ' is-running' : ''}`}
-              style={phase === 'playing' || closing ? { transitionDuration: `${SPEED_DURATION_MS}ms` } : undefined}
+              style={phase === 'playing' || closing ? { transitionDuration: `${speedDurationMs(seconds)}ms` } : undefined}
             />
           </div>
         </div>
@@ -67,7 +69,7 @@ export function SpeedStage({ phase, countdown, showGo, remainingMs, count, rate,
             </span>
             <span className="mini-count-unit">타</span>
           </div>
-          <p className="mini-count-hint">{phase === 'countdown' ? '「시작!」이 뜨면 10초가 흐릅니다.' : '멈추지 말고 계속 치세요.'}</p>
+          <p className="mini-count-hint">{phase === 'countdown' ? `「시작!」이 뜨면 ${seconds}초가 흐릅니다.` : '멈추지 말고 계속 치세요.'}</p>
         </div>
 
         <div className="mini-panel">

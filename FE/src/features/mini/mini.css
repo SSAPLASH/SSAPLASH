@@ -554,7 +554,7 @@
 .mini-bars {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 10), minmax(0, 1fr));
   gap: var(--space-s);
   margin: 0;
   padding: 0;
@@ -624,7 +624,7 @@
 }
 .mini-bars-axis {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols, 10), minmax(0, 1fr));
   gap: clamp(6px, 1.6vw, 40px);
   padding: 8px clamp(0px, 1.2vw, 20px) 0;
   color: var(--text-2);

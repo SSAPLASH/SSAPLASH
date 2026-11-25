@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react';
 
 interface Props {
-  /** 1초마다 친 횟수(10개) */
+  /** 1초마다 친 횟수(제한 시간의 초 수만큼) */
   perSecond: readonly number[];
   variant: 'compact' | 'chart';
   /** 강조할 칸 번호(0부터) */
@@ -14,9 +14,11 @@ export function SecondBars({ perSecond, variant, highlight }: Props) {
   const max = Math.max(0, ...perSecond);
   const label = `1초마다 친 횟수: ${perSecond.join(', ')}`;
   const chart = variant === 'chart';
+  // 칸 수는 값 개수다(10초 판 10칸, 5초 판 5칸)
+  const cols = { '--cols': perSecond.length } as CSSProperties;
 
   const bars = (
-    <ul className={`mini-bars mini-bars-${variant}`} role="img" aria-label={label}>
+    <ul className={`mini-bars mini-bars-${variant}`} style={cols} role="img" aria-label={label}>
       {perSecond.map((count, i) => (
         <li key={i} className="mini-bars-col" aria-hidden="true">
           <span className="mini-bars-slot">
@@ -36,7 +38,7 @@ export function SecondBars({ perSecond, variant, highlight }: Props) {
   return (
     <figure className="mini-chart">
       {bars}
-      <div className="mini-bars-axis" aria-hidden="true">
+      <div className="mini-bars-axis" style={cols} aria-hidden="true">
         {perSecond.map((_, i) => (
           <span key={i}>{i + 1}초</span>
         ))}
