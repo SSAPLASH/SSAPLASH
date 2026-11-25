@@ -107,6 +107,36 @@ function StaffRow({ pads }: { pads: readonly PadId[] }) {
   );
 }
 
+/** 한 음표 오선의 폭(좌표 단위)과 보이는 배율. 줄 간격이 20px이 된다 */
+const SOLO_WIDTH = 280;
+const SOLO_ZOOM = 2;
+
+/**
+ * 한 음표짜리 오선(미니게임 「악보 보고 빨리 치기」, 설계 MODE-006-minigame-sight D4). 오선 다섯 줄을 고정 폭으로 그리고 가운데에 자리 표시 상자를 둔다.
+ * `pad`가 있으면 그 자리에 그 패드의 음표를 그리고, 없으면 오선과 자리 표시만 그린다. 음표 자리와 머리 모양은 레슨 카드·알아보기 화면과 같다.
+ * 읽는 이름(`label`)은 부르는 쪽이 정한다 — 패드 이름을 숨겨야 하는 문제에서 답이 새지 않게 한다
+ */
+export function SoloStaff({ pad, label }: { pad?: PadId | null; label: string }) {
+  const height = BOTTOM + 40;
+  const x = SOLO_WIDTH / 2;
+  return (
+    <div className="lesson-staff lesson-solo-staff">
+      <svg width={SOLO_WIDTH * SOLO_ZOOM} height={height * SOLO_ZOOM} viewBox={`0 0 ${SOLO_WIDTH} ${height}`} role="img" aria-label={label}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <line key={i} className="lesson-staff-line" x1={6} x2={SOLO_WIDTH - 6} y1={TOP + GAP * i} y2={TOP + GAP * i} />
+        ))}
+        {/* 자리 표시: 알아보기 화면의 「지금 칠 음표」 표시와 같은 모양 */}
+        <rect className="lesson-read-cursor" x={x - 24} y={TOP - 38} width={48} height={GAP * 4 + 76} rx={10} />
+        {pad ? (
+          <g className="lesson-solo-note" data-pad={pad}>
+            <StaffHead pad={pad} x={x} />
+          </g>
+        ) : null}
+      </svg>
+    </div>
+  );
+}
+
 const READ_COL = 64;
 /** 보이는 크기 배율. 좌표는 그대로 두고 SVG만 키운다(입문자가 음표 모양을 알아보게) */
 const NOTATION_ZOOM = 1.5;
