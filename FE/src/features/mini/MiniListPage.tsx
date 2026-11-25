@@ -6,6 +6,7 @@ import { useShell } from '@/components/shell/nav/useShell';
 import { miniGamePath, type MiniGameId } from '@/domain/play/miniGame';
 import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { MiniCard } from '@/features/mini/components/MiniCard';
+import { SightArt } from '@/features/mini/components/sight/SightArt';
 import { SpeedArt } from '@/features/mini/components/speed/SpeedArt';
 import { MINI_CATALOG } from '@/features/mini/domain/miniCatalog';
 import { cardRecord } from '@/features/mini/domain/miniRecord';
@@ -16,6 +17,7 @@ import './mini.css';
 const CARD_ART: Record<MiniGameId, ReactNode> = {
   speed: <SpeedArt size="card" />,
   dynamics: <DynamicsArt size="card" />,
+  sight: <SightArt size="card" />,
 };
 
 export function MiniListPage() {

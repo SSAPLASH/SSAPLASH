@@ -463,6 +463,14 @@
   max-width: 100%;
   height: auto;
 }
+/* 한 음표 오선(SoloStaff): 폭이 좁으면 비율을 지킨 채 줄인다 */
+.lesson-solo-staff {
+  overflow: visible;
+}
+.lesson-solo-staff svg {
+  max-width: 100%;
+  height: auto;
+}
 .lesson-read-prompt {
   margin: 0;
   font-size: 18px;

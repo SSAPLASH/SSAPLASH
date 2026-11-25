@@ -25,3 +25,9 @@ describe('isMiniPath', () => {
     expect(isMiniPath('')).toBe(false);
   });
 });
+
+describe('miniGamePath: sight', () => {
+  it('악보 보고 빨리 치기 경로', () => {
+    expect(miniGamePath('sight')).toBe('/play/mini/sight');
+  });
+});

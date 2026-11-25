@@ -1,0 +1,266 @@
+/* 「악보 보고 빨리 치기」 플레이 화면과 결과 판. 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 플레이: 위쪽 ---- */
+.mini-sight-top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+}
+
+/* ---- 플레이: 진행 점 ---- */
+.mini-sight-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+}
+.mini-sight-dots {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mini-sight-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--fill-track);
+}
+.mini-sight-dot.is-ok {
+  background: var(--text-1);
+}
+.mini-sight-dot.is-bad {
+  background: var(--miss);
+}
+.mini-sight-dot.is-now {
+  background: transparent;
+  border: 2px solid var(--brand);
+}
+.mini-sight-count {
+  color: var(--text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 플레이: 두 단 ---- */
+.mini-sight-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: var(--space-m);
+  min-height: 0;
+}
+.mini-sight-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-l);
+  min-width: 0;
+  padding: var(--space-l);
+  box-sizing: border-box;
+  background: var(--surface-1);
+  border-radius: var(--radius-panel);
+}
+.mini-sight-message {
+  margin: 0;
+  min-height: 1.3em;
+  color: var(--text-1);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+.mini-sight-message.is-bad {
+  color: var(--miss);
+}
+.mini-sight-message.is-good {
+  color: var(--good);
+}
+.mini-sight-hint {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* 큰 숫자 */
+.mini-sight-clock {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-1);
+}
+.mini-sight-clock-value {
+  font-family: var(--font-num);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.mini-sight-clock-unit {
+  color: var(--text-2);
+  font-size: 20px;
+}
+.mini-sight-clock.is-idle {
+  opacity: 0.4;
+}
+
+/* ---- 플레이: 오른쪽 ---- */
+.mini-sight-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-m);
+  min-width: 0;
+}
+.mini-sight-kit-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-m);
+  min-width: 0;
+  padding: var(--space-l) var(--space-m);
+  box-sizing: border-box;
+  background: var(--surface-1);
+  border-radius: var(--radius-panel);
+}
+.mini-sight-kit {
+  width: min(100%, 420px);
+  min-width: 0;
+  margin: 0 auto;
+}
+.mini-sight-kit-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ---- 결과: 문제별 막대 ---- */
+.mini-sight-rows {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(5, auto);
+  column-gap: var(--space-xl);
+  row-gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mini-sight-row {
+  display: grid;
+  grid-template-columns: 24px 64px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: var(--space-s);
+  min-width: 0;
+  font-size: 14px;
+}
+.mini-sight-row-no {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.mini-sight-row-pad {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-sight-row-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  background: var(--fill-track);
+  border-radius: 5px;
+}
+.mini-sight-bar-base {
+  flex: none;
+  height: 100%;
+  background: var(--brand);
+}
+.mini-sight-bar-penalty {
+  flex: none;
+  height: 100%;
+  background: var(--miss);
+}
+.mini-sight-row-time {
+  color: var(--text-1);
+  font-family: var(--font-num);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mini-sight-row-time.is-bad {
+  color: var(--miss);
+}
+.mini-sight-result-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ---- 반응형 ---- */
+@media (max-width: 1024px) {
+  .mini-sight-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mini-sight-problem {
+    padding: var(--space-xl) var(--space-l);
+  }
+}
+@media (min-width: 640px) and (max-width: 1024px) {
+  .mini-sight-side {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .mini-sight-side > * {
+    flex: 1 1 0;
+  }
+}
+@media (max-width: 720px) {
+  .mini-sight-rows {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+}
+@media (max-width: 560px) {
+  /* 이름·힌트 전환·[그만하기]가 한 줄에 안 들어간다. 조작을 아랫줄 오른쪽으로 내린다 */
+  .mini-sight-top-actions {
+    gap: var(--space-xs);
+    margin-left: auto;
+  }
+  .mini-sight-dots {
+    gap: 6px;
+  }
+  .mini-sight-problem {
+    gap: var(--space-m);
+    padding: var(--space-l) var(--space-s);
+  }
+  .mini-sight-message {
+    font-size: 20px;
+  }
+  .mini-sight-clock-value {
+    font-size: 48px;
+  }
+  .mini-sight-kit-panel {
+    padding: var(--space-m) var(--space-s);
+  }
+  .mini-sight-row {
+    grid-template-columns: 20px 56px minmax(0, 1fr) 64px;
+    gap: var(--space-xs);
+  }
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SIGHT_VARIANTS } from './sightRound';
 import { cardRecord, isNewBest, parseRecords, recordKey, serializeRecords, type MiniRecord, type MiniRecords } from './miniRecord';
 
 const PER_SECOND = [3, 4, 5, 6, 7, 8, 7, 6, 5, 4];
@@ -198,5 +199,78 @@ describe('cardRecord', () => {
   it('아무 기록도 없으면 null', () => {
     expect(cardRecord({}, 'speed')).toBeNull();
     expect(cardRecord({}, 'speed', variants)).toBeNull();
+  });
+});
+
+// 악보 보고 빨리 치기(sight): 낮을수록 좋고 갈래가 둘이다
+const SIGHT_PROBLEMS_DETAIL = Array.from({ length: 10 }, () => ({ pad: 'SNARE', ms: 400, wrongs: 0, timedOut: false }));
+
+function sightRec(score: number, variant?: string, problems: unknown[] = SIGHT_PROBLEMS_DETAIL) {
+  const base = { gameId: 'sight', score, at: AT, detail: { problems } };
+  return variant === undefined ? base : { ...base, variant };
+}
+
+describe('sight 기록', () => {
+  it('recordKey는 게임 id:갈래', () => {
+    expect(recordKey('sight', 'hint-off')).toBe('sight:hint-off');
+  });
+
+  it('두 갈래 기록이 speed 기록과 나란히 살아남는다', () => {
+    const parsed = parseRecords(
+      raw({
+        speed: rec(60),
+        'sight:hint-off': sightRec(520, 'hint-off'),
+        'sight:hint-on': sightRec(470, 'hint-on'),
+      }),
+    );
+    expect(Object.keys(parsed).sort()).toEqual(['sight:hint-off', 'sight:hint-on', 'speed']);
+    expect(parsed['sight:hint-off'].score).toBe(520);
+    expect(parsed['sight:hint-on'].score).toBe(470);
+  });
+
+  it('detail이 깨진 sight 기록(9문제)은 그 기록만 버린다', () => {
+    const parsed = parseRecords(
+      raw({
+        speed: rec(60),
+        'sight:hint-off': sightRec(520, 'hint-off', SIGHT_PROBLEMS_DETAIL.slice(0, 9)),
+        'sight:hint-on': sightRec(470, 'hint-on'),
+      }),
+    );
+    expect(Object.keys(parsed).sort()).toEqual(['sight:hint-on', 'speed']);
+  });
+
+  it('키와 내용의 갈래가 어긋난 sight 기록은 버린다', () => {
+    expect(parseRecords(raw({ 'sight:hint-off': sightRec(470, 'hint-on') }))).toEqual({});
+    expect(parseRecords(raw({ sight: sightRec(470, 'hint-on') }))).toEqual({});
+  });
+});
+
+describe('isNewBest: lower', () => {
+  it('낮으면 갱신, 같거나 높으면 갱신 아님, 이전이 없으면 갱신', () => {
+    expect(isNewBest({ score: 520 }, 470, 'lower')).toBe(true);
+    expect(isNewBest({ score: 520 }, 520, 'lower')).toBe(false);
+    expect(isNewBest({ score: 520 }, 570, 'lower')).toBe(false);
+    expect(isNewBest(null, 470, 'lower')).toBe(true);
+  });
+});
+
+describe('cardRecord: sight', () => {
+  const off = sightRec(520, 'hint-off') as MiniRecord;
+  const on = sightRec(470, 'hint-on') as MiniRecord;
+
+  it('힌트 끔 기록이 있으면 꼬리말 없이 그 기록', () => {
+    expect(cardRecord({ 'sight:hint-off': off }, 'sight', SIGHT_VARIANTS)).toEqual({ record: off });
+  });
+
+  it('힌트 켬 기록만 있으면 갈래 이름을 붙인다', () => {
+    expect(cardRecord({ 'sight:hint-on': on }, 'sight', SIGHT_VARIANTS)).toEqual({ record: on, variantName: '힌트 켬' });
+  });
+
+  it('둘 다 있으면 힌트 끔', () => {
+    expect(cardRecord({ 'sight:hint-off': off, 'sight:hint-on': on }, 'sight', SIGHT_VARIANTS)).toEqual({ record: off });
+  });
+
+  it('없으면 null', () => {
+    expect(cardRecord({}, 'sight', SIGHT_VARIANTS)).toBeNull();
   });
 });

@@ -660,6 +660,10 @@
   }
 }
 @media (max-width: 560px) {
+  /* 위 줄에 조작이 여럿인 게임은 이름 아래로 줄을 바꾼다 */
+  .mini-stage-top {
+    flex-wrap: wrap;
+  }
   .mini-card {
     padding: var(--space-l);
   }
@@ -722,4 +726,17 @@
 }
 .mini-art-dot.is-mid {
   fill: var(--text-2);
+}
+/* 「악보 보고 빨리 치기」: 오선과 파란 음표 */
+.mini-art-staff {
+  stroke: var(--text-3);
+  stroke-width: 2;
+}
+.mini-art-note {
+  fill: var(--brand);
+}
+.mini-art-stem {
+  stroke: var(--brand);
+  stroke-width: 4;
+  stroke-linecap: round;
 }
