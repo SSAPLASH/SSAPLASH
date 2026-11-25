@@ -18,3 +18,10 @@ describe('metronomeDisabledRoute', () => {
     expect(metronomeDisabledRoute('/play/mini/tempo/x')).toBe(false);
   });
 });
+
+describe('metronomeDisabledRoute: 정적 뒤 한 방', () => {
+  it('/play/mini/oneshot에서는 막고 하위 경로는 막지 않는다', () => {
+    expect(metronomeDisabledRoute('/play/mini/oneshot')).toBe(true);
+    expect(metronomeDisabledRoute('/play/mini/oneshot/x')).toBe(false);
+  });
+});
