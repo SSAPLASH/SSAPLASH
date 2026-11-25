@@ -2,6 +2,7 @@
 // 기록은 게임마다 하나, 갈래가 있는 게임은 갈래마다 하나다(D13). `detail`은 게임마다 모양이 달라 검증을 게임 id별 표로 둔다.
 import type { MiniGameId } from '@/domain/play/miniGame';
 import { isDynamicsDetail, type DynamicsDetail } from './dynamicsRound';
+import { isSightDetail, type SightDetail } from './sightRound';
 import { isSpeedDetail, type SpeedDetail } from './speedRound';
 
 /** 값이 클수록 좋은 기록인가. 반응 시간·오차를 재는 게임은 `lower` */
@@ -11,12 +12,14 @@ export type MiniBetter = 'higher' | 'lower';
 interface MiniDetailMap {
   speed: SpeedDetail;
   dynamics: DynamicsDetail;
+  sight: SightDetail;
 }
 
 /** 게임별 `detail` 검증. 뒤의 게임이 한 줄을 더한다 */
 const DETAIL_GUARDS: { [G in MiniGameId]: (detail: unknown) => detail is MiniDetailMap[G] } = {
   speed: isSpeedDetail,
   dynamics: isDynamicsDetail,
+  sight: isSightDetail,
 };
 
 /** 한 게임(또는 한 갈래)의 최고 기록 */

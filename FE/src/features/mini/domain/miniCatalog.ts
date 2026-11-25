@@ -3,6 +3,7 @@
 import type { MiniGameId } from '@/domain/play/miniGame';
 import { formatDynamicsScore } from './dynamicsRound';
 import type { MiniBetter } from './miniRecord';
+import { SIGHT_VARIANTS, formatSeconds } from './sightRound';
 
 /** 기록이 갈래별로 따로인 게임의 갈래(407은 힌트 켬·끔, 409는 곡) */
 export interface MiniVariant {
@@ -44,6 +45,18 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
     unit: '',
     better: 'lower',
     format: formatDynamicsScore,
+  },
+  {
+    id: 'sight',
+    name: '악보 보고 빨리 치기',
+    rule: '음표가 뜨면 맞는 패드를 바로 치기',
+    tag: '10문제',
+    unit: '초',
+    better: 'lower',
+    // 기록은 ms로 두고 초 소수 둘째 자리로 보인다(420 → 「0.42」)
+    format: formatSeconds,
+    // 힌트를 끈 쪽이 본 기록이라 먼저 둔다
+    variants: SIGHT_VARIANTS,
   },
 ];
 
