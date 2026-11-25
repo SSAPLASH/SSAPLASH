@@ -54,13 +54,58 @@
 .mini-speed-ring .play-countdown {
   background: none;
 }
+/* 3·2·1: 가늘고 큰 숫자(본문 글꼴의 가는 굵기, 자간을 좁힌다). 숫자마다 또렷하게 나타났다가 1초에 걸쳐
+ * 흰색에서 메인 색으로 물들며 사라진다. 숫자 하나의 길이(1초)는 domain/miniFlow의 COUNTDOWN_STEP_MS와 같다 */
 .mini-speed-ring .play-countdown-value {
-  font-size: calc(var(--ring) * 0.5);
+  font-family: var(--font);
+  font-size: calc(var(--ring) * 0.56);
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: lining-nums;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--mini-accent) 30%, transparent);
+  animation:
+    mini-speed-count-fade 1000ms linear both,
+    mini-speed-count-settle var(--motion-move) var(--ease-out) both;
 }
+@keyframes mini-speed-count-fade {
+  0% {
+    opacity: 0;
+    color: var(--text-1);
+  }
+  12% {
+    opacity: 1;
+    color: var(--text-1);
+  }
+  35% {
+    opacity: 1;
+    color: var(--text-1);
+  }
+  100% {
+    opacity: 0;
+    color: var(--mini-accent-text);
+  }
+}
+/* scale 1.08 → 1 (모션 줄이기에서는 시간이 0이라 사라지는 것만 남는다) */
+@keyframes mini-speed-count-settle {
+  from {
+    transform: scale(1.08);
+  }
+}
+/* 「시작!」·「끝!」: 한글이라 본문 글꼴의 굵은 굵기로 둔다. 「시작!」도 떠 있는 0.6초에 걸쳐 사라진다 */
 .mini-speed-ring .play-countdown-value[data-value='go'],
 .mini-speed-ring .mini-end-text {
-  font-size: calc(var(--ring) * 0.3);
+  font-family: var(--font);
+  font-size: calc(var(--ring) * 0.26);
+  font-weight: 700;
+  letter-spacing: -0.03em;
   white-space: nowrap;
+}
+.mini-speed-ring .play-countdown-value[data-value='go'] {
+  text-shadow: 0 0 28px color-mix(in srgb, var(--mini-accent) 30%, transparent);
+  animation:
+    mini-speed-count-fade 600ms linear both,
+    mini-speed-count-settle var(--motion-move) var(--ease-out) both;
 }
 /* 고리 안팎의 번짐. 줄어드는 선에 필터를 걸지 않도록 움직이지 않는 요소에 둔다 */
 .mini-speed-ring::before {
