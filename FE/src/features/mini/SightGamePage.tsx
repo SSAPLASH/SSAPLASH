@@ -8,6 +8,7 @@ import { Segmented } from '@/components/ui/form/Segmented';
 import type { PadId } from '@/domain/kit/pads';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import { SightArt } from '@/features/mini/components/sight/SightArt';
 import { SightResult } from '@/features/mini/components/sight/SightResult';
 import { SightStage } from '@/features/mini/components/sight/SightStage';
@@ -184,7 +185,7 @@ export function SightGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['음표가 뜨면', '맞는 패드를 바로 치세요.']}
-          description="틀리면 0.5초가 더해져요. 음표가 뜨기 전에 치면 그 문제를 다시 내요."
+          description={miniGameInfo('sight').description}
           art={<SightArt size="hero" />}
           cells={[
             { label: '한 판', value: String(SIGHT_PROBLEMS), unit: '문제', note: '패드가 고르게 나와요' },

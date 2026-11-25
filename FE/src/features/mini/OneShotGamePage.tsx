@@ -14,6 +14,7 @@ import { isFootHit, isSensorSource } from '@/domain/events';
 import { metronome } from '@/engine/Metronome';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
+import { miniGameInfo } from '@/features/mini/domain/miniCatalog';
 import { OneShotArt } from '@/features/mini/components/oneshot/OneShotArt';
 import { OneShotResult } from '@/features/mini/components/oneshot/OneShotResult';
 import { OneShotSongPick } from '@/features/mini/components/oneshot/OneShotSongPick';
@@ -311,7 +312,7 @@ export function OneShotGamePage() {
         <MiniIntro
           overline={GAME_NAME}
           title={['노래가 멈춘 뒤', '돌아올 박에 한 방.']}
-          description="노래가 끊기면 속으로 박을 세다가, 노래가 돌아올 자리에 딱 한 번 치세요. 노래가 끊기기 전에 치면 실패예요."
+          description={miniGameInfo('oneshot').description}
           art={<OneShotArt size="hero" />}
           cells={[
             { label: '한 판', value: '1', unit: '타', note: '어느 패드를 쳐도 돼요' },
