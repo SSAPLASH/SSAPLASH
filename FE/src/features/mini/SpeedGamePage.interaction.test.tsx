@@ -849,6 +849,133 @@ describe('제한 시간 고르기 (설계 MODE-006-minigame-speed-ui)', () => {
   });
 });
 
+describe('플레이 화면의 모양 (설계 MODE-006-minigame-speed-ui)', () => {
+  const ring = () => document.querySelector<HTMLElement>('.mini-speed-ring');
+  const fill = () => document.querySelector<SVGCircleElement>('.mini-speed-ring-fill');
+  const heat = () => [ring()?.getAttribute('data-heat'), ring()?.style.getPropertyValue('--heat-step')];
+  /** 플레이 중 지금 시각에 스네어를 n번 친다 */
+  const strike = (n: number) => {
+    for (let i = 0; i < n; i += 1) snareNow();
+  };
+
+  it('세 단계의 <main>에 이 게임의 색을 켜는 data-game이 실린다', () => {
+    open();
+    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+    toPlaying();
+    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+    finishRound();
+    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+  });
+
+  it('남은 시간 고리: 카운트다운 중 가득, 플레이 중 제한 시간에 걸쳐 줄어들고, 끝나면 숨는다', () => {
+    open();
+    clickStart();
+    expect(fill()?.classList.contains('is-running')).toBe(false);
+    advance(3000);
+    expect(fill()?.classList.contains('is-running')).toBe(true);
+    expect(fill()?.classList.contains('is-empty')).toBe(false);
+    expect(fill()?.style.transitionDuration).toBe('10000ms');
+    advance(10_000);
+    expect(fill()?.classList.contains('is-empty')).toBe(true);
+  });
+
+  it('5초 판의 고리는 5초에 걸쳐 줄어든다', () => {
+    open();
+    fireEvent.click(screen.getByRole('radio', { name: '5초' }));
+    toPlaying();
+    expect(fill()?.style.transitionDuration).toBe('5000ms');
+  });
+
+  it('머리 줄의 보조 글이 그 판의 시간을 말한다', () => {
+    open();
+    toPlaying();
+    expect(document.querySelector('.mini-stage-sub')?.textContent).toBe('10초 · 스네어');
+  });
+
+  it('카운트다운 중에는 타수와 남은 시간을 숨기고 무대 빛이 꺼져 있다가, 플레이가 시작되면 켜진다', () => {
+    open();
+    clickStart();
+    expect(document.querySelector('.mini-count-value')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('.mini-speed-remain')?.classList.contains('is-hidden')).toBe(true);
+    expect(document.querySelector('.free-lights')?.classList.contains('is-on')).toBe(false);
+    advance(3000);
+    expect(document.querySelector('.free-lights')?.classList.contains('is-on')).toBe(true);
+    // 「시작!」이 떠 있는 동안은 흐리게, 사라지면 또렷하게
+    expect(document.querySelector('.mini-speed-remain')?.classList.contains('is-dim')).toBe(true);
+    advance(700);
+    expect(document.querySelector('.mini-count-value')?.className).toBe('mini-count-value');
+    expect(document.querySelector('.mini-speed-remain')?.className).toBe('mini-speed-remain');
+  });
+
+  it('달아오름: 10타마다 칸이 오르고 50타·100타에서 단계가 바뀐다', () => {
+    open();
+    toPlaying();
+    expect(heat()).toEqual(['0', '0']);
+    strike(9);
+    expect(heat()).toEqual(['0', '0']);
+    strike(1);
+    expect(heat()).toEqual(['0', '1']);
+    strike(39);
+    expect(heat()).toEqual(['0', '4']);
+    expect(document.querySelector('.mini-speed-burst')).toBeNull();
+    strike(1);
+    expect(count()).toBe('50');
+    expect(heat()).toEqual(['1', '0']);
+    expect(document.querySelector('.mini-speed-burst')).not.toBeNull();
+    strike(50);
+    expect(heat()).toEqual(['2', '0']);
+  });
+
+  it('달아오름: 5초 판은 5타마다 칸이 오르고 25타에서 단계가 바뀐다', () => {
+    open();
+    fireEvent.click(screen.getByRole('radio', { name: '5초' }));
+    toPlaying();
+    strike(5);
+    expect(heat()).toEqual(['0', '1']);
+    strike(20);
+    expect(heat()).toEqual(['1', '0']);
+  });
+
+  it('[다시 하기]로 새 판을 시작하면 달아오름이 처음으로 돌아간다', () => {
+    open();
+    toPlaying();
+    strike(60);
+    expect(heat()).toEqual(['1', '1']);
+    finishRound();
+    clickRetry();
+    expect(heat()).toEqual(['0', '0']);
+  });
+
+  it('울림 링: 타격이 있어야 생기고, 칸이 바뀌는 타격(10타째)은 굵다', () => {
+    open();
+    toPlaying();
+    expect(document.querySelector('.mini-speed-pulse')).toBeNull();
+    strike(9);
+    expect(document.querySelector('.mini-speed-pulse')?.classList.contains('is-strong')).toBe(false);
+    strike(1);
+    expect(document.querySelector('.mini-speed-pulse')?.classList.contains('is-strong')).toBe(true);
+  });
+
+  it('초별 작은 막대: 칸 수가 초 수이고 지금 흐르는 초의 칸만 강조한다', () => {
+    open();
+    toPlaying();
+    const bars = () => Array.from(document.querySelectorAll('.mini-bars-compact .mini-bar'));
+    expect(bars()).toHaveLength(10);
+    expect(bars().map((el) => el.classList.contains('is-now'))).toEqual([true, ...Array.from({ length: 9 }, () => false)]);
+    advance(2100);
+    expect(bars().findIndex((el) => el.classList.contains('is-now'))).toBe(2);
+  });
+
+  it('HUD의 최고 기록은 그 판의 제한 시간으로 세운 기록이다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: record(68), 'speed:5s': fiveRecord(31) }));
+    open();
+    fireEvent.click(screen.getByRole('radio', { name: '5초' }));
+    toPlaying();
+    const hud = Array.from(document.querySelectorAll('.mini-speed-hud-item')).map((el) => el.textContent);
+    expect(hud[1]).toBe('최고 기록31타');
+  });
+});
+
 describe('공용 타격음', () => {
   it('화면에 있는 동안 켜지고 떠나면 꺼진다', () => {
     const { unmount } = open();
