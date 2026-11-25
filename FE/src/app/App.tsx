@@ -22,6 +22,7 @@ const SpeedGamePage = lazy(() => loadRoute('miniSpeed'));
 const DynamicsGamePage = lazy(() => loadRoute('miniDynamics'));
 const SightGamePage = lazy(() => loadRoute('miniSight'));
 const TempoGamePage = lazy(() => loadRoute('miniTempo'));
+const CrescendoGamePage = lazy(() => loadRoute('miniCrescendo'));
 const StudioPage = lazy(() => loadRoute('studio'));
 const SettingsPage = lazy(() => loadRoute('settings'));
 const HistoryPage = lazy(() => loadRoute('history'));
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="play/mini/dynamics" element={<DynamicsGamePage />} />
           <Route path="play/mini/sight" element={<SightGamePage />} />
           <Route path="play/mini/tempo" element={<TempoGamePage />} />
+          <Route path="play/mini/crescendo" element={<CrescendoGamePage />} />
           {OneShotGamePage && <Route path="play/mini/oneshot" element={<OneShotGamePage />} />}
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
