@@ -3,6 +3,7 @@
 import type { MiniGameId } from '@/domain/play/miniGame';
 import { formatDynamicsScore } from './dynamicsRound';
 import type { MiniBetter } from './miniRecord';
+import { ONE_SHOT_VARIANTS } from './oneShotSongs';
 import { SIGHT_VARIANTS, formatSeconds } from './sightRound';
 
 /** 기록이 갈래별로 따로인 게임의 갈래(407은 힌트 켬·끔, 409는 곡) */
@@ -65,6 +66,17 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
     tag: '16타',
     unit: 'ms',
     better: 'lower',
+  },
+  {
+    // 이벤트 스위치(config/miniOneShot)가 켜진 빌드에서만 목록에 보인다. 거르는 일은 목록 화면이 한다
+    id: 'oneshot',
+    name: '정적 뒤 한 방',
+    rule: '노래가 멈춘 뒤 정확한 박에 한 방',
+    tag: '이벤트',
+    unit: 'ms',
+    better: 'lower',
+    // 기록은 곡별이다. 갈래는 곡 표의 곡
+    variants: ONE_SHOT_VARIANTS,
   },
 ];
 
