@@ -3,8 +3,8 @@ import { formatDynamicsScore } from './dynamicsRound';
 import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
-  it('speed, dynamics, sight, tempo, oneshot 다섯 줄이 이 순서로 있다', () => {
-    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo', 'oneshot']);
+  it('speed, dynamics, sight, tempo, crescendo, oneshot 여섯 줄이 이 순서로 있다', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo', 'crescendo', 'oneshot']);
     expect(MINI_CATALOG[0]).toEqual({
       id: 'speed',
       name: '누구보다 빠르게',
@@ -76,8 +76,8 @@ describe('악보 보고 빨리 치기(sight)', () => {
 });
 
 describe('인간 메트로놈(tempo)', () => {
-  it('목록은 speed, dynamics, sight, tempo, oneshot 순서', () => {
-    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo', 'oneshot']);
+  it('목록은 speed, dynamics, sight, tempo, crescendo, oneshot 순서', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight', 'tempo', 'crescendo', 'oneshot']);
   });
 
   it('표 한 줄이 설계와 같다', () => {
@@ -93,6 +93,23 @@ describe('인간 메트로놈(tempo)', () => {
 
   it('점수는 숫자 그대로 보인다', () => {
     expect(formatMiniScore(miniGameInfo('tempo'), 14)).toBe('14');
+  });
+});
+
+describe('어디까지 올라가는 거예요?(crescendo)', () => {
+  it('표 한 줄이 설계와 같다', () => {
+    const info = miniGameInfo('crescendo');
+    expect(info.name).toBe('어디까지 올라가는 거예요?');
+    expect(info.rule).toBe('앞 타격보다 조금씩 더 세게 치기');
+    expect(info.tag).toBe('약하면 끝');
+    expect(info.unit).toBe('번');
+    expect(info.better).toBe('higher');
+    expect(info.format).toBeUndefined();
+    expect(info.variants).toBeUndefined();
+  });
+
+  it('점수는 숫자 그대로 보인다', () => {
+    expect(formatMiniScore(miniGameInfo('crescendo'), 9)).toBe('9');
   });
 });
 

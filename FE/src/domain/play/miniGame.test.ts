@@ -38,6 +38,16 @@ describe('miniGamePath: tempo', () => {
   });
 });
 
+describe('miniGamePath: crescendo', () => {
+  it('어디까지 올라가는 거예요? 경로', () => {
+    expect(miniGamePath('crescendo')).toBe('/play/mini/crescendo');
+  });
+
+  it('그 경로도 미니게임 경로다', () => {
+    expect(isMiniPath('/play/mini/crescendo')).toBe(true);
+  });
+});
+
 describe('miniGamePath: oneshot', () => {
   it('정적 뒤 한 방 경로', () => {
     expect(miniGamePath('oneshot')).toBe('/play/mini/oneshot');

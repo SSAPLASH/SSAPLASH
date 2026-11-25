@@ -308,6 +308,43 @@ describe('tempo 기록', () => {
   });
 });
 
+describe('어디까지 올라가는 거예요?(crescendo)', () => {
+  const STEPS = [30, 42, 55];
+  const cresRec = (score = 3, detail: unknown = { steps: STEPS, last: 49 }) => ({ gameId: 'crescendo', score, at: AT, detail });
+
+  it('recordKey는 게임 id 그대로', () => {
+    expect(recordKey('crescendo')).toBe('crescendo');
+  });
+
+  it('올바른 기록은 다른 게임 기록 옆에서 읽히고 왕복한다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), crescendo: cresRec() }));
+    expect(Object.keys(parsed).sort()).toEqual(['crescendo', 'speed']);
+    expect(parsed.crescendo).toEqual(cresRec());
+    expect(parseRecords(serializeRecords(parsed))).toEqual(parsed);
+  });
+
+  it('점수가 계단 수와 다르면 그 기록만 버리고 다른 게임 기록은 살린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), crescendo: cresRec(5) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('detail이 깨진 기록(계단이 커지지 않음)만 버린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), crescendo: cresRec(3, { steps: [30, 30, 55], last: 49 }) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('cardRecord는 그 기록을 돌려준다', () => {
+    const record = cresRec() as MiniRecord;
+    expect(cardRecord({ crescendo: record }, 'crescendo')).toEqual({ record });
+    expect(cardRecord({}, 'crescendo')).toBeNull();
+  });
+
+  it('isNewBest higher: 4는 3을 이기고 3은 3과 같아 갱신이 아니다', () => {
+    expect(isNewBest({ score: 3 }, 4, 'higher')).toBe(true);
+    expect(isNewBest({ score: 3 }, 3, 'higher')).toBe(false);
+  });
+});
+
 describe('정적 뒤 한 방(oneshot)', () => {
   const oneRec = (overrides: Record<string, unknown> = {}) => ({
     gameId: 'oneshot',
