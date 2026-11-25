@@ -84,7 +84,7 @@ describe('미니게임 목록(이벤트 스위치 켜짐)', () => {
     const names = cards().map((el) => el.querySelector('.mini-card-name')?.textContent);
     expect(names).toEqual(['누구보다 빠르게', '강약중강약', '악보 보고 빨리 치기', '인간 메트로놈', '어디까지 올라가는 거예요?', '정적 뒤 한 방']);
     const tags = cards().map((el) => el.querySelector('.mini-card-tag')?.textContent);
-    expect(tags).toEqual(['10초', '3타', '10문제', '16타', '약하면 끝', '이벤트']);
+    expect(tags).toEqual(['5초 · 10초', '3타', '10문제', '16타', '약하면 끝', '이벤트']);
     expect(within(grid()).getByText('노래가 멈춘 뒤 정확한 박에 한 방')).toBeTruthy();
     expect(cards()[5].getAttribute('data-game')).toBe('oneshot');
   });

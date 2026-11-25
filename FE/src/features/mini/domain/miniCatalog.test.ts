@@ -8,11 +8,13 @@ describe('MINI_CATALOG', () => {
     expect(MINI_CATALOG[0]).toEqual({
       id: 'speed',
       name: '누구보다 빠르게',
-      rule: '10초 동안 스네어 가장 많이 치기',
-      tag: '10초',
+      rule: '제한 시간 동안 스네어 가장 많이 치기',
+      tag: '5초 · 10초',
       description: '스네어를 친 것만 셉니다. 카운트다운이 끝나면 바로 시작해요.',
       unit: '타',
       better: 'higher',
+      // 기록은 제한 시간별이다. 10초는 갈래 없는 기록이라 id가 없다
+      variants: [{ name: '10초' }, { id: '5s', name: '5초' }],
     });
   });
 });

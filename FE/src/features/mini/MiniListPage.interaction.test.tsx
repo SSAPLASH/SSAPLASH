@@ -100,6 +100,11 @@ function speedRecord(score: number): MiniRecord {
   return { gameId: 'speed', score, at: '2026-11-24T10:00:00.000Z', detail: { perSecond: [score, 0, 0, 0, 0, 0, 0, 0, 0, 0] } };
 }
 
+/** 「누구보다 빠르게」 5초 판 기록(갈래 `5s`, 초별 값 5개) */
+function speedFiveRecord(score: number): MiniRecord {
+  return { gameId: 'speed', variant: '5s', score, at: '2026-11-24T10:00:00.000Z', detail: { perSecond: [score, 0, 0, 0, 0] } };
+}
+
 function dynamicsRecord(score: number): MiniRecord {
   return {
     gameId: 'dynamics',
@@ -159,14 +164,14 @@ describe('미니게임 목록: 구성', () => {
     expect(names).toEqual(['누구보다 빠르게', '강약중강약', '악보 보고 빨리 치기', '인간 메트로놈', '어디까지 올라가는 거예요?']);
     const rules = cards().map((el) => el.querySelector('.mini-card-rule')?.textContent);
     expect(rules).toEqual([
-      '10초 동안 스네어 가장 많이 치기',
+      '제한 시간 동안 스네어 가장 많이 치기',
       '내 세기를 재고 숫자에 맞춰 세 번 치기',
       '음표가 뜨면 맞는 패드를 바로 치기',
       '소리가 꺼져도 같은 빠르기로 치기',
       '앞 타격보다 조금씩 더 세게 치기',
     ]);
     const tags = cards().map((el) => el.querySelector('.mini-card-tag')?.textContent);
-    expect(tags).toEqual(['10초', '3타', '10문제', '16타', '약하면 끝']);
+    expect(tags).toEqual(['5초 · 10초', '3타', '10문제', '16타', '약하면 끝']);
   });
 
   it('카드마다 자기 게임 id가 data-game에 실린다', () => {
@@ -329,14 +334,40 @@ describe('미니게임 목록: 큰 카드의 설명과 기록', () => {
   });
 
   it('갈래가 없는 게임은 「최고 기록」 한 줄이고 기록이 없으면 「아직 기록이 없어요」', () => {
-    open();
+    open('/play/mini?game=tempo');
     expect(heroRows()).toEqual([['최고 기록', '아직 기록이 없어요']]);
   });
 
   it('갈래가 없는 게임에 기록이 있으면 그 줄에 값과 단위가 보인다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ tempo: tempoRecord(14) }));
+    open('/play/mini?game=tempo');
+    expect(heroRows()).toEqual([['최고 기록', '14ms']]);
+  });
+
+  it('「누구보다 빠르게」는 10초·5초 두 줄이고 기록이 없으면 둘 다 비어 있다', () => {
+    open();
+    expect(heroRows()).toEqual([
+      ['10초', '아직 기록이 없어요'],
+      ['5초', '아직 기록이 없어요'],
+    ]);
+  });
+
+  it('「누구보다 빠르게」의 갈래 없는 기록(예전 기록 포함)은 10초 줄에 보인다', () => {
     localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68) }));
     open();
-    expect(heroRows()).toEqual([['최고 기록', '68타']]);
+    expect(heroRows()).toEqual([
+      ['10초', '68타'],
+      ['5초', '아직 기록이 없어요'],
+    ]);
+  });
+
+  it('「누구보다 빠르게」에 두 시간의 기록이 다 있으면 두 줄 모두 값이 보인다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68), 'speed:5s': speedFiveRecord(36) }));
+    open();
+    expect(heroRows()).toEqual([
+      ['10초', '68타'],
+      ['5초', '36타'],
+    ]);
   });
 
   it('「악보 보고 빨리 치기」는 힌트 끔·힌트 켬 두 줄이고 기록이 없는 줄만 비어 있다', () => {
@@ -363,7 +394,10 @@ describe('미니게임 목록: 큰 카드의 설명과 기록', () => {
   it('다른 게임을 고르면 기록 줄도 그 게임 것으로 바뀐다', () => {
     localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68), tempo: tempoRecord(14) }));
     open();
-    expect(heroRows()).toEqual([['최고 기록', '68타']]);
+    expect(heroRows()).toEqual([
+      ['10초', '68타'],
+      ['5초', '아직 기록이 없어요'],
+    ]);
     fireEvent.click(card('인간 메트로놈'));
     expect(heroRows()).toEqual([['최고 기록', '14ms']]);
     fireEvent.click(card('강약중강약'));
@@ -372,12 +406,18 @@ describe('미니게임 목록: 큰 카드의 설명과 기록', () => {
 
   it('열려 있는 동안 스토어의 기록이 바뀌면 큰 카드와 카드가 같이 따라간다', () => {
     open();
-    expect(heroRows()).toEqual([['최고 기록', '아직 기록이 없어요']]);
+    expect(heroRows()).toEqual([
+      ['10초', '아직 기록이 없어요'],
+      ['5초', '아직 기록이 없어요'],
+    ]);
     expect(emptyCards()).toBe(5);
     act(() => {
       useMiniRecords.getState().submit(speedRecord(41));
     });
-    expect(heroRows()).toEqual([['최고 기록', '41타']]);
+    expect(heroRows()).toEqual([
+      ['10초', '41타'],
+      ['5초', '아직 기록이 없어요'],
+    ]);
     expect(cardValues()).toEqual(['41타']);
     expect(emptyCards()).toBe(4);
   });
@@ -451,6 +491,23 @@ describe('미니게임 목록: 카드의 최고 기록', () => {
     expect(sight.querySelector('.mini-card-value')?.textContent).toBe('0.42초힌트 켬');
     expect(sight.querySelector('.mini-card-variant')?.textContent).toBe('힌트 켬');
     // 다른 네 카드는 비어 있다
+    expect(emptyCards()).toBe(4);
+  });
+
+  it('누구보다 빠르게: 10초·5초 기록이 다 있으면 10초 기록을 갈래 이름 없이 보인다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ speed: speedRecord(68), 'speed:5s': speedFiveRecord(36) }));
+    open();
+    const speed = card('누구보다 빠르게');
+    expect(speed.querySelector('.mini-card-value')?.textContent).toBe('68타');
+    expect(speed.querySelector('.mini-card-variant')).toBeNull();
+  });
+
+  it('누구보다 빠르게: 5초 기록만 있으면 그 값에 「5초」가 붙는다', () => {
+    localStorage.setItem(STORAGE_KEY, serializeRecords({ 'speed:5s': speedFiveRecord(36) }));
+    open();
+    const speed = card('누구보다 빠르게');
+    expect(speed.querySelector('.mini-card-value')?.textContent).toBe('36타5초');
+    expect(speed.querySelector('.mini-card-variant')?.textContent).toBe('5초');
     expect(emptyCards()).toBe(4);
   });
 
