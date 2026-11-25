@@ -4,6 +4,7 @@
 // 타격은 단계가 아니라 시각으로 가린다: 그 판에 받은 스네어 타격을 모두 담아 두고, 시작 시각이 정해지면 구간 안의 것만 센다.
 // 그래서 카운트다운 중에 친 타격은 세지 않고, 끝나기 직전에 쳐서 마무리 시간(250ms)에 늦게 도착한 타격은 센다.
 // 제한 시간은 안내 단계에서만 바뀐다(설계 MODE-006-minigame-speed-ui D8). 기록은 시간별로 따로이고 10초가 갈래 없는 기록이다(D6).
+// 세 단계의 <main>에 data-game을 실어 이 게임의 색을 강조색으로 켠다(D3, 색은 mini.css).
 import { useEffect, useState } from 'react';
 import { useShell } from '@/components/shell/nav/useShell';
 import { Segmented } from '@/components/ui/form/Segmented';
@@ -169,7 +170,7 @@ export function SpeedGamePage() {
 
   if (phase === 'intro') {
     return (
-      <main className="main">
+      <main className="main" data-game="speed">
         <MiniIntro
           overline={GAME_NAME}
           title={[`${seconds}초 동안 스네어를`, '가장 많이 치세요.']}
@@ -195,7 +196,7 @@ export function SpeedGamePage() {
     const peak = peakSecond(perSecond);
     const verdict = speedVerdict(count, previous);
     return (
-      <main className="main">
+      <main className="main" data-game="speed">
         <div className="mini-page">
           <MiniResultHero
             overline={GAME_NAME}
@@ -221,7 +222,7 @@ export function SpeedGamePage() {
   }
 
   return (
-    <main className="main">
+    <main className="main" data-game="speed">
       <SpeedStage
         phase={phase}
         countdown={flow.countdown}

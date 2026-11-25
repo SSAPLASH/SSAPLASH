@@ -1,0 +1,444 @@
+/* 「누구보다 빠르게」 플레이·결과 (설계 MODE-006-minigame-speed-ui). 접두사 mini-speed-, 타수는 mini-count-, 초별 막대는 mini-bars-.
+ * 색은 mini.css의 강조색 변수(--mini-accent)와 이 파일의 달아오름 변수(--heat-*)로 받는다. 토큰은 tokens.css의 이름만 쓴다.
+ */
+
+/* ---- 플레이: 가운데(고리 + 한 줄 안내) ---- */
+.mini-speed-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-m);
+  min-height: 0;
+}
+
+/* 남은 시간 고리(D4). 큰 타수를 둘러싸고 제한 시간 동안 시계 방향으로 비어 간다.
+ * 달아오름(D11): 단계는 data-heat(0·1·2), 단계 안의 칸은 --heat-step(0~4)으로 받는다.
+ *   0단계: 타수 숫자가 흰색에서 강조색으로 칸마다 진해진다
+ *   1단계: 숫자·고리·울림이 콤보 금색(--fx-combo)
+ *   2단계: 숫자·고리가 흰빛(--text-1), 번짐은 금색
+ * 번짐은 단계가 오를수록, 칸이 오를수록 커진다. 판정색(초록·빨강)은 쓰지 않는다
+ */
+.mini-speed-ring {
+  --ring: clamp(240px, 46dvh, 400px);
+  --heat-step: 0;
+  /* 고리 선·울림 링 색 */
+  --heat-c: var(--mini-accent);
+  /* 타수 숫자 색 */
+  --heat-num: color-mix(in srgb, var(--mini-accent) calc(var(--heat-step) * 25%), var(--text-1));
+  /* 번짐 색과 세기 */
+  --heat-halo: var(--mini-accent);
+  --heat-glow: calc(6% + var(--heat-step) * 5%);
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--ring);
+  height: var(--ring);
+}
+.mini-speed-ring[data-heat='1'] {
+  --heat-c: var(--fx-combo);
+  --heat-num: var(--fx-combo);
+  --heat-halo: var(--fx-combo);
+  --heat-glow: calc(26% + var(--heat-step) * 5%);
+}
+.mini-speed-ring[data-heat='2'] {
+  --heat-c: var(--text-1);
+  --heat-num: var(--text-1);
+  --heat-halo: var(--fx-combo);
+  --heat-glow: calc(46% + var(--heat-step) * 5%);
+}
+/* 고리 안팎의 번짐. 줄어드는 선에 필터를 걸지 않도록 움직이지 않는 요소에 둔다 */
+.mini-speed-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 calc(28px + var(--heat-step) * 10px) color-mix(in srgb, var(--heat-halo) var(--heat-glow), transparent),
+    inset 0 0 calc(28px + var(--heat-step) * 10px) color-mix(in srgb, var(--heat-halo) calc(var(--heat-glow) / 2), transparent);
+  transition: box-shadow var(--motion-fade) var(--ease-out);
+  pointer-events: none;
+}
+/* 선은 12시에서 시작해 반시계 방향으로 그린다. 끝이 줄어들면 빈 자리가 12시에서 시계 방향으로 넓어진다 */
+.mini-speed-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg) scaleY(-1);
+}
+.mini-speed-ring-track,
+.mini-speed-ring-fill {
+  fill: none;
+  stroke-width: 3;
+}
+.mini-speed-ring-track {
+  stroke: var(--fill-track);
+}
+/* 길이 100짜리 선(pathLength)이 제한 시간짜리 전환 하나로 0까지 줄어든다. 카운트다운 중에는 가득, 마무리에서는 숨긴다 */
+.mini-speed-ring-fill {
+  stroke: var(--heat-c);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+}
+.mini-speed-ring-fill.is-running {
+  stroke-dashoffset: 100;
+  transition-property: stroke-dashoffset;
+  transition-timing-function: linear;
+}
+.mini-speed-ring-fill.is-empty {
+  opacity: 0;
+}
+
+/* 울림 링(D5): 받아들인 타격마다 고리에서 한 번 퍼진다. 칸이 바뀌는 타격은 굵다 */
+.mini-speed-pulse,
+.mini-speed-burst {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.mini-speed-pulse {
+  border: 1px solid color-mix(in srgb, var(--heat-c) 55%, transparent);
+  animation: mini-speed-pulse 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mini-speed-pulse.is-strong {
+  border-width: 2px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--heat-c) 30%, transparent);
+}
+@keyframes mini-speed-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+/* 단계가 바뀌는 순간의 큰 빛 */
+.mini-speed-burst {
+  background: radial-gradient(circle, color-mix(in srgb, var(--heat-halo) 38%, transparent), transparent 70%);
+  animation: mini-speed-burst 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes mini-speed-burst {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+/* ---- 고리 안: 큰 타수와 남은 시간 ---- */
+.mini-count {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+}
+.mini-count-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity var(--motion-fade) var(--ease-out);
+}
+/* 가운데 큰 글자(3·2·1·「시작!」·「끝!」)와 겹치는 동안: 카운트다운은 숨기고, 「시작!」·「끝!」은 흐리게 둔다 */
+.mini-count-value.is-hidden,
+.mini-speed-remain.is-hidden {
+  opacity: 0;
+}
+.mini-count-value.is-dim,
+.mini-speed-remain.is-dim {
+  opacity: 0.25;
+}
+.mini-count-num {
+  display: inline-block;
+  color: var(--heat-num);
+  font-family: var(--font-num);
+  font-size: calc(var(--ring) * 0.36);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 calc(18px + var(--heat-step) * 6px) color-mix(in srgb, var(--heat-halo) var(--heat-glow), transparent);
+  animation: mini-count-pop var(--motion-move) var(--ease-out);
+}
+.mini-count-unit {
+  color: var(--text-2);
+  font-size: calc(var(--ring) * 0.07);
+  font-weight: 500;
+}
+@keyframes mini-count-pop {
+  from {
+    transform: scale(1.06);
+  }
+}
+.mini-speed-remain {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  transition: opacity var(--motion-fade) var(--ease-out);
+}
+.mini-speed-remain-value {
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.mini-speed-remain-unit {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.mini-count-hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* 「끝!」: 공유 Countdown과 같은 크기·글꼴로 본문 영역에 겹친다 */
+.mini-end {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.mini-end-text {
+  font-family: var(--font-display);
+  font-size: 200px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text-1);
+  text-shadow:
+    0 0 24px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 0 8px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
+    0 2px 4px color-mix(in srgb, var(--bg-canvas) 80%, transparent);
+  animation: motion-fade-in var(--motion-fade) var(--ease-out);
+}
+
+/* ---- HUD: 상자 없이 무대 아래에 글자로(자유 연습 .free-hud와 같은 모양) ---- */
+.mini-speed-hud {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-l);
+  min-height: 56px;
+}
+.mini-speed-hud-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mini-speed-hud-item:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+.mini-speed-hud-cap {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mini-speed-hud-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mini-speed-hud-unit {
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.mini-speed-hud-bars {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* ---- 초별 막대. 칸 수(--cols)는 제한 시간의 초 수다 ---- */
+.mini-bars {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 10), minmax(0, 1fr));
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+}
+.mini-bars-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.mini-bars-slot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+}
+.mini-bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: max(4px, calc(var(--h) * 1%));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mini-accent) 38%, var(--surface-2));
+}
+/* 가장 빨랐던 초: 강조색 그대로에 번짐 */
+.mini-bar.is-peak {
+  background: var(--mini-accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--mini-accent) 45%, transparent);
+}
+/* 플레이 중 작은 막대: 칸마다 폭이 같고 지금 흐르는 초만 강조색이다 */
+.mini-bars-compact {
+  gap: 6px;
+  width: calc(var(--cols, 10) * 24px);
+  max-width: 100%;
+}
+.mini-bars-compact .mini-bars-slot {
+  height: 40px;
+}
+.mini-bars-compact .mini-bar {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-1) 22%, transparent);
+  transition: height var(--motion-fast) var(--ease-out);
+}
+.mini-bars-compact .mini-bar.is-now {
+  background: var(--mini-accent);
+}
+.mini-bars-chart {
+  border-bottom: 1px solid var(--line-strong);
+  gap: clamp(6px, 1.6vw, 40px);
+  padding: 0 clamp(0px, 1.2vw, 20px);
+}
+.mini-bars-chart .mini-bars-col {
+  margin-bottom: -1px;
+}
+.mini-bars-chart .mini-bars-slot {
+  height: 140px;
+  padding-top: 24px;
+  box-sizing: border-box;
+}
+/* 결과 막대는 아래에서 자라며 왼쪽부터 차례로 나타난다(--i는 칸 번호) */
+.mini-bars-chart .mini-bar {
+  max-width: 64px;
+  transform-origin: center bottom;
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out) both,
+    mini-bar-grow var(--motion-move) var(--ease-out) both;
+  animation-delay: calc(240ms + var(--i, 0) * 40ms);
+}
+@keyframes mini-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+.mini-bar-num {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-bottom: 6px;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 14px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.mini-bars-axis {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 10), minmax(0, 1fr));
+  gap: clamp(6px, 1.6vw, 40px);
+  padding: 8px clamp(0px, 1.2vw, 20px) 0;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mini-chart {
+  margin: 0;
+}
+
+/* ---- 반응형 ---- */
+@media (max-width: 1024px) {
+  /* HUD: 막대가 위 한 줄, 두 값이 그 아래 양 끝 */
+  .mini-speed-hud {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-m);
+  }
+  .mini-speed-hud-bars {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}
+@media (max-width: 560px) {
+  .mini-speed-ring {
+    --ring: clamp(200px, 64vw, 280px);
+  }
+  .mini-bars-chart {
+    gap: 4px;
+    padding: 0;
+  }
+  .mini-bars-axis {
+    gap: 4px;
+    padding: 8px 0 0;
+    font-size: 11px;
+  }
+  .mini-bars-chart .mini-bars-slot {
+    height: 120px;
+  }
+  .mini-bar-num {
+    font-size: 12px;
+  }
+  .mini-end-text {
+    font-size: 120px;
+  }
+}
+
+/* 모션 줄이기: 울림 링·큰 빛·타수의 튀는 모션·「끝!」 등장·막대 자람을 뺀다.
+ * 남은 시간 고리와 초별 막대 높이, 단계 색은 정보라 그대로 둔다 */
+@media (prefers-reduced-motion: reduce) {
+  .mini-speed-pulse,
+  .mini-speed-burst {
+    display: none;
+  }
+  .mini-count-num,
+  .mini-end-text,
+  .mini-bars-chart .mini-bar {
+    animation: none;
+  }
+  .mini-count-value,
+  .mini-speed-remain,
+  .mini-speed-ring::before {
+    transition: none;
+  }
+}
