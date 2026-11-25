@@ -15,21 +15,24 @@
 
 /* 남은 시간 고리(D4). 큰 타수를 둘러싸고 제한 시간 동안 시계 방향으로 비어 간다.
  * 달아오름(D11): 단계는 data-heat(0·1·2), 단계 안의 칸은 --heat-step(0~4)으로 받는다.
- *   0단계: 타수 숫자가 흰색에서 강조색으로 칸마다 진해진다
- *   1단계: 숫자·고리·울림이 콤보 금색(--fx-combo)
- *   2단계: 숫자·고리가 흰빛(--text-1), 번짐은 금색
- * 번짐은 단계가 오를수록, 칸이 오를수록 커진다. 판정색(초록·빨강)은 쓰지 않는다
+ * 메인 색의 은은한 네온에서 연보라 네온으로 옮겨 간다.
+ *   0단계: 고리는 메인 색, 타수 숫자가 흰색에서 메인 색으로 칸마다 진해진다
+ *   1단계: 숫자·고리·울림이 메인 색과 연보라 사이(칸마다 연보라 쪽으로 30% → 70%)
+ *   2단계: 숫자·고리·울림이 연보라
+ * 번짐은 단계가 오를수록, 칸이 오를수록 조금씩 커지되 은은하게 둔다. 판정색(초록·빨강)은 쓰지 않는다
  */
 .mini-speed-ring {
   --ring: clamp(240px, 46dvh, 400px);
   --heat-step: 0;
+  /* 달아오름의 끝 색: 연보라 */
+  --heat-end: #b3a3ff;
   /* 고리 선·울림 링 색 */
   --heat-c: var(--mini-accent);
   /* 타수 숫자 색 */
-  --heat-num: color-mix(in srgb, var(--mini-accent) calc(var(--heat-step) * 25%), var(--text-1));
+  --heat-num: color-mix(in srgb, var(--mini-accent-text) calc(var(--heat-step) * 25%), var(--text-1));
   /* 번짐 색과 세기 */
-  --heat-halo: var(--mini-accent);
-  --heat-glow: calc(6% + var(--heat-step) * 5%);
+  --heat-halo: var(--heat-c);
+  --heat-glow: calc(8% + var(--heat-step) * 4%);
   position: relative;
   flex: none;
   display: grid;
@@ -38,16 +41,14 @@
   height: var(--ring);
 }
 .mini-speed-ring[data-heat='1'] {
-  --heat-c: var(--fx-combo);
-  --heat-num: var(--fx-combo);
-  --heat-halo: var(--fx-combo);
-  --heat-glow: calc(26% + var(--heat-step) * 5%);
+  --heat-c: color-mix(in srgb, var(--heat-end) calc(30% + var(--heat-step) * 10%), var(--mini-accent-text));
+  --heat-num: var(--heat-c);
+  --heat-glow: calc(22% + var(--heat-step) * 3%);
 }
 .mini-speed-ring[data-heat='2'] {
-  --heat-c: var(--text-1);
-  --heat-num: var(--text-1);
-  --heat-halo: var(--fx-combo);
-  --heat-glow: calc(46% + var(--heat-step) * 5%);
+  --heat-c: var(--heat-end);
+  --heat-num: var(--heat-end);
+  --heat-glow: calc(32% + var(--heat-step) * 3%);
 }
 /* 고리 안팎의 번짐. 줄어드는 선에 필터를 걸지 않도록 움직이지 않는 요소에 둔다 */
 .mini-speed-ring::before {
