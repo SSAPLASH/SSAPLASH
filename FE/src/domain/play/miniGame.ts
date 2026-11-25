@@ -6,7 +6,7 @@
 export const MINI_PATH = '/play/mini';
 
 /** 게임 id. 뒤의 게임(406~409)이 자기 id를 더한다 */
-export type MiniGameId = 'speed' | 'dynamics' | 'sight' | 'tempo' | 'oneshot';
+export type MiniGameId = 'speed' | 'dynamics' | 'sight' | 'tempo' | 'crescendo' | 'oneshot';
 
 /** 게임 화면 경로. 한 게임의 안내·카운트다운·플레이·결과는 이 경로 안의 단계다 */
 export function miniGamePath(id: MiniGameId): string {

@@ -1,6 +1,7 @@
 // 미니게임 최고 기록의 타입·갱신 판정·저장 값 검증 (설계 MODE-006-minigame-speed 3절). localStorage에는 접근하지 않는다(store가 한다).
 // 기록은 게임마다 하나, 갈래가 있는 게임은 갈래마다 하나다(D13). `detail`은 게임마다 모양이 달라 검증을 게임 id별 표로 둔다.
 import type { MiniGameId } from '@/domain/play/miniGame';
+import { isCrescendoDetail, isCrescendoRecord, type CrescendoDetail } from './crescendoRound';
 import { isDynamicsDetail, type DynamicsDetail } from './dynamicsRound';
 import { isOneShotDetail, isOneShotRecord, type OneShotDetail } from './oneShotRound';
 import { isSightDetail, type SightDetail } from './sightRound';
@@ -16,6 +17,7 @@ interface MiniDetailMap {
   dynamics: DynamicsDetail;
   sight: SightDetail;
   tempo: TempoDetail;
+  crescendo: CrescendoDetail;
   oneshot: OneShotDetail;
 }
 
@@ -25,6 +27,7 @@ const DETAIL_GUARDS: { [G in MiniGameId]: (detail: unknown) => detail is MiniDet
   dynamics: isDynamicsDetail,
   sight: isSightDetail,
   tempo: isTempoDetail,
+  crescendo: isCrescendoDetail,
   oneshot: isOneShotDetail,
 };
 
@@ -77,6 +80,8 @@ function parseRecord(value: unknown): MiniRecord | null {
   if (!DETAIL_GUARDS[gameId](detail)) return null;
   // 「정적 뒤 한 방」은 곡 표에 있는 곡의 기록이고 점수가 오차의 절댓값과 같아야 한다
   if (gameId === 'oneshot' && !isOneShotRecord(variant, score, detail as OneShotDetail)) return null;
+  // 「어디까지 올라가는 거예요?」는 점수가 계단 수와 같아야 한다
+  if (gameId === 'crescendo' && !isCrescendoRecord(score, detail as CrescendoDetail)) return null;
   // 검증 표가 게임 id와 `detail` 모양의 짝을 보장한다(타입은 둘의 짝을 따라가지 못해 단언한다)
   return (variant === undefined ? { gameId, score, at, detail } : { gameId, variant, score, at, detail }) as MiniRecord;
 }
