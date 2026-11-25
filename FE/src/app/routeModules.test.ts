@@ -10,6 +10,7 @@ const KEYS: RouteKey[] = [
   'miniSpeed',
   'miniDynamics',
   'miniSight',
+  'miniTempo',
   'studio',
   'settings',
   'history',
