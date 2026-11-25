@@ -3,8 +3,8 @@ import { formatDynamicsScore } from './dynamicsRound';
 import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
-  it('speed, dynamics 두 줄이 이 순서로 있다', () => {
-    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics']);
+  it('speed, dynamics, sight 세 줄이 이 순서로 있다', () => {
+    expect(MINI_CATALOG.map((game) => game.id)).toEqual(['speed', 'dynamics', 'sight']);
     expect(MINI_CATALOG[0]).toEqual({
       id: 'speed',
       name: '누구보다 빠르게',
@@ -56,5 +56,21 @@ describe('formatMiniScore', () => {
 
   it('format이 있으면 그 함수 결과를 돌려준다', () => {
     expect(formatMiniScore({ format: (s) => `${s}ms` }, 230)).toBe('230ms');
+  });
+});
+
+describe('악보 보고 빨리 치기(sight)', () => {
+  it('표 한 줄이 설계와 같다', () => {
+    const info = miniGameInfo('sight');
+    expect(info.name).toBe('악보 보고 빨리 치기');
+    expect(info.rule).toBe('음표가 뜨면 맞는 패드를 바로 치기');
+    expect(info.tag).toBe('10문제');
+    expect(info.unit).toBe('초');
+    expect(info.better).toBe('lower');
+    expect(info.variants?.map((v) => v.id)).toEqual(['hint-off', 'hint-on']);
+  });
+
+  it('점수는 초 소수 둘째 자리로 보인다', () => {
+    expect(formatMiniScore(miniGameInfo('sight'), 420)).toBe('0.42');
   });
 });
