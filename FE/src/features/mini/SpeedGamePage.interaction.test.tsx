@@ -858,13 +858,23 @@ describe('플레이 화면의 모양 (설계 MODE-006-minigame-speed-ui)', () =>
     for (let i = 0; i < n; i += 1) snareNow();
   };
 
-  it('세 단계의 <main>에 이 게임의 색을 켜는 data-game이 실린다', () => {
+  it('게임 화면은 게임 색을 켜지 않는다(강조색은 메인 색이다)', () => {
     open();
-    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+    expect(document.querySelector('main')?.hasAttribute('data-game')).toBe(false);
     toPlaying();
-    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+    expect(document.querySelector('main')?.hasAttribute('data-game')).toBe(false);
     finishRound();
-    expect(document.querySelector('main')?.getAttribute('data-game')).toBe('speed');
+    expect(document.querySelector('main')?.hasAttribute('data-game')).toBe(false);
+  });
+
+  it('카운트다운 숫자·「시작!」·「끝!」은 고리 안에 겹친다', () => {
+    open();
+    clickStart();
+    expect(ring()?.querySelector('.play-countdown-value')?.textContent).toBe('3');
+    advance(3000);
+    expect(ring()?.querySelector('.play-countdown-value')?.textContent).toBe('시작!');
+    advance(10_000);
+    expect(ring()?.querySelector('.mini-end-text')?.textContent).toBe('끝!');
   });
 
   it('남은 시간 고리: 카운트다운 중 가득, 플레이 중 제한 시간에 걸쳐 줄어들고, 끝나면 숨는다', () => {
