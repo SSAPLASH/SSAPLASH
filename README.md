@@ -49,8 +49,7 @@ AI가 만든 **채보**를 따라 연주하며 **코칭**으로 실력을 쌓는
 5. [기술 스택](#-기술-스택)
 6. [폴더 구조](#-폴더-구조)
 7. [시작하기](#-시작하기)
-8. [팀](#-팀)
-9. [문서](#-문서)
+8. [문서](#-문서)
 
 ---
 
@@ -261,18 +260,6 @@ VITE_SONGS_SOURCE=builtin
 
 ---
 
-## 👥 팀
-
-| 파트 | 담당 | 주요 기여 |
-| :-- | :-- | :-- |
-| ⚛️ Frontend | [확인필요] | [확인필요] |
-| ☕ Backend | [확인필요] | [확인필요] |
-| 🧠 AI & Data | [확인필요] | [확인필요] |
-| 🥢 Embedded | [확인필요] | [확인필요] |
-| 🐳 Infra | [확인필요] | [확인필요] |
-
----
-
 ## 📚 문서
 
 | 파트 | 문서 |
@@ -291,7 +278,7 @@ VITE_SONGS_SOURCE=builtin
 | 📊 발표 자료 | [Canva 슬라이드](https://canva.link/salp1va2sz8nj5w) | 발표 슬라이드 |
 | 📝 Notion | [링크 예정] | [확인필요] 공개할 페이지 범위 |
 | 🦊 GitLab | [s15-final/S15P31A307](https://lab.ssafy.com/s15-final/S15P31A307) | 원본 저장소 (SSAFY GitLab 계정 필요) |
-| 📋 JIRA | `S15P31A307` [확인필요] 보드 주소 | 이슈 관리 |
+| 📋 JIRA | [S15P31A307 보드](https://ssafy.atlassian.net/jira/software/c/projects/S15P31A307/boards/16611/reports) | 이슈 관리 (SSAFY Jira 계정 필요) |
 
 <details>
 <summary><b>📝 기획 · 설계 문서</b> — GitLab Wiki</summary>
