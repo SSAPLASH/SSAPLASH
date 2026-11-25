@@ -21,6 +21,7 @@ const MiniListPage = lazy(() => loadRoute('miniList'));
 const SpeedGamePage = lazy(() => loadRoute('miniSpeed'));
 const DynamicsGamePage = lazy(() => loadRoute('miniDynamics'));
 const SightGamePage = lazy(() => loadRoute('miniSight'));
+const TempoGamePage = lazy(() => loadRoute('miniTempo'));
 const StudioPage = lazy(() => loadRoute('studio'));
 const SettingsPage = lazy(() => loadRoute('settings'));
 const HistoryPage = lazy(() => loadRoute('history'));
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="play/mini/speed" element={<SpeedGamePage />} />
           <Route path="play/mini/dynamics" element={<DynamicsGamePage />} />
           <Route path="play/mini/sight" element={<SightGamePage />} />
+          <Route path="play/mini/tempo" element={<TempoGamePage />} />
           <Route path="free" element={<FreePlayPage />} />
           <Route path="sheet" element={<SheetPage />} />
           <Route path="sheet/lesson/:songId" element={<LessonReadPage />} />

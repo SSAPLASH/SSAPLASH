@@ -19,6 +19,7 @@ const routeImports = {
   miniSpeed: () => import('@/features/mini/SpeedGamePage').then((m) => ({ default: m.SpeedGamePage })),
   miniDynamics: () => import('@/features/mini/DynamicsGamePage').then((m) => ({ default: m.DynamicsGamePage })),
   miniSight: () => import('@/features/mini/SightGamePage').then((m) => ({ default: m.SightGamePage })),
+  miniTempo: () => import('@/features/mini/TempoGamePage').then((m) => ({ default: m.TempoGamePage })),
   studio: () => import('@/features/studio/StudioPage').then((m) => ({ default: m.StudioPage })),
   settings: () => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
   history: () => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })),
