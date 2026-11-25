@@ -4,7 +4,8 @@ import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
 import { notationRows } from '@/domain/play/lesson';
-import { PadNotation } from './PadNotation';
+import { staffPosOf } from '@/domain/song/sheet';
+import { PadNotation, SoloStaff } from './PadNotation';
 
 /** CSS의 .lesson-staff-name 글자 크기(px, SVG 좌표 단위) */
 const NAME_FONT = 13;
@@ -76,5 +77,58 @@ describe('PadNotation 줄 나누기', () => {
   it('4개 이하는 오선 한 줄이다', () => {
     const { container } = render(<PadNotation pads={['HIHAT', 'KICK', 'SNARE']} />);
     expect(container.querySelectorAll('.lesson-staff svg')).toHaveLength(1);
+  });
+});
+
+// 미니게임 「악보 보고 빨리 치기」의 한 음표 오선
+describe('SoloStaff', () => {
+  const PADS = ['CRASH', 'HIHAT', 'SNARE', 'SMALL_TOM', 'MID_TOM', 'FLOOR_TOM', 'RIDE', 'KICK'] as const;
+
+  it('pad가 없으면 오선 다섯 줄과 자리 표시만 그리고 음표는 없다', () => {
+    const { container, getByRole } = render(<SoloStaff label="문제 악보" />);
+    expect(container.querySelectorAll('.lesson-staff-line')).toHaveLength(5);
+    expect(container.querySelector('.lesson-read-cursor')).toBeTruthy();
+    expect(container.querySelector('.lesson-note')).toBeNull();
+    const svg = container.querySelector('svg')!;
+    expect(svg.getAttribute('role')).toBe('img');
+    expect(svg.getAttribute('aria-label')).toBe('문제 악보');
+    expect(getByRole('img', { name: '문제 악보' })).toBeTruthy();
+  });
+
+  it.each(PADS)('%s: 음표 하나를 머리 모양에 맞게 그린다', (pad) => {
+    const { container } = render(<SoloStaff pad={pad} label="이 음표의 패드" />);
+    const group = container.querySelector(`[data-pad="${pad}"]`)!;
+    expect(group).toBeTruthy();
+    expect(container.querySelectorAll('.lesson-note')).toHaveLength(1);
+    const note = group.querySelector('.lesson-note')!;
+    const { head } = staffPosOf(pad);
+    if (head === 'normal') {
+      expect(note.querySelector('ellipse')).toBeTruthy();
+      expect(note.classList.contains('lesson-note-cross')).toBe(false);
+    } else {
+      expect(note.classList.contains('lesson-note-cross')).toBe(true);
+      expect(note.querySelector('ellipse')).toBeNull();
+      expect(note.querySelector('circle') !== null).toBe(head === 'circle-cross');
+    }
+    expect(container.querySelector('svg')!.getAttribute('aria-label')).toBe('이 음표의 패드');
+  });
+
+  it.each(PADS)('%s: 세로 위치가 PadNotation과 같다', (pad) => {
+    const ys = (el: Element) => {
+      const e = el.querySelector('ellipse');
+      if (e) return [e.getAttribute('cy')];
+      return [...el.querySelectorAll('line')].map((l) => `${l.getAttribute('y1')},${l.getAttribute('y2')}`);
+    };
+    const solo = ys(render(<SoloStaff pad={pad} label="x" />).container.querySelector(`[data-pad="${pad}"] .lesson-note`)!);
+    cleanup();
+    const full = ys(render(<PadNotation pads={[pad]} />).container.querySelector(`[data-pad="${pad}"] .lesson-note`)!);
+    expect(solo).toEqual(full);
+  });
+
+  it('읽는 이름은 넘긴 문구 그대로이고 패드 이름을 스스로 붙이지 않는다', () => {
+    const { container } = render(<SoloStaff pad="SNARE" label="이 음표의 패드" />);
+    const label = container.querySelector('svg')!.getAttribute('aria-label')!;
+    expect(label).toBe('이 음표의 패드');
+    expect(label).not.toContain('스네어');
   });
 });
