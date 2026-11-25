@@ -740,3 +740,12 @@
   stroke-width: 4;
   stroke-linecap: round;
 }
+/* 「인간 메트로놈」: 켜진 박(채운 점)과 꺼진 박(빈 고리) */
+.mini-art-beat.is-on {
+  fill: var(--text-1);
+}
+.mini-art-beat.is-off {
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 3;
+}

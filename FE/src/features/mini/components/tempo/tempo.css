@@ -1,0 +1,191 @@
+/* 「인간 메트로놈」 플레이 화면과 결과 그림. 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 화면 낭독기 전용 ---- */
+.mini-tempo-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- 플레이: 가운데 세로줄 ---- */
+.mini-tempo-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-m);
+  min-width: 0;
+  text-align: center;
+}
+.mini-tempo-tag {
+  background: var(--fill-soft);
+  color: var(--text-2);
+}
+.mini-tempo-bpm {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-s);
+  margin: 0;
+}
+.mini-tempo-bpm-value {
+  display: inline-block;
+  font-family: var(--font-num);
+  font-size: clamp(72px, 12vw, 128px);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  animation: mini-tempo-pulse 120ms var(--ease-out);
+}
+.mini-tempo-bpm-unit {
+  color: var(--text-2);
+  font-size: 20px;
+  font-weight: 700;
+}
+.mini-tempo-headline {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.mini-tempo-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mini-tempo-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  margin-top: var(--space-m);
+  padding: var(--space-l);
+  background: var(--surface-1);
+  border-radius: var(--radius-panel);
+}
+
+@keyframes mini-tempo-pulse {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* ---- 점 묶음 ---- */
+.mini-tempo-dots {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-m);
+  min-width: 0;
+}
+.mini-tempo-dot-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-m) var(--space-l);
+  min-width: 0;
+}
+.mini-tempo-dot-group {
+  display: flex;
+  gap: var(--space-s);
+}
+.mini-tempo-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--fill-track);
+}
+.mini-tempo-dot.is-on {
+  background: var(--text-1);
+}
+.mini-tempo-count {
+  color: var(--text-2);
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 결과: 오차 그림 ---- */
+.mini-tempo-chart {
+  /* 폰 폭에서는 그림을 줄이지 않고 판 안에서 가로로 민다(글자가 읽히는 크기를 지킨다). 화면 자체는 넘치지 않는다 */
+  position: relative;
+  min-width: 0;
+  overflow-x: auto;
+}
+.mini-tempo-chart-svg {
+  display: block;
+  width: 100%;
+  min-width: 560px;
+  height: auto;
+}
+.mini-tempo-chart-band {
+  fill: var(--brand-tint);
+  stroke: var(--brand-tint-line);
+  stroke-width: 1;
+}
+.mini-tempo-chart-band-label,
+.mini-tempo-chart-side,
+.mini-tempo-chart-no {
+  fill: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mini-tempo-chart-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.mini-tempo-chart-hit line {
+  stroke: var(--text-1);
+  stroke-width: 2;
+}
+.mini-tempo-chart-hit circle {
+  fill: var(--text-1);
+}
+.mini-tempo-chart-hit.is-off line {
+  stroke: var(--warn);
+}
+.mini-tempo-chart-hit.is-off circle {
+  fill: var(--warn);
+}
+
+/* ---- 좁은 화면 ---- */
+@media (max-width: 560px) {
+  .mini-tempo-headline {
+    font-size: 24px;
+  }
+  .mini-tempo-desc {
+    font-size: 14px;
+  }
+  .mini-tempo-panel {
+    padding: var(--space-m);
+  }
+  .mini-tempo-dot {
+    width: 12px;
+    height: 12px;
+  }
+  .mini-tempo-dot-row {
+    gap: var(--space-s) var(--space-m);
+  }
+  .mini-tempo-dot-group {
+    gap: 6px;
+  }
+}
+
+/* 모션 줄이기: 박마다 튀는 숫자만 뺀다 */
+@media (prefers-reduced-motion: reduce) {
+  .mini-tempo-bpm-value {
+    animation: none;
+  }
+}
