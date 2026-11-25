@@ -30,7 +30,7 @@ AI가 만든 **채보**를 따라 연주하며 **코칭**으로 실력을 쌓는
 
 **SSAFY 15기 자율 프로젝트** &nbsp;|&nbsp; 2026.10 – [확인필요]
 
-[🌐 서비스](https://k15a307.p.ssafy.io) · 🎬 시연 영상 [링크 예정] · 🎨 Figma [링크 예정] · 📊 발표 자료 [링크 예정] · 📝 Notion [링크 예정]
+[🌐 서비스](https://k15a307.p.ssafy.io) · 🎬 시연 영상 [링크 예정] · [🎨 Figma](https://www.figma.com/design/4mknN9GvkDMk0Kfq1RBO4Y/SSAPLASH?node-id=223-3444) · [📊 발표 자료](https://canva.link/salp1va2sz8nj5w) · 📝 Notion [링크 예정]
 
 <br/>
 
@@ -80,6 +80,10 @@ AI가 만든 **채보**를 따라 연주하며 **코칭**으로 실력을 쌓는
 
 ### 🥢 1. 센서 스틱
 
+<div align="center">
+<img src="./Docs/images/hardware.png" alt="직접 만든 센서 스틱 2개와 페달 2개" width="70%">
+</div>
+
 - 스틱 안의 IMU를 **1.66kHz**로 읽어 타격을 검출하고, 스틱이 향한 방향으로 **어느 패드를 쳤는지** 판정
 - **BLE(Web Bluetooth)** 로 브라우저에 직접 연결, USB 동글(Web Serial) 경로도 지원
 - 타격 순간 스틱 안에서 바로 울리는 **진동(햅틱)**, 하이햇 · 킥 페달
@@ -122,32 +126,28 @@ AI가 만든 **채보**를 따라 연주하며 **코칭**으로 실력을 쌓는
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="./Docs/images/setup.png" alt="드럼 세팅 화면"><br><b>1. 드럼 세팅</b><br>스틱 연결 · 시작 위치 보정 · 박자 맞추기 · 프리셋</td>
-    <td width="50%" align="center"><img src="./Docs/images/studio.png" alt="라이브러리 화면"><br><b>2. 라이브러리</b><br>음원을 올리면 AI가 채보를 만듭니다</td>
+    <td width="50%" align="center"><img src="./Docs/images/setup.png" alt="드럼 세팅 화면"><br><b>1. 드럼 세팅</b><br>패드를 차례로 쳐 드럼 위치를 잡습니다</td>
+    <td width="50%" align="center"><img src="./Docs/images/library.png" alt="라이브러리 화면"><br><b>2. 라이브러리</b><br>음원을 올리면 AI가 채보를 만듭니다</td>
   </tr>
   <tr>
-    <td align="center"><img src="./Docs/images/play.png" alt="리듬 게임 연주 화면"><br><b>3. 리듬 게임</b><br>떨어지는 노트에 맞춰 치고 점수와 콤보를 쌓습니다</td>
-    <td align="center"><img src="./Docs/images/sheet.png" alt="악보 연습 연주 화면"><br><b>4. 악보 연습</b><br>가로로 흐르는 악보를 보며 정확도와 판정으로 연습합니다</td>
+    <td align="center"><img src="./Docs/images/free.gif" alt="자유 연습 화면"><br><b>3. 자유 연습</b><br>채보 없이 치는 대로 소리가 납니다</td>
+    <td align="center"><img src="./Docs/images/play.gif" alt="리듬 게임 연주 화면"><br><b>4. 리듬 게임</b><br>노트에 맞춰 치고 점수와 콤보를 쌓습니다</td>
   </tr>
   <tr>
-    <td align="center"><img src="./Docs/images/result.png" alt="연주 결과 화면"><br><b>5. 연주 결과</b><br>점수 · 정확도 · 판정 분포 · 타이밍 분포</td>
-    <td align="center"><img src="./Docs/images/report.png" alt="코치 리포트 화면"><br><b>6. 코치 리포트</b><br>코치 한마디 · 약점 구간 분석 · 추천 곡</td>
+    <td align="center"><img src="./Docs/images/sheet.gif" alt="악보 연습 화면의 타이밍 막대와 코치 구령"><br><b>5. 악보 연습 · 실시간 코칭</b><br>악보를 보며 치고 코치 구령을 받습니다</td>
+    <td align="center"><img src="./Docs/images/report.png" alt="코치 리포트 화면"><br><b>6. 코치 리포트</b><br>코치 한마디 · 판정 분포 · 약점 구간</td>
   </tr>
 </table>
 
 <details>
-<summary><b>🖼️ 화면 더 보기</b> — 자유 연습 · 학습 코스 · 미니게임</summary>
+<summary><b>🖼️ 화면 더 보기</b> — 연주 결과 · 학습 코스</summary>
 
 <br/>
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="./Docs/images/free.png" alt="자유 연습 화면"><br><b>자유 연습</b><br>채보 없이 치는 대로 소리가 납니다</td>
-    <td width="50%" align="center"><img src="./Docs/images/lesson.png" alt="학습 코스 화면"><br><b>학습 코스</b><br>입문 · 중급 스테이지를 순서대로 통과합니다</td>
-  </tr>
-  <tr>
-    <td align="center"><img src="./Docs/images/mini.png" alt="미니게임 목록 화면"><br><b>미니게임</b><br>혼자 기록을 깨거나 번갈아 겨루는 가벼운 게임</td>
-    <td align="center"><img src="./Docs/images/mini-speed.png" alt="미니게임 누구보다 빠르게 화면"><br><b>누구보다 빠르게</b><br>10초 동안 스네어를 친 횟수를 겨룹니다</td>
+    <td width="50%" align="center"><img src="./Docs/images/result.png" alt="연주 결과 화면"><br><b>연주 결과</b><br>정확도 · 판정 분포 · 타이밍 분포</td>
+    <td width="50%" align="center"><img src="./Docs/images/lesson.png" alt="학습 코스 화면"><br><b>학습 코스</b><br>입문 · 중급 스테이지를 차례로 통과합니다</td>
   </tr>
 </table>
 
@@ -287,8 +287,8 @@ VITE_SONGS_SOURCE=builtin
 | 외부 링크 | 주소 | 내용 |
 | :-- | :-- | :-- |
 | 🎬 시연 영상 | [링크 예정] | 서비스 시연 |
-| 🎨 Figma | [링크 예정] | 화면 디자인 · 디자인 시스템 |
-| 📊 발표 자료 | [링크 예정] (Canva) | 발표 슬라이드 |
+| 🎨 Figma | [SSAPLASH 디자인 파일](https://www.figma.com/design/4mknN9GvkDMk0Kfq1RBO4Y/SSAPLASH?node-id=223-3444) | 화면 디자인 |
+| 📊 발표 자료 | [Canva 슬라이드](https://canva.link/salp1va2sz8nj5w) | 발표 슬라이드 |
 | 📝 Notion | [링크 예정] | [확인필요] 공개할 페이지 범위 |
 | 🦊 GitLab | [s15-final/S15P31A307](https://lab.ssafy.com/s15-final/S15P31A307) | 원본 저장소 (SSAFY GitLab 계정 필요) |
 | 📋 JIRA | `S15P31A307` [확인필요] 보드 주소 | 이슈 관리 |
