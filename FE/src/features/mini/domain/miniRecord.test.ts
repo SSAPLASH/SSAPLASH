@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ONE_SHOT_VARIANTS } from './oneShotSongs';
 import { SIGHT_VARIANTS } from './sightRound';
 import { cardRecord, isNewBest, parseRecords, recordKey, serializeRecords, type MiniRecord, type MiniRecords } from './miniRecord';
 
@@ -304,5 +305,52 @@ describe('tempo 기록', () => {
   it('isNewBest lower: 15는 16을 이기고 16은 16과 같아 갱신이 아니다', () => {
     expect(isNewBest({ score: 16 }, 15, 'lower')).toBe(true);
     expect(isNewBest({ score: 16 }, 16, 'lower')).toBe(false);
+  });
+});
+
+describe('정적 뒤 한 방(oneshot)', () => {
+  const oneRec = (overrides: Record<string, unknown> = {}) => ({
+    gameId: 'oneshot',
+    variant: 'iwaly',
+    score: 38,
+    at: AT,
+    detail: { errorMs: -38 },
+    ...overrides,
+  });
+
+  it('recordKey는 `oneshot:곡 id`', () => {
+    expect(recordKey('oneshot', 'iwaly')).toBe('oneshot:iwaly');
+  });
+
+  it('올바른 기록은 다른 게임 기록 옆에서 살아남는다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), 'oneshot:iwaly': oneRec() }));
+    expect(Object.keys(parsed).sort()).toEqual(['oneshot:iwaly', 'speed']);
+    expect(parsed['oneshot:iwaly']).toEqual(oneRec());
+  });
+
+  it('detail의 오차가 허용 범위 밖(81)이면 그 기록만 버린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), 'oneshot:iwaly': oneRec({ score: 81, detail: { errorMs: 81 } }) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('점수가 오차의 절댓값과 다르면 그 기록만 버린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), 'oneshot:iwaly': oneRec({ score: 30, detail: { errorMs: 38 } }) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('곡 표에 없는 곡 id의 기록은 키가 맞아도 버린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), 'oneshot:nope': oneRec({ variant: 'nope' }) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('갈래(곡)가 없는 기록은 버린다', () => {
+    const { variant: _variant, ...noVariant } = oneRec();
+    const parsed = parseRecords(raw({ speed: rec(40), oneshot: noVariant }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+  });
+
+  it('cardRecord는 첫 곡의 기록을 꼬리말 없이 돌려준다', () => {
+    const record = oneRec() as MiniRecord;
+    expect(cardRecord({ 'oneshot:iwaly': record }, 'oneshot', ONE_SHOT_VARIANTS)).toEqual({ record });
   });
 });
