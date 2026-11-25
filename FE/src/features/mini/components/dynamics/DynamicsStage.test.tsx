@@ -3,7 +3,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DynamicsStage } from '@/features/mini/components/dynamics/DynamicsStage';
-import { velocityRatio, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
+import type { FeelShot, MatchShot } from '@/features/mini/domain/dynamicsRound';
+import { velocityRatio } from '@/features/mini/domain/velocityShot';
 
 const FEEL: FeelShot[] = [
   { level: 'weak', actual: 42 },

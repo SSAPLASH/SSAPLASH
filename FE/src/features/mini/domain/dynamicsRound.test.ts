@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  acceptsShot,
   bestNote,
-  canStartDynamics,
   collectFeel,
   collectMatch,
   DYNAMICS_CLOSING_MS,
-  DYNAMICS_PAD,
   DYNAMICS_SHOTS,
   dynamicsStep,
   feelPrompt,
@@ -14,7 +11,6 @@ import {
   FEEL_ORDER,
   formatDynamicsScore,
   isDynamicsDetail,
-  isWrongPad,
   labeledMarks,
   LEVEL_LABEL,
   makeMatchTargets,
@@ -23,12 +19,7 @@ import {
   matchScore,
   NEAR_DIFF,
   roundRemark,
-  SHOT_GUARD_MS,
   shotRemark,
-  velocityRatio,
-  VELOCITY_MAX,
-  VELOCITY_MIN,
-  WRONG_PAD_HINT_MS,
   worstShot,
 } from './dynamicsRound';
 
@@ -52,84 +43,15 @@ function hit(t: number, velocity = 64, over: { pad?: string | null; source?: str
   return { ...base, ...over } as unknown as Parameters<typeof collectFeel>[1][number];
 }
 
-function acc(h: unknown, since: number): boolean {
-  return acceptsShot(h as Parameters<typeof acceptsShot>[0], since);
-}
-
 describe('상수', () => {
   it('값이 설계와 같다', () => {
     expect(DYNAMICS_SHOTS).toBe(3);
-    expect(DYNAMICS_PAD).toBe('SNARE');
-    expect(VELOCITY_MIN).toBe(1);
-    expect(VELOCITY_MAX).toBe(127);
     expect(NEAR_DIFF).toBe(12);
-    expect(SHOT_GUARD_MS).toBe(300);
     expect(DYNAMICS_CLOSING_MS).toBe(1200);
-    expect(WRONG_PAD_HINT_MS).toBe(1500);
   });
 
   it('감 잡기는 약 → 중 → 강 차례다', () => {
     expect(FEEL_ORDER).toEqual(['weak', 'mid', 'strong']);
-  });
-});
-
-describe('acceptsShot', () => {
-  it('센서 소스의 스네어는 보호 시간 정확히 뒤에 받고 1ms 전엔 받지 않는다', () => {
-    expect(acc(hit(START + 300), START)).toBe(true);
-    expect(acc(hit(START + 299), START)).toBe(false);
-  });
-
-  it('키보드·터치·미리듣기·소스 없음은 스네어여도 받지 않는다', () => {
-    for (const source of ['keyboard', 'touch', 'preview', undefined]) {
-      expect(acc(hit(START + 1000, 64, { source }), START)).toBe(false);
-    }
-  });
-
-  it('그 밖의 소스(pointer·ble·serial)는 받는다', () => {
-    for (const source of ['pointer', 'ble', 'serial']) {
-      expect(acc(hit(START + 1000, 64, { source }), START)).toBe(true);
-    }
-  });
-
-  it('스네어가 아닌 패드와 패드 없음은 받지 않는다', () => {
-    expect(acc(hit(START + 1000, 64, { pad: 'HIHAT' }), START)).toBe(false);
-    expect(acc(hit(START + 1000, 64, { pad: 'KICK' }), START)).toBe(false);
-    expect(acc(hit(START + 1000, 64, { pad: null }), START)).toBe(false);
-  });
-
-  it('시각은 타격 시각과 받은 시각 중 이른 쪽이다', () => {
-    // 타격 시각이 이르면 그것을 쓴다
-    expect(acc(hit(0, 64, { tHit: START + 299, tRecv: START + 500 }), START)).toBe(false);
-    expect(acc(hit(0, 64, { tHit: START + 300, tRecv: START + 500 }), START)).toBe(true);
-    // 받은 시각이 이르면 그것을 쓴다
-    expect(acc(hit(0, 64, { tHit: START + 500, tRecv: START + 299 }), START)).toBe(false);
-    expect(acc(hit(0, 64, { tHit: START + 500, tRecv: START + 300 }), START)).toBe(true);
-  });
-
-  it('타격 시각이 숫자가 아니면 받은 시각을 쓴다', () => {
-    expect(acc(hit(0, 64, { tHit: Number.NaN, tRecv: START + 300 }), START)).toBe(true);
-    expect(acc(hit(0, 64, { tHit: Number.NaN, tRecv: START + 299 }), START)).toBe(false);
-  });
-});
-
-describe('isWrongPad', () => {
-  const wrong = (h: unknown) => isWrongPad(h as Parameters<typeof isWrongPad>[0]);
-
-  it('센서 소스에서 스네어가 아닌 패드면 참', () => {
-    expect(wrong({ pad: 'HIHAT', source: 'serial' })).toBe(true);
-    expect(wrong({ pad: 'KICK', source: 'ble' })).toBe(true);
-  });
-
-  it('센서 소스의 스네어는 거짓', () => {
-    expect(wrong({ pad: 'SNARE', source: 'serial' })).toBe(false);
-  });
-
-  it('센서 소스에서 패드 없음은 거짓', () => {
-    expect(wrong({ pad: null, source: 'serial' })).toBe(false);
-  });
-
-  it('키보드의 다른 패드는 거짓', () => {
-    expect(wrong({ pad: 'HIHAT', source: 'keyboard' })).toBe(false);
   });
 });
 
@@ -521,19 +443,6 @@ describe('labeledMarks', () => {
   });
 });
 
-describe('velocityRatio', () => {
-  it('1은 0, 127은 1, 64는 0.5', () => {
-    expect(velocityRatio(1)).toBe(0);
-    expect(velocityRatio(127)).toBe(1);
-    expect(velocityRatio(64)).toBe(0.5);
-  });
-
-  it('눈금 밖은 0~1로 자른다', () => {
-    expect(velocityRatio(0)).toBe(0);
-    expect(velocityRatio(200)).toBe(1);
-  });
-});
-
 describe('bestNote (낮을수록 좋다)', () => {
   it('이전 기록이 없으면 첫 기록', () => {
     expect(bestNote(14, null)).toEqual({ newBest: true, text: '첫 기록이에요' });
@@ -549,33 +458,6 @@ describe('bestNote (낮을수록 좋다)', () => {
 
   it('이전보다 높으면 최고 기록을 알려 준다', () => {
     expect(bestNote(14, 9)).toEqual({ newBest: false, text: '최고 기록 오차 9' });
-  });
-});
-
-describe('canStartDynamics', () => {
-  const states: [boolean, boolean][] = [
-    [false, false],
-    [true, false],
-    [false, true],
-    [true, true],
-  ];
-
-  it('센서를 고르지 않았으면 나머지와 상관없이 거짓', () => {
-    for (const connected of states) {
-      expect(canStartDynamics('none', false, connected)).toBe(false);
-      expect(canStartDynamics('none', true, connected)).toBe(false);
-    }
-  });
-
-  it('연결이 필요한 센서는 한 손 이상 연결돼야 참', () => {
-    expect(canStartDynamics('serial', false, [false, false])).toBe(false);
-    expect(canStartDynamics('serial', false, [true, false])).toBe(true);
-    expect(canStartDynamics('serial', false, [false, true])).toBe(true);
-    expect(canStartDynamics('serial', false, [true, true])).toBe(true);
-  });
-
-  it('연결 개념이 없는 소스는 연결과 상관없이 참', () => {
-    for (const connected of states) expect(canStartDynamics('pointer', true, connected)).toBe(true);
   });
 });
 

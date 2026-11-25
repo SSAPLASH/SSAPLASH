@@ -3,7 +3,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { DynamicsResult } from '@/features/mini/components/dynamics/DynamicsResult';
-import { velocityRatio, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
+import type { FeelShot, MatchShot } from '@/features/mini/domain/dynamicsRound';
+import { velocityRatio } from '@/features/mini/domain/velocityShot';
 
 afterEach(cleanup);
 

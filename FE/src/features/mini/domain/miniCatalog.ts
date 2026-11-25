@@ -68,6 +68,14 @@ export const MINI_CATALOG: readonly MiniGameInfo[] = [
     better: 'lower',
   },
   {
+    id: 'crescendo',
+    name: '어디까지 올라가는 거예요?',
+    rule: '앞 타격보다 조금씩 더 세게 치기',
+    tag: '약하면 끝',
+    unit: '번',
+    better: 'higher',
+  },
+  {
     // 이벤트 스위치(config/miniOneShot)가 켜진 빌드에서만 목록에 보인다. 거르는 일은 목록 화면이 한다
     id: 'oneshot',
     name: '정적 뒤 한 방',

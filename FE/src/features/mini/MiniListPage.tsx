@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useShell } from '@/components/shell/nav/useShell';
 import { ONE_SHOT_ENABLED } from '@/config/miniOneShot';
 import { miniGamePath, type MiniGameId } from '@/domain/play/miniGame';
+import { CrescendoArt } from '@/features/mini/components/crescendo/CrescendoArt';
 import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { MiniCard } from '@/features/mini/components/MiniCard';
 import { OneShotArt } from '@/features/mini/components/oneshot/OneShotArt';
@@ -22,6 +23,7 @@ const CARD_ART: Record<MiniGameId, ReactNode> = {
   dynamics: <DynamicsArt size="card" />,
   sight: <SightArt size="card" />,
   tempo: <TempoArt size="card" />,
+  crescendo: <CrescendoArt size="card" />,
   oneshot: <OneShotArt size="card" />,
 };
 

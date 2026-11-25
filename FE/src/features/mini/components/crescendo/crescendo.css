@@ -1,0 +1,305 @@
+/* 「어디까지 올라가는 거예요?」 플레이 화면과 결과 판 (설계 MODE-006-minigame-crescendo).
+   공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 플레이: 머리 문구 ---- */
+.mini-cres-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.mini-cres-prompt {
+  margin: 0;
+  min-height: 1.25em;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+/* 직전 계단 숫자를 문구보다 크게 */
+.mini-cres-prompt-num {
+  font-family: var(--font-num);
+  font-size: 1.6em;
+  font-variant-numeric: tabular-nums;
+}
+.mini-cres-sub {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.4;
+}
+.mini-cres-sub.is-hint {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* ---- 플레이: 본문 3열 ---- */
+.mini-cres-board {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-l);
+  min-height: 0;
+}
+.mini-cres-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-s);
+  min-width: 0;
+  padding: var(--space-l) var(--space-m);
+  box-sizing: border-box;
+  background: var(--surface-1);
+  border-radius: var(--radius-panel);
+  text-align: center;
+}
+.mini-cres-big-label {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.4;
+}
+.mini-cres-big-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+.mini-cres-big-value {
+  font-family: var(--font-num);
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.mini-cres-big-value.is-warn {
+  color: var(--warn);
+}
+.mini-cres-big-unit {
+  color: var(--text-2);
+  font-size: 20px;
+}
+
+/* ---- 플레이: 세로 눈금 ---- */
+.mini-cres-ladder {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+}
+.mini-cres-scale {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-self: stretch;
+  min-height: 280px;
+  padding-inline: 48px;
+}
+.mini-cres-track {
+  position: relative;
+  width: 56px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--fill-track);
+  border-radius: 28px;
+}
+/* 마지막 계단 아래: 여기보다 위를 쳐야 이어진다 */
+.mini-cres-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface-1);
+  opacity: 0.7;
+  transition: height var(--motion-fade) var(--ease-out);
+}
+.mini-cres-step,
+.mini-cres-fall {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-bottom: -1px;
+  background: var(--text-2);
+  animation: mini-cres-line-in var(--motion-fade) var(--ease-out);
+}
+.mini-cres-step.is-top {
+  height: 4px;
+  margin-bottom: -2px;
+  background: var(--brand-text);
+  box-shadow: 0 0 8px var(--brand);
+}
+.mini-cres-fall {
+  height: 4px;
+  margin-bottom: -2px;
+  background: var(--warn);
+}
+@keyframes mini-cres-line-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
+}
+.mini-cres-tick {
+  position: absolute;
+  left: calc(50% + 44px);
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.mini-cres-tick.is-max {
+  top: 0;
+}
+.mini-cres-tick.is-min {
+  bottom: 0;
+}
+.mini-cres-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ---- 결과: 세기 계단 막대 ---- */
+.mini-cres-bars {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0 0 var(--space-xs);
+  list-style: none;
+  overflow-x: auto;
+}
+.mini-cres-bar {
+  flex: 0 0 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.mini-cres-bar-area {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 180px;
+  background: var(--fill-track);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.mini-cres-bar-fill {
+  width: 100%;
+  min-height: 2px;
+  background: var(--text-3);
+  transform-origin: bottom;
+  animation: mini-cres-bar-in var(--motion-fade) var(--ease-out);
+}
+.mini-cres-bar.is-top .mini-cres-bar-fill {
+  background: var(--brand);
+}
+.mini-cres-bar.is-fall .mini-cres-bar-fill {
+  background: var(--warn);
+}
+@keyframes mini-cres-bar-in {
+  from {
+    transform: scaleY(0.3);
+    opacity: 0;
+  }
+}
+.mini-cres-bar-index {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.mini-cres-bar-value {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.mini-cres-bar.is-fall .mini-cres-bar-index,
+.mini-cres-bar.is-fall .mini-cres-bar-value {
+  color: var(--warn);
+}
+
+@media (max-width: 1024px) {
+  .mini-cres-prompt {
+    font-size: 30px;
+  }
+  .mini-cres-big-value {
+    font-size: 64px;
+  }
+  .mini-cres-board {
+    gap: var(--space-m);
+  }
+}
+
+@media (max-width: 560px) {
+  .mini-cres-prompt {
+    font-size: 24px;
+  }
+  .mini-cres-sub {
+    font-size: 13px;
+  }
+  /* 큰 숫자 칸 둘을 눈금 위에 한 줄로, 눈금은 그 아래 */
+  .mini-cres-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-s);
+  }
+  .mini-cres-big {
+    grid-row: 1;
+    padding: var(--space-m) var(--space-xs);
+  }
+  .mini-cres-big.is-count {
+    grid-column: 1;
+  }
+  .mini-cres-big.is-last {
+    grid-column: 2;
+  }
+  .mini-cres-ladder {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .mini-cres-big-label {
+    font-size: 13px;
+  }
+  .mini-cres-big-value {
+    font-size: 44px;
+  }
+  .mini-cres-big-unit {
+    font-size: 16px;
+  }
+  .mini-cres-scale {
+    min-height: 220px;
+    padding-inline: 40px;
+  }
+  .mini-cres-track {
+    width: 40px;
+    border-radius: 20px;
+  }
+  .mini-cres-tick {
+    left: calc(50% + 32px);
+    font-size: 12px;
+  }
+  .mini-cres-bar {
+    flex-basis: 38px;
+  }
+  .mini-cres-bar-area {
+    height: 140px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-cres-step,
+  .mini-cres-fall,
+  .mini-cres-bar-fill {
+    animation: none;
+  }
+  .mini-cres-floor {
+    transition: none;
+  }
+}
