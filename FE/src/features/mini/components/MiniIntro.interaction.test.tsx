@@ -79,9 +79,9 @@ describe('MiniIntro 기본', () => {
     expect(screen.getByTestId('where').textContent).toBe('/setup');
   });
 
-  it('「← 미니게임」 링크의 href가 /play/mini', () => {
+  it('「← 미니게임」 링크는 이 게임을 고른 목록(/play/mini?game=speed)으로 간다', () => {
     open();
-    expect(screen.getByRole('link', { name: '← 미니게임' }).getAttribute('href')).toBe('/play/mini');
+    expect(screen.getByRole('link', { name: '← 미니게임' }).getAttribute('href')).toBe('/play/mini?game=speed');
   });
 
   it('focusStart가 참이면 [시작하기]가 포커스를 받고, 아니면 받지 않는다', () => {

@@ -459,10 +459,10 @@ describe('SongPicker 안내 줄·배치 (설계 MODE-003 곡 선택 안내 영�
     expect(card.parentElement).toBe(grid);
     expect(list.parentElement).toBe(grid);
     expect(follows(list, card)).toBe(true);
-    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다. 리듬 게임은 미니게임 링크와 한 줄(.play-sp-tabs)로 묶여 있다
+    // 탭은 왼쪽 열의 첫 요소 — 카드 윗선과 같은 줄에서 시작한다. 두 모드 모두 범위 줄은 범위 버튼뿐이다(미니게임 링크는 제목 줄에 있다)
     const tabs = screen.getByRole('radiogroup', { name: '곡 범위' });
-    expect(list.firstElementChild).toBe(mode === 'play' ? tabs.parentElement : tabs);
-    if (mode === 'play') expect(list.firstElementChild?.classList.contains('play-sp-tabs')).toBe(true);
+    expect(list.firstElementChild).toBe(tabs);
+    expect(list.querySelector('a[href="/play/mini"]')).toBeNull();
     expect(list.querySelector('table')).not.toBeNull();
     expect(list.contains(card)).toBe(false);
   });
@@ -747,10 +747,16 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     expect(checked()).toBe('기본 곡');
   });
 
-  it('리듬 게임에는 「미니게임」 링크(/play/mini)가 있고 악보 연습에는 없다', async () => {
+  it('리듬 게임에는 제목 줄 오른쪽에 「미니게임」 링크(/play/mini)가 있고 악보 연습에는 없다', async () => {
     open('/play', { mode: 'play' });
     await screen.findAllByText('목록곡');
-    expect(screen.getByRole('link', { name: '미니게임' }).getAttribute('href')).toBe('/play/mini');
+    const link = screen.getByRole('link', { name: '미니게임' });
+    expect(link.getAttribute('href')).toBe('/play/mini');
+    // 제목과 같은 머리(header) 안, 동작 자리에 있다. 범위 줄·목록 영역 안이 아니다
+    const head = screen.getByRole('heading', { name: '리듬에 맞춰 도전해요' }).closest('header') as HTMLElement;
+    expect(head.contains(link)).toBe(true);
+    expect(link.closest('.ui-page-actions')).not.toBeNull();
+    expect(document.querySelector('.play-sp-grid')?.contains(link)).toBe(false);
     cleanup();
     open('/sheet');
     await screen.findAllByText('목록곡');
@@ -761,7 +767,9 @@ describe('SongPicker 악보 연습 범위와 주소 (설계 MODE-003-악보-연�
     useSongs.setState({ source: 'builtin' });
     open('/play', { mode: 'play' });
     expect(screen.queryByRole('radiogroup', { name: '곡 범위' })).toBeNull();
-    expect(screen.getByRole('link', { name: '미니게임' }).getAttribute('href')).toBe('/play/mini');
+    const link = screen.getByRole('link', { name: '미니게임' });
+    expect(link.getAttribute('href')).toBe('/play/mini');
+    expect(link.closest('.ui-page-actions')).not.toBeNull();
   });
 
   // 학습 코스 설계 4-4절: 사이드바 하위 메뉴가 펼쳐져 있어도 화면 위 버튼을 다시 둔다

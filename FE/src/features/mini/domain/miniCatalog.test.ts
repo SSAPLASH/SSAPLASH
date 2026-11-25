@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatDynamicsScore } from './dynamicsRound';
-import { formatMiniScore, MINI_CATALOG, miniGameInfo } from './miniCatalog';
+import { formatMiniScore, MINI_CATALOG, miniGameInfo, selectedGame } from './miniCatalog';
 
 describe('MINI_CATALOG', () => {
   it('speed, dynamics, sight, tempo, crescendo, oneshot 여섯 줄이 이 순서로 있다', () => {
@@ -10,6 +10,7 @@ describe('MINI_CATALOG', () => {
       name: '누구보다 빠르게',
       rule: '10초 동안 스네어 가장 많이 치기',
       tag: '10초',
+      description: '스네어를 친 것만 셉니다. 카운트다운이 끝나면 바로 시작해요.',
       unit: '타',
       better: 'higher',
     });
@@ -23,6 +24,7 @@ describe('miniGameInfo', () => {
       name: '강약중강약',
       rule: '내 세기를 재고 숫자에 맞춰 세 번 치기',
       tag: '3타',
+      description: '먼저 약·중·강을 한 번씩 쳐서 내 세기를 재요. 그다음 숫자 세 개에 맞춰 칩니다.',
       unit: '',
       better: 'lower',
       format: formatDynamicsScore,
@@ -123,5 +125,46 @@ describe('정적 뒤 한 방(oneshot)', () => {
     expect(info.better).toBe('lower');
     expect(info.variants?.map((v) => v.id)).toEqual(['iwaly']);
     expect(info.format).toBeUndefined();
+  });
+});
+
+describe('description(게임 방법 설명)', () => {
+  it('여섯 게임 모두 비어 있지 않은 설명이 있다', () => {
+    for (const game of MINI_CATALOG) expect(game.description.length).toBeGreaterThan(0);
+  });
+
+  it('인간 메트로놈의 설명은 예비 박 8개·타격 16번을 적는다', () => {
+    expect(miniGameInfo('tempo').description).toBe('예비 박 8개를 듣고, 소리가 꺼지면 같은 빠르기로 16번 치세요. 어느 패드를 쳐도 돼요.');
+  });
+
+  it('나머지 게임의 설명은 안내 화면에 있던 글 그대로다', () => {
+    expect(miniGameInfo('sight').description).toBe('틀리면 0.5초가 더해져요. 음표가 뜨기 전에 치면 그 문제를 다시 내요.');
+    expect(miniGameInfo('crescendo').description).toBe('앞에 친 것보다 조금이라도 세게 쳐야 이어져요. 같거나 약하면 끝나요.');
+    expect(miniGameInfo('oneshot').description).toBe(
+      '노래가 끊기면 속으로 박을 세다가, 노래가 돌아올 자리에 딱 한 번 치세요. 노래가 끊기기 전에 치면 실패예요.',
+    );
+  });
+});
+
+describe('selectedGame', () => {
+  // 이벤트 스위치가 꺼진 빌드의 목록
+  const noEvent = MINI_CATALOG.filter((game) => game.id !== 'oneshot');
+
+  it('원하는 게임이 목록에 있으면 그 게임', () => {
+    expect(selectedGame(MINI_CATALOG, 'tempo').id).toBe('tempo');
+    expect(selectedGame(MINI_CATALOG, 'crescendo').id).toBe('crescendo');
+    expect(selectedGame(MINI_CATALOG, 'oneshot').id).toBe('oneshot');
+  });
+
+  it('원하는 게임이 없으면(null) 첫 게임', () => {
+    expect(selectedGame(MINI_CATALOG, null).id).toBe('speed');
+  });
+
+  it('이 빌드의 목록에 없는 게임이면 첫 게임', () => {
+    expect(selectedGame(noEvent, 'oneshot').id).toBe('speed');
+  });
+
+  it('목록 순서가 다르면 그 목록의 첫 게임', () => {
+    expect(selectedGame([...noEvent].reverse(), null).id).toBe('crescendo');
   });
 });

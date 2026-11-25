@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ONE_SHOT_VARIANTS } from './oneShotSongs';
 import { SIGHT_VARIANTS } from './sightRound';
-import { cardRecord, isNewBest, parseRecords, recordKey, serializeRecords, type MiniRecord, type MiniRecords } from './miniRecord';
+import { cardRecord, heroRecords, isNewBest, parseRecords, recordKey, serializeRecords, type MiniRecord, type MiniRecords } from './miniRecord';
 
 const PER_SECOND = [3, 4, 5, 6, 7, 8, 7, 6, 5, 4];
 const AT = '2026-11-23T10:00:00.000Z';
@@ -389,5 +389,45 @@ describe('정적 뒤 한 방(oneshot)', () => {
   it('cardRecord는 첫 곡의 기록을 꼬리말 없이 돌려준다', () => {
     const record = oneRec() as MiniRecord;
     expect(cardRecord({ 'oneshot:iwaly': record }, 'oneshot', ONE_SHOT_VARIANTS)).toEqual({ record });
+  });
+});
+
+describe('heroRecords(큰 카드의 기록 줄)', () => {
+  const variants = [
+    { id: 'a', name: '갈래 A' },
+    { id: 'b', name: '갈래 B' },
+  ];
+
+  it('갈래 없는 게임은 「최고 기록」 한 줄', () => {
+    expect(heroRecords({ speed: rec(60) }, 'speed')).toEqual([{ label: '최고 기록', record: rec(60) }]);
+    expect(heroRecords({ speed: rec(60) }, 'speed', [])).toEqual([{ label: '최고 기록', record: rec(60) }]);
+  });
+
+  it('갈래 없는 게임에 기록이 없으면 그 한 줄의 기록이 null', () => {
+    expect(heroRecords({}, 'speed')).toEqual([{ label: '최고 기록', record: null }]);
+  });
+
+  it('갈래가 있는 게임은 갈래 순서대로 갈래마다 한 줄이고 이름은 갈래 이름이다', () => {
+    const records: MiniRecords = { 'speed:b': rec(90, 'b'), 'speed:a': rec(60, 'a') };
+    expect(heroRecords(records, 'speed', variants)).toEqual([
+      { label: '갈래 A', record: rec(60, 'a') },
+      { label: '갈래 B', record: rec(90, 'b') },
+    ]);
+  });
+
+  it('기록이 없는 갈래도 줄은 남고 기록만 null이다(카드와 달리 모든 갈래를 보인다)', () => {
+    expect(heroRecords({ 'speed:b': rec(90, 'b') }, 'speed', variants)).toEqual([
+      { label: '갈래 A', record: null },
+      { label: '갈래 B', record: rec(90, 'b') },
+    ]);
+  });
+
+  it('갈래가 있는 게임은 갈래 없는 키의 기록을 보지 않는다', () => {
+    expect(heroRecords({ speed: rec(60) }, 'speed', variants).map((row) => row.record)).toEqual([null, null]);
+  });
+
+  it('악보 보고 빨리 치기는 힌트 끔·힌트 켬 두 줄, 정적 뒤 한 방은 곡마다 한 줄', () => {
+    expect(heroRecords({}, 'sight', SIGHT_VARIANTS).map((row) => row.label)).toEqual(['힌트 끔', '힌트 켬']);
+    expect(heroRecords({}, 'oneshot', ONE_SHOT_VARIANTS).map((row) => row.label)).toEqual(ONE_SHOT_VARIANTS.map((v) => v.name));
   });
 });
