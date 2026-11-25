@@ -274,3 +274,35 @@ describe('cardRecord: sight', () => {
     expect(cardRecord({}, 'sight', SIGHT_VARIANTS)).toBeNull();
   });
 });
+
+describe('tempo 기록', () => {
+  const errors = (n: number) => Array.from({ length: n }, (_, i) => (i === 0 ? 0 : i % 2 === 0 ? -i : i));
+  const tempoRec = (score: number, detail: unknown = { bpm: 96, errors: errors(16) }) => ({ gameId: 'tempo', score, at: AT, detail });
+
+  it('recordKey는 게임 id 그대로', () => {
+    expect(recordKey('tempo')).toBe('tempo');
+  });
+
+  it('올바른 tempo 기록은 다른 게임 기록 옆에서 살아남는다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), tempo: tempoRec(16) }));
+    expect(Object.keys(parsed).sort()).toEqual(['speed', 'tempo']);
+    expect(parsed.tempo).toEqual(tempoRec(16));
+  });
+
+  it('detail이 깨진 tempo 기록만 버린다', () => {
+    const parsed = parseRecords(raw({ speed: rec(40), tempo: tempoRec(16, { bpm: 96, errors: errors(15) }) }));
+    expect(Object.keys(parsed)).toEqual(['speed']);
+    expect(parseRecords(raw({ tempo: tempoRec(16, { bpm: 300, errors: errors(16) }) }))).toEqual({});
+  });
+
+  it('cardRecord는 그 기록을 돌려준다', () => {
+    const record = tempoRec(16) as MiniRecord;
+    expect(cardRecord({ tempo: record }, 'tempo')).toEqual({ record });
+    expect(cardRecord({}, 'tempo')).toBeNull();
+  });
+
+  it('isNewBest lower: 15는 16을 이기고 16은 16과 같아 갱신이 아니다', () => {
+    expect(isNewBest({ score: 16 }, 15, 'lower')).toBe(true);
+    expect(isNewBest({ score: 16 }, 16, 'lower')).toBe(false);
+  });
+});
