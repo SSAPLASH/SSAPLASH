@@ -1,7 +1,7 @@
 // 「누구보다 빠르게」 플레이 화면 (설계 MODE-006-minigame-speed-ui 3절 「플레이」). 값만 받는다 — 타격 구독·타이머는 페이지가 한다.
 // 가운데 고리가 남은 시간이고(제한 시간짜리 CSS 전환 하나), 그 안에 큰 타수와 남은 시간 숫자가 있다. 아래 HUD는 상자 없이 글자만 둔다.
-// 타수가 오르면 고리와 숫자가 달아오른다(D11): 단계·칸은 domain/speedRound.speedHeat가 계산하고 색은 speed.css가 정한다.
-// 카운트다운·「시작!」·「끝!」은 본문 영역(position: relative)에 겹쳐 그린다. 그 글자와 겹치는 타수·남은 시간은 그동안 숨기거나 흐리게 둔다.
+// 타수가 오르면 고리와 숫자가 달아오른다(D11, 메인 색 네온 → 연보라 네온): 단계·칸은 domain/speedRound.speedHeat가 계산하고 색은 speed.css가 정한다.
+// 카운트다운·「시작!」·「끝!」은 고리 한가운데(position: relative)에 겹쳐 그린다. 그 글자와 겹치는 타수·남은 시간은 그동안 숨기거나 흐리게 둔다.
 // 무대 빛줄기는 카운트다운 동안 꺼져 있다가 플레이가 시작되는 순간 켜진다(자유 연습의 연결 순간과 같은 부품).
 import type { CSSProperties } from 'react';
 import { StageBeam } from '@/components/drum/StageLights';
@@ -97,6 +97,13 @@ export function SpeedStage({ phase, countdown, showGo, seconds, remainingMs, cou
                 <span className="mini-speed-remain-unit">초</span>
               </div>
             </div>
+            {/* 3·2·1 → 시작! → 끝! 은 고리 한가운데에 겹친다(같은 자리의 같은 요소에서 값만 바뀐다) */}
+            {overlay ? <Countdown value={overlay.value} backdrop={overlay.backdrop} /> : null}
+            {closing ? (
+              <div className="mini-end" role="status">
+                <span className="mini-end-text">끝!</span>
+              </div>
+            ) : null}
           </div>
           <p className="mini-count-hint">{phase === 'countdown' ? `「시작!」이 뜨면 ${seconds}초가 흐릅니다.` : '멈추지 말고 계속 치세요.'}</p>
         </div>
@@ -121,12 +128,6 @@ export function SpeedStage({ phase, countdown, showGo, seconds, remainingMs, cou
           </div>
         </div>
 
-        {overlay ? <Countdown value={overlay.value} backdrop={overlay.backdrop} /> : null}
-        {closing ? (
-          <div className="mini-end" role="status">
-            <span className="mini-end-text">끝!</span>
-          </div>
-        ) : null}
       </div>
     </div>
   );

@@ -50,6 +50,18 @@
   --heat-num: var(--heat-end);
   --heat-glow: calc(32% + var(--heat-step) * 3%);
 }
+/* 카운트다운 숫자·「시작!」·「끝!」은 고리 한가운데에 놓는다. 무대가 이미 어두워 배경을 따로 깔지 않고, 글자 크기는 고리에 맞춘다 */
+.mini-speed-ring .play-countdown {
+  background: none;
+}
+.mini-speed-ring .play-countdown-value {
+  font-size: calc(var(--ring) * 0.5);
+}
+.mini-speed-ring .play-countdown-value[data-value='go'],
+.mini-speed-ring .mini-end-text {
+  font-size: calc(var(--ring) * 0.3);
+  white-space: nowrap;
+}
 /* 고리 안팎의 번짐. 줄어드는 선에 필터를 걸지 않도록 움직이지 않는 요소에 둔다 */
 .mini-speed-ring::before {
   content: '';
@@ -212,7 +224,7 @@
   line-height: 1.5;
 }
 
-/* 「끝!」: 공유 Countdown과 같은 크기·글꼴로 본문 영역에 겹친다 */
+/* 「끝!」: 공유 Countdown과 같은 글꼴로 고리 한가운데에 겹친다 */
 .mini-end {
   position: absolute;
   inset: 0;
@@ -224,7 +236,7 @@
 }
 .mini-end-text {
   font-family: var(--font-display);
-  font-size: 200px;
+  font-size: 120px;
   font-weight: 400;
   line-height: 1;
   color: var(--text-1);
@@ -419,9 +431,6 @@
   }
   .mini-bar-num {
     font-size: 12px;
-  }
-  .mini-end-text {
-    font-size: 120px;
   }
 }
 
