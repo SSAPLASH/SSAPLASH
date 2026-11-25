@@ -1,19 +1,11 @@
 // 「강약중강약」 한 판의 순수 계산 (설계 MODE-006-minigame-dynamics-match 3절). 내 세기 모으기·목표 범위·숫자 목표 뽑기·오차 합·문구·눈금 위치.
 // 한 판은 두 단계다. 1단계(감 잡기)는 약·중·강을 한 번씩 쳐서 내 세기를 재고, 2단계(숫자 맞추기)는 그 범위 안에서 뽑은 숫자 세 개에 맞춰 친다.
 // 난수는 함수로 받고 시계는 읽지 않는다. 타이머·구독은 화면(DynamicsGamePage)이 한다.
-// 세기 눈금은 스틱이 내는 1~127이다(위키 EMB 「타격 감지와 패드 판정」 3장). 목표 범위·최소 폭·보호 시간은 초안 값이라 스틱 실기 뒤 상수만 고친다(U7).
-import { isSensorSource, type ResolvedHit, type SensorId } from '@/domain/events';
-import { stickConnectionRequired } from '@/domain/kit/device/dockChip';
-import type { PadId } from '@/domain/kit/pads';
-import { hitTime } from './hitTime';
+// 받을 타격 가리기·눈금 자리·시작 가능 판정처럼 세기 게임이 같이 쓰는 계산은 domain/velocityShot에 있다. 목표 범위·최소 폭은 초안 값이라 스틱 실기 뒤 상수만 고친다(U7).
+import { VELOCITY_MAX, VELOCITY_MIN, collectVelocities, type VelocityHit } from './velocityShot';
 
 /** 단계마다의 타수(감 잡기 3타, 숫자 맞추기 3타) */
 export const DYNAMICS_SHOTS = 3;
-/** 받는 패드 */
-export const DYNAMICS_PAD: PadId = 'SNARE';
-/** 눈금 양 끝 */
-export const VELOCITY_MIN = 1;
-export const VELOCITY_MAX = 127;
 /** 감 잡기 뒤 「내 세기」를 보이는 시간. 지나면 숫자 맞추기가 저절로 시작된다(D3) */
 export const FEEL_REVIEW_MS = 2500;
 /** 숫자 목표가 벗어나지 않는 눈금 범위(D5). 아래는 튀어 오르며 생기는 약한 타격, 위는 상한에 붙는 값을 피한다 */
@@ -27,12 +19,8 @@ export const MATCH_ZONE_INNER = 0.6;
 export const NEAR_DIFF = 12;
 /** 눈금 옆 내 세기 글자(약·중·강)끼리 이만큼은 떨어져야 글자를 다 보인다. 더 붙으면 겹치므로 뒤의 글자를 뺀다 */
 export const MARK_LABEL_GAP = 12;
-/** 받은 타격 뒤(그리고 각 단계가 시작된 직후) 다음 타격을 받지 않는 시간 */
-export const SHOT_GUARD_MS = 300;
 /** 마지막 타 뒤 결과로 넘어가기까지 */
 export const DYNAMICS_CLOSING_MS = 1200;
-/** 「스네어를 쳐 주세요」를 보이는 시간 */
-export const WRONG_PAD_HINT_MS = 1500;
 
 export type DynamicsLevel = 'weak' | 'mid' | 'strong';
 
@@ -91,45 +79,6 @@ export function isDynamicsDetail(detail: unknown): detail is DynamicsDetail {
 /** 0 이상 1 미만의 난수로 0..n-1 중 하나. 1이 들어와도 범위를 넘지 않는다 */
 function pickIndex(random: () => number, n: number): number {
   return Math.min(n - 1, Math.max(0, Math.floor(random() * n)));
-}
-
-/** 세기를 눈금(1~127) 안의 정수로 맞춘다 */
-function toVelocity(velocity: number): number {
-  return Math.min(VELOCITY_MAX, Math.max(VELOCITY_MIN, Math.round(velocity)));
-}
-
-type ShotHit = Pick<ResolvedHit, 'pad' | 'source' | 'tHit' | 'tRecv'>;
-type VelocityHit = ShotHit & Pick<ResolvedHit, 'velocity'>;
-
-/**
- * 타수로 받을 타격인가. 센서 소스의 스네어 타격이고 기준 시각(단계 시작 시각 또는 직전에 받은 타격의 시각)에서 보호 시간이 지났어야 한다.
- * 키보드·화면 터치는 세기가 고정이라 받지 않고, 패드를 판정하지 못한 타격(세게 친 뒤 튀어 오르며 생기는 약한 타격)도 여기서 걸러진다
- */
-export function acceptsShot(hit: ShotHit, since: number): boolean {
-  if (!isSensorSource(hit.source) || hit.pad !== DYNAMICS_PAD) return false;
-  return hitTime(hit) - since >= SHOT_GUARD_MS;
-}
-
-/** 센서 소스 타격인데 스네어가 아닌 다른 패드를 쳤는가. 패드 판정이 없는 타격은 거짓이다(안내하지 않는다) */
-export function isWrongPad(hit: Pick<ResolvedHit, 'pad' | 'source'>): boolean {
-  return isSensorSource(hit.source) && hit.pad !== null && hit.pad !== DYNAMICS_PAD;
-}
-
-/**
- * 받은 타격(받은 순서)에서 타수로 받을 것의 세기만 `limit`개까지 고른다.
- * 기준 시각은 단계 시작 시각에서 출발해 받은 타격의 시각으로 옮겨 간다. 단계 시작보다 이른 타격은 보호 시간에 걸려 빠진다.
- * 받은 순서대로 보므로 늦게 도착한 타격 때문에 이미 보인 결과가 바뀌지 않는다
- */
-function collectVelocities(since: number, hits: readonly VelocityHit[], limit: number): number[] {
-  const out: number[] = [];
-  let from = since;
-  for (const hit of hits) {
-    if (out.length >= limit) break;
-    if (!acceptsShot(hit, from)) continue;
-    out.push(toVelocity(hit.velocity));
-    from = hitTime(hit);
-  }
-  return out;
 }
 
 /** 감 잡기: 플레이 시작 뒤 받은 타격을 약·중·강 차례에 붙인다. 세 타까지 */
@@ -257,26 +206,10 @@ export function labeledMarks(feel: readonly FeelShot[]): DynamicsLevel[] {
   return labeled;
 }
 
-/** 눈금 위 자리 0~1 (1이 0, 127이 1) */
-export function velocityRatio(velocity: number): number {
-  const ratio = (velocity - VELOCITY_MIN) / (VELOCITY_MAX - VELOCITY_MIN);
-  return Math.min(1, Math.max(0, ratio));
-}
-
 /** 결과의 점수 아래 한 줄과 「새 최고 기록」 여부. `previous`는 이 판 전의 최고 기록(없으면 null). 낮을수록 좋다 */
 export function bestNote(score: number, previous: number | null): { newBest: boolean; text: string } {
   if (previous === null) return { newBest: true, text: '첫 기록이에요' };
   if (score < previous) return { newBest: true, text: `지난 최고 ${formatDynamicsScore(previous)}` };
   if (score === previous) return { newBest: false, text: '최고 기록과 같아요' };
   return { newBest: false, text: `최고 기록 ${formatDynamicsScore(previous)}` };
-}
-
-/**
- * 세기를 재는 입력이 준비됐는가. 자유 연습·상단 연결 표시와 같은 판정이다.
- * 센서를 고르지 않았으면(키보드 전용) 거짓, 연결 개념이 없는 센서 소스(포인터 모의 스틱)는 참, 연결이 필요한 소스(동글·BLE)는 한 손 이상 연결돼야 참
- */
-export function canStartDynamics(sensorKind: SensorId, hasUsageGuide: boolean, connected: readonly [boolean, boolean]): boolean {
-  if (sensorKind === 'none') return false;
-  if (!stickConnectionRequired(sensorKind, hasUsageGuide)) return true;
-  return connected[0] || connected[1];
 }

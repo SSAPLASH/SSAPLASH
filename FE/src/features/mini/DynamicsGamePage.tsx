@@ -14,22 +14,19 @@ import { DynamicsResult } from '@/features/mini/components/dynamics/DynamicsResu
 import { DynamicsStage } from '@/features/mini/components/dynamics/DynamicsStage';
 import {
   DYNAMICS_CLOSING_MS,
-  DYNAMICS_PAD,
   DYNAMICS_SHOTS,
   FEEL_REVIEW_MS,
-  WRONG_PAD_HINT_MS,
   bestNote,
-  canStartDynamics,
   collectFeel,
   collectMatch,
   dynamicsStep,
   formatDynamicsScore,
-  isWrongPad,
   makeMatchTargets,
   matchScore,
   roundRemark,
   worstShot,
 } from '@/features/mini/domain/dynamicsRound';
+import { VELOCITY_PAD, WRONG_PAD_HINT_MS, canStartVelocityGame, isWrongPad } from '@/features/mini/domain/velocityShot';
 import { useMiniRecords } from '@/features/mini/store/miniRecordStore';
 import { useMiniFlow } from '@/features/mini/useMiniFlow';
 import { unlockAudio } from '@/runtime/audioUnlock';
@@ -50,7 +47,7 @@ export function DynamicsGamePage() {
   const connected = useLive((s) => s.connected);
   // 세기를 재는 입력이 준비됐는가. 자유 연습·상단 연결 표시와 같은 판정이다
   const hasUsageGuide = sensorKind !== 'none' && !!sensorRegistry.get(sensorKind)?.usageGuide;
-  const ready = canStartDynamics(sensorKind, hasUsageGuide, connected);
+  const ready = canStartVelocityGame(sensorKind, hasUsageGuide, connected);
   // 이 판(카운트다운부터 마지막 타까지)에 받은 타격. 받은 순서대로, 같은 타격은 id로 한 번만 담는다
   const [hits, setHits] = useState<readonly ResolvedHit[]>([]);
   // 숫자 맞추기가 시작된 시각(`performance.now()`)과 그때 뽑은 목표 3개. 감 잡기와 「내 세기」를 보이는 동안은 null·빈 값이다
@@ -83,7 +80,7 @@ export function DynamicsGamePage() {
       setHits((list) => (list.some((h) => h.id === hit.id) ? list : [...list, hit]));
       if (phase !== 'playing') return;
       if (isWrongPad(hit)) setWrongSeq((n) => n + 1);
-      else if (hit.pad === DYNAMICS_PAD) setWrongSeq(0);
+      else if (hit.pad === VELOCITY_PAD) setWrongSeq(0);
     });
   }, [phase]);
 

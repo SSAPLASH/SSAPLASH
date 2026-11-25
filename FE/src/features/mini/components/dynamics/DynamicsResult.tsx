@@ -1,7 +1,8 @@
 // 「강약중강약」 결과 본문 (설계 MODE-006-minigame-dynamics-match 4절 「결과 화면」). 예전 시안(Figma 1183:38610)을 고쳐 쓴 것이다.
 // 「타격별 세기」 판: 위에 내 세기 줄, 타마다 목표 선·내 세기 표시·친 세기를 가로 눈금 위에 보인다.
 import { FeelStrip } from '@/features/mini/components/dynamics/FeelStrip';
-import { shotRemark, velocityRatio, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
+import { shotRemark, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
+import { velocityRatio } from '@/features/mini/domain/velocityShot';
 import './dynamics.css';
 
 interface Props {

@@ -1,6 +1,7 @@
 // 「강약중강약」 한 타의 세로 눈금 카드 (설계 MODE-006-minigame-dynamics-match 4절). 값만 받는다.
 // 감 잡기(1단계)에서는 머리 글자와 친 뒤의 내 타격 표시만, 숫자 맞추기(2단계)에서는 목표 숫자·목표 선·내 세기 표시를 더한다.
-import { LEVEL_LABEL, labeledMarks, shotRemark, velocityRatio, VELOCITY_MAX, VELOCITY_MIN, type FeelShot } from '@/features/mini/domain/dynamicsRound';
+import { LEVEL_LABEL, labeledMarks, shotRemark, type FeelShot } from '@/features/mini/domain/dynamicsRound';
+import { velocityRatio, VELOCITY_MAX, VELOCITY_MIN } from '@/features/mini/domain/velocityShot';
 
 interface Props {
   /** 차례(0부터) */
