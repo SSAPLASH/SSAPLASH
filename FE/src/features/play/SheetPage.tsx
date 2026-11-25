@@ -71,7 +71,7 @@ import { disarm, finishSong, setLocked } from '@/runtime/recordingStore';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
-import { useTimingCalGate } from './useTimingCalGate';
+import { useTimingCalGate } from '@/components/calibration/useTimingCalGate';
 import { PlayClock } from './sessionClock';
 import { metronome } from '@/engine/Metronome';
 import { inputManager } from '@/runtime/sources';

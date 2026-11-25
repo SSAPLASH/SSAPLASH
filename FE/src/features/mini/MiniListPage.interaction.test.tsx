@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // MiniListPage 검증: /play/mini의 카드 넷(카탈로그 순서), 최고 기록 유무에 따른 문구, 저장소 읽기, [시작] 이동.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { MINI_PATH } from '@/domain/play/miniGame';
@@ -8,6 +8,9 @@ import { serializeRecords, type MiniRecord } from '@/features/mini/domain/miniRe
 import { useMiniRecords } from '@/features/mini/store/miniRecordStore';
 import { MiniListPage } from '@/features/mini/MiniListPage';
 import { useAuth } from '@/store/authStore';
+
+// 「정적 뒤 한 방」 이벤트 스위치가 꺼진 빌드. 켜진 쪽은 MiniListPage.oneshot.interaction.test.tsx가 본다
+vi.mock('@/config/miniOneShot', () => ({ ONE_SHOT_AUDIO_BASE: null, ONE_SHOT_ENABLED: false }));
 
 const STORAGE_KEY = 'ssaplash.mini.v1';
 
@@ -210,6 +213,14 @@ describe('미니게임 목록', () => {
     expect(cards[1].textContent).toContain('아직 기록이 없어요');
     expect(cards[1].querySelector('.mini-card-value')).toBeNull();
     expect(cards[2].textContent).toContain('아직 기록이 없어요');
+  });
+
+  it('이벤트 스위치가 꺼져 있으면 「정적 뒤 한 방」 카드와 [정적 뒤 한 방 시작]이 없다', () => {
+    const { container } = open();
+    expect(container.querySelectorAll('.mini-card')).toHaveLength(4);
+    expect(screen.queryByRole('heading', { name: '정적 뒤 한 방' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '정적 뒤 한 방 시작' })).toBeNull();
+    expect(screen.queryByText('이벤트')).toBeNull();
   });
 
   it('[시작]을 누르면 /play/mini/speed로 간다', () => {

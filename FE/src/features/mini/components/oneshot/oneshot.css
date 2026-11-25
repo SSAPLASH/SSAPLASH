@@ -1,0 +1,295 @@
+/* 「정적 뒤 한 방」 플레이 화면과 결과 그림. 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 화면 낭독기 전용 ---- */
+.mini-oneshot-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- 곡 고르기 ---- */
+.mini-oneshot-song {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 700;
+}
+.mini-oneshot-pick {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ---- 플레이: 가운데 세로줄 ---- */
+.mini-oneshot-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-m);
+  min-width: 0;
+  text-align: center;
+}
+.mini-oneshot-headline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: clamp(40px, 7vw, 72px);
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.mini-oneshot-headline.is-good {
+  color: var(--good);
+}
+.mini-oneshot-headline.is-bad {
+  color: var(--miss);
+}
+.mini-oneshot-headline.is-plain {
+  color: var(--text-1);
+}
+.mini-oneshot-verdict {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 20px;
+  font-weight: 700;
+}
+.mini-oneshot-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.mini-oneshot-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  margin-top: var(--space-m);
+  padding: var(--space-l);
+  background: var(--surface-1);
+  border-radius: var(--radius-panel);
+}
+.mini-oneshot-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- 노래 막대 띠 ---- */
+.mini-oneshot-strip {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 72px;
+}
+.mini-oneshot-bars {
+  position: relative;
+  flex: 0 0 65%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  height: 100%;
+  min-width: 0;
+}
+.mini-oneshot-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  max-width: 8px;
+  background: var(--text-3);
+  border-radius: 999px;
+}
+.mini-oneshot-rest {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+.mini-oneshot-rest-line {
+  flex: 1;
+  height: 0;
+  border-top: 2px dashed var(--line-strong);
+}
+.mini-oneshot-rest-label {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+/* 지금 위치 선: 막대 구역 왼쪽 끝에서 오른쪽 끝(정적이 시작되는 곳)까지 일정한 빠르기로 간다 */
+.mini-oneshot-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--brand);
+  border-radius: 999px;
+  animation-name: mini-oneshot-sweep;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes mini-oneshot-sweep {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 2px);
+  }
+}
+
+/* ---- 결과: 정답 자리 그림 ---- */
+.mini-oneshot-chart {
+  /* 폰 폭에서는 그림을 줄이지 않고 판 안에서 가로로 민다(글자가 읽히는 크기를 지킨다). 화면 자체는 넘치지 않는다 */
+  position: relative;
+  min-width: 0;
+  overflow-x: auto;
+}
+.mini-oneshot-chart-svg {
+  display: block;
+  width: 100%;
+  min-width: 560px;
+  height: auto;
+}
+.mini-oneshot-chart-song rect {
+  fill: var(--text-3);
+}
+.mini-oneshot-chart-chorus rect {
+  fill: var(--brand);
+}
+.mini-oneshot-chart-chorus.is-dim rect {
+  fill: var(--fill-track);
+}
+.mini-oneshot-chart-rest {
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+.mini-oneshot-chart-band {
+  fill: var(--brand-tint);
+  stroke: var(--brand-tint-line);
+  stroke-width: 1;
+}
+.mini-oneshot-chart-answer {
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+.mini-oneshot-chart-label {
+  fill: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mini-oneshot-chart-label.is-strong {
+  fill: var(--brand-text);
+}
+.mini-oneshot-chart-hit circle {
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+.mini-oneshot-chart-hit text {
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-weight: 700;
+}
+.mini-oneshot-chart-hit.is-good circle {
+  fill: var(--good);
+}
+.mini-oneshot-chart-hit.is-good text {
+  fill: var(--good);
+}
+.mini-oneshot-chart-hit.is-bad circle {
+  fill: var(--miss);
+}
+.mini-oneshot-chart-hit.is-bad text {
+  fill: var(--miss);
+}
+
+/* ---- 결과: 곡별 기록 ---- */
+.mini-oneshot-records {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mini-oneshot-record {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-m);
+  min-width: 0;
+  padding: var(--space-m) 0;
+  border-top: 1px solid var(--line);
+}
+.mini-oneshot-record:first-child {
+  border-top: 0;
+}
+.mini-oneshot-record-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mini-oneshot-record-name {
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.mini-oneshot-record-when {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.mini-oneshot-record-value {
+  flex-shrink: 0;
+  color: var(--text-1);
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mini-oneshot-record-value.is-empty {
+  color: var(--text-3);
+  font-family: inherit;
+  font-weight: 400;
+}
+
+/* ---- 좁은 화면 ---- */
+@media (max-width: 560px) {
+  .mini-oneshot-headline {
+    font-size: clamp(32px, 11vw, 44px);
+  }
+  .mini-oneshot-verdict {
+    font-size: 16px;
+  }
+  .mini-oneshot-desc {
+    font-size: 14px;
+  }
+  .mini-oneshot-panel {
+    padding: var(--space-m);
+  }
+  .mini-oneshot-strip {
+    height: 56px;
+  }
+  .mini-oneshot-bars {
+    gap: 2px;
+  }
+}

@@ -73,7 +73,7 @@ import { startPlaySync } from '@/runtime/playSync';
 import { diagSessionEnd, diagSessionPhase, diagSessionStart, reportHit } from '@/engine/diagReport';
 import { kickOffsetOrStick } from '@/domain/kit/calibration/timingCalibration';
 import { diagSessionOpts } from './diagSessionOpts';
-import { useTimingCalGate } from './useTimingCalGate';
+import { useTimingCalGate } from '@/components/calibration/useTimingCalGate';
 import { inputManager, KEYBOARD_INPUT_ENABLED } from '@/runtime/sources';
 import { setSoundOnHit } from '@/runtime/hitSound';
 import { useKeyboardDrum } from '@/runtime/keyboardDrum';

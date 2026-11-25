@@ -37,3 +37,9 @@ describe('miniGamePath: tempo', () => {
     expect(miniGamePath('tempo')).toBe('/play/mini/tempo');
   });
 });
+
+describe('miniGamePath: oneshot', () => {
+  it('정적 뒤 한 방 경로', () => {
+    expect(miniGamePath('oneshot')).toBe('/play/mini/oneshot');
+  });
+});

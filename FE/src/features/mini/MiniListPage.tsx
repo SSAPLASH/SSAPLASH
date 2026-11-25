@@ -3,9 +3,11 @@
 import { useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useShell } from '@/components/shell/nav/useShell';
+import { ONE_SHOT_ENABLED } from '@/config/miniOneShot';
 import { miniGamePath, type MiniGameId } from '@/domain/play/miniGame';
 import { DynamicsArt } from '@/features/mini/components/dynamics/DynamicsArt';
 import { MiniCard } from '@/features/mini/components/MiniCard';
+import { OneShotArt } from '@/features/mini/components/oneshot/OneShotArt';
 import { SightArt } from '@/features/mini/components/sight/SightArt';
 import { SpeedArt } from '@/features/mini/components/speed/SpeedArt';
 import { TempoArt } from '@/features/mini/components/tempo/TempoArt';
@@ -20,7 +22,11 @@ const CARD_ART: Record<MiniGameId, ReactNode> = {
   dynamics: <DynamicsArt size="card" />,
   sight: <SightArt size="card" />,
   tempo: <TempoArt size="card" />,
+  oneshot: <OneShotArt size="card" />,
 };
+
+/** 목록에 보일 게임. 「정적 뒤 한 방」은 이벤트 스위치가 켜진 빌드에서만 보인다 */
+const GAMES = MINI_CATALOG.filter((info) => info.id !== 'oneshot' || ONE_SHOT_ENABLED);
 
 export function MiniListPage() {
   const navigate = useNavigate();
@@ -42,7 +48,7 @@ export function MiniListPage() {
         <p className="mini-lede">한 판에 30초면 충분해요. 혼자 기록을 깨거나, 친구와 번갈아 겨뤄 보세요.</p>
       </header>
       <ul className="mini-grid">
-        {MINI_CATALOG.map((info) => {
+        {GAMES.map((info) => {
           const card = cardRecord(records, info.id, info.variants);
           return (
             <li key={info.id} className="mini-grid-item">

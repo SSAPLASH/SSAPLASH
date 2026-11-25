@@ -749,3 +749,16 @@
   stroke: var(--text-3);
   stroke-width: 3;
 }
+/* 「정적 뒤 한 방」: 노래 막대 · 정적(점선) · 한 방 */
+.mini-art-song {
+  fill: var(--text-3);
+}
+.mini-art-rest {
+  stroke: var(--text-3);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 12;
+}
+.mini-art-shot {
+  fill: var(--brand);
+}

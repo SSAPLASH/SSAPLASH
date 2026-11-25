@@ -2,6 +2,7 @@
 // 기록은 게임마다 하나, 갈래가 있는 게임은 갈래마다 하나다(D13). `detail`은 게임마다 모양이 달라 검증을 게임 id별 표로 둔다.
 import type { MiniGameId } from '@/domain/play/miniGame';
 import { isDynamicsDetail, type DynamicsDetail } from './dynamicsRound';
+import { isOneShotDetail, isOneShotRecord, type OneShotDetail } from './oneShotRound';
 import { isSightDetail, type SightDetail } from './sightRound';
 import { isSpeedDetail, type SpeedDetail } from './speedRound';
 import { isTempoDetail, type TempoDetail } from './tempoRound';
@@ -15,6 +16,7 @@ interface MiniDetailMap {
   dynamics: DynamicsDetail;
   sight: SightDetail;
   tempo: TempoDetail;
+  oneshot: OneShotDetail;
 }
 
 /** 게임별 `detail` 검증. 뒤의 게임이 한 줄을 더한다 */
@@ -23,6 +25,7 @@ const DETAIL_GUARDS: { [G in MiniGameId]: (detail: unknown) => detail is MiniDet
   dynamics: isDynamicsDetail,
   sight: isSightDetail,
   tempo: isTempoDetail,
+  oneshot: isOneShotDetail,
 };
 
 /** 한 게임(또는 한 갈래)의 최고 기록 */
@@ -72,6 +75,8 @@ function parseRecord(value: unknown): MiniRecord | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) return null;
   if (!DETAIL_GUARDS[gameId](detail)) return null;
+  // 「정적 뒤 한 방」은 곡 표에 있는 곡의 기록이고 점수가 오차의 절댓값과 같아야 한다
+  if (gameId === 'oneshot' && !isOneShotRecord(variant, score, detail as OneShotDetail)) return null;
   // 검증 표가 게임 id와 `detail` 모양의 짝을 보장한다(타입은 둘의 짝을 따라가지 못해 단언한다)
   return (variant === undefined ? { gameId, score, at, detail } : { gameId, variant, score, at, detail }) as MiniRecord;
 }
