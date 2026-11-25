@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ONE_SHOT_VARIANTS } from './oneShotSongs';
 import { SIGHT_VARIANTS } from './sightRound';
+import { SPEED_VARIANTS } from './speedRound';
 import { cardRecord, heroRecords, isNewBest, parseRecords, recordKey, serializeRecords, type MiniRecord, type MiniRecords } from './miniRecord';
 
 const PER_SECOND = [3, 4, 5, 6, 7, 8, 7, 6, 5, 4];
@@ -14,6 +15,19 @@ function rec(score: number, variant?: string): MiniRecord {
 function raw(records: Record<string, unknown>, v = 1): string {
   return JSON.stringify({ v, records });
 }
+
+describe('「누구보다 빠르게」 5초 판 기록', () => {
+  const five = { gameId: 'speed' as const, variant: '5s', score: 30, at: AT, detail: { perSecond: [6, 6, 6, 6, 6] } };
+
+  it('초별 값이 다섯 개인 `speed:5s` 기록이 10초 기록과 나란히 살아남는다', () => {
+    expect(parseRecords(raw({ speed: rec(60), 'speed:5s': five }))).toEqual({ speed: rec(60), 'speed:5s': five });
+  });
+
+  it('초별 값의 개수가 5도 10도 아니면 그 기록만 버린다', () => {
+    const broken = { ...five, detail: { perSecond: [6, 6, 6] } };
+    expect(parseRecords(raw({ speed: rec(60), 'speed:5s': broken }))).toEqual({ speed: rec(60) });
+  });
+});
 
 describe('isNewBest', () => {
   it('이전 기록이 없으면 새 최고다', () => {
@@ -200,6 +214,16 @@ describe('cardRecord', () => {
   it('아무 기록도 없으면 null', () => {
     expect(cardRecord({}, 'speed')).toBeNull();
     expect(cardRecord({}, 'speed', variants)).toBeNull();
+  });
+
+  // 「누구보다 빠르게」: 갈래 표의 첫 줄(10초)에 id가 없다 — 갈래 없는 기록을 가리킨다
+  it('id가 없는 갈래 줄은 갈래 없는 기록이다(첫 줄이면 갈래 이름을 붙이지 않는다)', () => {
+    const records: MiniRecords = { speed: rec(60), 'speed:5s': rec(30, '5s') };
+    expect(cardRecord(records, 'speed', SPEED_VARIANTS)).toEqual({ record: rec(60) });
+  });
+
+  it('id가 없는 줄의 기록이 없고 둘째 갈래만 있으면 그 기록과 갈래 이름을 돌려준다', () => {
+    expect(cardRecord({ 'speed:5s': rec(30, '5s') }, 'speed', SPEED_VARIANTS)).toEqual({ record: rec(30, '5s'), variantName: '5초' });
   });
 });
 
@@ -424,6 +448,17 @@ describe('heroRecords(큰 카드의 기록 줄)', () => {
 
   it('갈래가 있는 게임은 갈래 없는 키의 기록을 보지 않는다', () => {
     expect(heroRecords({ speed: rec(60) }, 'speed', variants).map((row) => row.record)).toEqual([null, null]);
+  });
+
+  it('id가 없는 갈래 줄은 갈래 없는 키의 기록을 보인다(「누구보다 빠르게」의 10초·5초)', () => {
+    expect(heroRecords({ speed: rec(60), 'speed:5s': rec(30, '5s') }, 'speed', SPEED_VARIANTS)).toEqual([
+      { label: '10초', record: rec(60) },
+      { label: '5초', record: rec(30, '5s') },
+    ]);
+    expect(heroRecords({}, 'speed', SPEED_VARIANTS)).toEqual([
+      { label: '10초', record: null },
+      { label: '5초', record: null },
+    ]);
   });
 
   it('악보 보고 빨리 치기는 힌트 끔·힌트 켬 두 줄, 정적 뒤 한 방은 곡마다 한 줄', () => {

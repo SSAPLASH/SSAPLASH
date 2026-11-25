@@ -1,6 +1,7 @@
 // 시작 전 안내 (Figma 1182:37832). 큰 제목·그림·칸 3개·[시작하기]·스틱 연결 안내 한 줄.
 // 「← 미니게임」은 이 게임을 고른 목록으로 돌아간다(설계 MODE-006-minigame-list-ui D5).
 // 시작은 막지 않는 것이 기본이다. 게임이 `blocked`를 넘기면 [시작하기]를 끄고 그 사유와 딸린 버튼을 보인다.
+// 글 → 그림 → 칸 → 버튼 줄 순서로 떠오른다(순서는 mini.css).
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/action/Button';

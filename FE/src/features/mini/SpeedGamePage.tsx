@@ -1,10 +1,13 @@
-// 「누구보다 빠르게」 화면 (설계 MODE-006-minigame-speed 4절 「한 판」). 10초 동안 스네어를 친 횟수를 센다.
+// 「누구보다 빠르게」 화면 (설계 MODE-006-minigame-speed 4절 「한 판」). 제한 시간(5초·10초, 안내에서 고른다) 동안 스네어를 친 횟수를 센다.
 // 단계(useMiniFlow)에 따라 안내 · 플레이(카운트다운·플레이·마무리는 같은 SpeedStage) · 결과를 조립한다. 집계 계산은 domain/speedRound, 저장은 store가 한다.
 // 소리·텔레메트리는 자유 연습·학습 코스처럼 공용 경로(setSoundOnHit)가 내고, 이 화면은 타격만 구독한다.
 // 타격은 단계가 아니라 시각으로 가린다: 그 판에 받은 스네어 타격을 모두 담아 두고, 시작 시각이 정해지면 구간 안의 것만 센다.
 // 그래서 카운트다운 중에 친 타격은 세지 않고, 끝나기 직전에 쳐서 마무리 시간(250ms)에 늦게 도착한 타격은 센다.
+// 제한 시간은 안내 단계에서만 바뀐다(설계 MODE-006-minigame-speed-ui D8). 기록은 시간별로 따로이고 10초가 갈래 없는 기록이다(D6).
+// 게임 화면의 강조색은 메인 색이다 — 게임 색(data-game)을 켜지 않는다(D3, 색은 mini.css의 --mini-accent).
 import { useEffect, useState } from 'react';
 import { useShell } from '@/components/shell/nav/useShell';
+import { Segmented } from '@/components/ui/form/Segmented';
 import type { ResolvedHit } from '@/domain/events';
 import { MiniIntro } from '@/features/mini/components/MiniIntro';
 import { MiniResultHero } from '@/features/mini/components/MiniResultHero';
@@ -16,17 +19,22 @@ import { SpeedStage } from '@/features/mini/components/speed/SpeedStage';
 import {
   GO_SHOW_MS,
   LATE_GRACE_MS,
-  SPEED_DURATION_MS,
   SPEED_PAD,
+  SPEED_SECONDS,
   acceptedOffsets,
   currentRate,
   hitsPerSecond,
+  parseSpeedSeconds,
   peakSecond,
   secondBuckets,
+  speedDurationMs,
   speedResultTitle,
+  speedVariant,
   speedVerdict,
+  type SpeedSeconds,
 } from '@/features/mini/domain/speedRound';
 import { useMiniRecords } from '@/features/mini/store/miniRecordStore';
+import { readSpeedSeconds, writeSpeedSeconds } from '@/features/mini/store/speedDurationPref';
 import { useMiniFlow } from '@/features/mini/useMiniFlow';
 import { unlockAudio } from '@/runtime/audioUnlock';
 import { setSoundOnHit } from '@/runtime/hitSound';
@@ -37,6 +45,8 @@ import './mini.css';
 const GAME_NAME = '누구보다 빠르게';
 /** 남은 시간 숫자와 「지금 속도」를 갱신하는 간격 */
 const TICK_MS = 100;
+/** 제한 시간 세그먼트의 칸. 값은 초 수의 글자다 */
+const SECONDS_OPTIONS = SPEED_SECONDS.map((seconds) => ({ value: String(seconds), label: `${seconds}초` }));
 
 /** 결과의 셋째 칸: 이 판 전의 최고 기록과 견준 한 줄 */
 function bestCell(score: number, previous: number | null): StatCell {
@@ -57,9 +67,14 @@ function bestCell(score: number, previous: number | null): StatCell {
 
 export function SpeedGamePage() {
   useShell({ title: '미니게임' });
-  const flow = useMiniFlow({ playMs: SPEED_DURATION_MS, closingMs: LATE_GRACE_MS });
+  // 제한 시간. 마지막에 고른 값에서 시작하고 안내 단계에서만 바뀐다(다른 단계에는 세그먼트가 없다)
+  const [seconds, setSeconds] = useState<SpeedSeconds>(readSpeedSeconds);
+  const durationMs = speedDurationMs(seconds);
+  const variant = speedVariant(seconds);
+  const flow = useMiniFlow({ playMs: durationMs, closingMs: LATE_GRACE_MS });
   const { phase, startedAt } = flow;
-  const best = useMiniRecords((s) => s.best('speed')?.score ?? null);
+  // 고른 시간의 최고 기록(5초와 10초는 따로다)
+  const best = useMiniRecords((s) => s.best('speed', variant)?.score ?? null);
   const stickConnected = useLive((s) => s.connected[0] || s.connected[1]);
   // 이 판(카운트다운부터 마무리까지)에 받은 스네어 타격. 같은 타격은 id로 한 번만 담는다
   const [hits, setHits] = useState<readonly ResolvedHit[]>([]);
@@ -102,29 +117,39 @@ export function SpeedGamePage() {
     return () => clearInterval(timer);
   }, [phase, startedAt]);
 
-  const offsets = startedAt === null ? [] : acceptedOffsets(startedAt, hits);
+  const offsets = startedAt === null ? [] : acceptedOffsets(startedAt, hits, durationMs);
   const count = offsets.length;
-  const perSecond = secondBuckets(offsets);
+  const perSecond = secondBuckets(offsets, durationMs);
 
   // 결과가 확정될 때만 기록을 쓴다(중간에 나간 판은 남지 않는다). 0타면 남기지 않는다.
   // 같은 점수로 다시 불려도 동점은 갱신이 아니라서 저장 값이 바뀌지 않는다
   useEffect(() => {
     if (phase !== 'result' || startedAt === null) return;
-    const accepted = acceptedOffsets(startedAt, hits);
+    const ms = speedDurationMs(seconds);
+    const accepted = acceptedOffsets(startedAt, hits, ms);
     if (accepted.length === 0) return;
-    useMiniRecords.getState().submit({
-      gameId: 'speed',
+    const record = {
+      gameId: 'speed' as const,
       score: accepted.length,
       at: new Date().toISOString(),
-      detail: { perSecond: secondBuckets(accepted) },
-    });
-  }, [phase, startedAt, hits]);
+      detail: { perSecond: secondBuckets(accepted, ms) },
+    };
+    // 10초 판은 갈래가 없다(키를 두지 않는다)
+    const key = speedVariant(seconds);
+    useMiniRecords.getState().submit(key === undefined ? record : { ...record, variant: key });
+  }, [phase, startedAt, hits, seconds]);
 
   /** 새 판 준비: 받은 타격을 비우고 지금의 최고 기록을 견줄 값으로 잡는다 */
   const begin = () => {
     setHits([]);
     setElapsed(0);
-    setPrevious(useMiniRecords.getState().best('speed')?.score ?? null);
+    setPrevious(useMiniRecords.getState().best('speed', variant)?.score ?? null);
+  };
+  /** 안내에서 제한 시간을 바꾼다. 고른 값은 다음에 열 때도 남는다 */
+  const onSeconds = (value: string) => {
+    const next = parseSpeedSeconds(value);
+    setSeconds(next);
+    writeSpeedSeconds(next);
   };
   const onStart = () => {
     // 오디오 잠금을 풀지 못해도 소리 없이 진행한다(집계는 소리와 무관하다)
@@ -148,17 +173,18 @@ export function SpeedGamePage() {
       <main className="main">
         <MiniIntro
           overline={GAME_NAME}
-          title={['10초 동안 스네어를', '가장 많이 치세요.']}
+          title={[`${seconds}초 동안 스네어를`, '가장 많이 치세요.']}
           description={miniGameInfo('speed').description}
           art={<SpeedArt size="hero" />}
           cells={[
-            { label: '제한 시간', value: String(SPEED_DURATION_MS / 1000), unit: '초', note: '끝나면 자동으로 멈춰요' },
+            { label: '제한 시간', value: String(seconds), unit: '초', note: '끝나면 자동으로 멈춰요' },
             { label: '세는 것', value: '스네어', note: '양손 번갈아 쳐도 됩니다' },
             best === null
               ? { label: '내 최고 기록', value: '—', note: '이 브라우저에 저장돼요' }
               : { label: '내 최고 기록', value: String(best), unit: '타', note: '이 브라우저에 저장돼요' },
           ]}
           stickConnected={stickConnected}
+          controls={<Segmented label="제한 시간" value={String(seconds)} onChange={onSeconds} options={SECONDS_OPTIONS} />}
           focusStart={returned}
           onStart={onStart}
         />
@@ -175,13 +201,13 @@ export function SpeedGamePage() {
           <MiniResultHero
             overline={GAME_NAME}
             newBest={verdict === 'first' || verdict === 'best'}
-            title={speedResultTitle(count, previous)}
-            score={{ label: '기록', value: String(count), unit: '타', note: `초당 ${hitsPerSecond(count)}타` }}
+            title={speedResultTitle(count, previous, seconds)}
+            score={{ label: '기록', value: String(count), unit: '타', note: `초당 ${hitsPerSecond(count, durationMs)}타` }}
             onRetry={onRetry}
           />
           <SpeedResult
             cells={[
-              { label: '초당 평균', value: String(hitsPerSecond(count)), unit: '타', note: '10초 전체' },
+              { label: '초당 평균', value: String(hitsPerSecond(count, durationMs)), unit: '타', note: `${seconds}초 전체` },
               count > 0
                 ? { label: '가장 빨랐던 1초', value: String(peak.count), unit: '타', note: `${peak.second}초째` }
                 : { label: '가장 빨랐던 1초', value: '0', unit: '타' },
@@ -201,7 +227,8 @@ export function SpeedGamePage() {
         phase={phase}
         countdown={flow.countdown}
         showGo={phase === 'playing' && elapsed < GO_SHOW_MS}
-        remainingMs={phase === 'countdown' ? SPEED_DURATION_MS : phase === 'playing' ? Math.max(0, SPEED_DURATION_MS - elapsed) : 0}
+        seconds={seconds}
+        remainingMs={phase === 'countdown' ? durationMs : phase === 'playing' ? Math.max(0, durationMs - elapsed) : 0}
         count={count}
         rate={currentRate(offsets, elapsed)}
         perSecond={perSecond}

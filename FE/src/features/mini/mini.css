@@ -1,11 +1,18 @@
 /* 미니게임 (Figma 12 미니게임 — 목록 1181:37608, 안내 1182:37832, 카운트다운 1182:38036, 플레이 1182:38163, 결과 1182:38353) */
 
 .mini-page {
+  /* 빛줄기(StageBeam)의 기준 */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-l);
   color: var(--text-1);
   min-width: 0;
+  /* 게임 화면의 강조색(설계 MODE-006-minigame-speed-ui D3). 게임 색(--mini-c)이 있으면 그 색, 없으면 브랜드 색이다.
+   * 게임 색은 그 게임 화면의 <main data-game>이 켠다. 강조색 면 위의 글자는 어두운 잉크다(목록 큰 카드와 같은 짝) */
+  --mini-accent: var(--mini-c, var(--brand));
+  --mini-accent-text: var(--mini-c, var(--brand-text));
+  --mini-accent-ink: var(--brand-on);
 }
 
 /* 큰 제목 두 줄·설명 (목록·안내·결과 공통) */
@@ -30,23 +37,25 @@
   word-break: keep-all;
 }
 .mini-overline {
-  color: var(--brand-text);
+  color: var(--mini-accent-text);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
 }
 
 /* 「← 미니게임」 */
-.mini-back {
+.mini-page .mini-back {
   align-self: flex-start;
   margin-left: calc(var(--space-s) * -1);
-  color: var(--brand-text);
+  color: var(--mini-accent-text);
 }
 
 /* ---- 목록 (설계 MODE-006-minigame-list-ui) ----
- * 큰 카드(고른 게임) + 고르기 카드 줄. 모서리 34·26·18과 캡슐 버튼, 게임별 색은 이 화면에서만 쓴다(D9·D11).
+ * 큰 카드(고른 게임) + 고르기 카드 줄. 모서리 34·26·18과 캡슐 버튼은 이 화면에서만 쓴다(D9·D11).
+ * 게임별 색은 목록의 카드와, 게임 화면의 <main data-game>(그 게임의 강조색)이 쓴다.
  */
-.mini-page {
+.mini-page,
+.main[data-game] {
   /* 게임별 색. 초록·빨강은 판정색(Good·Miss)이라 쓰지 않는다 */
   --mini-c-speed: #ff9230;
   --mini-c-dynamics: #ff8ac4;
@@ -55,22 +64,28 @@
   --mini-c-crescendo: #00c3d0;
   --mini-c-oneshot: #fedf43;
 }
-.mini-page [data-game='speed'] {
+.mini-page [data-game='speed'],
+.main[data-game='speed'] {
   --mini-c: var(--mini-c-speed);
 }
-.mini-page [data-game='dynamics'] {
+.mini-page [data-game='dynamics'],
+.main[data-game='dynamics'] {
   --mini-c: var(--mini-c-dynamics);
 }
-.mini-page [data-game='sight'] {
+.mini-page [data-game='sight'],
+.main[data-game='sight'] {
   --mini-c: var(--mini-c-sight);
 }
-.mini-page [data-game='tempo'] {
+.mini-page [data-game='tempo'],
+.main[data-game='tempo'] {
   --mini-c: var(--mini-c-tempo);
 }
-.mini-page [data-game='crescendo'] {
+.mini-page [data-game='crescendo'],
+.main[data-game='crescendo'] {
   --mini-c: var(--mini-c-crescendo);
 }
-.mini-page [data-game='oneshot'] {
+.mini-page [data-game='oneshot'],
+.main[data-game='oneshot'] {
   --mini-c: var(--mini-c-oneshot);
 }
 .mini-list-head {
@@ -386,9 +401,12 @@
   grid-auto-columns: minmax(0, 1fr);
   margin: 0;
   padding: var(--space-l) 0;
-  background: var(--surface-1);
+  /* 글래스 판: 자유 연습 반주 바·드럼 세팅 조작부와 같은 재료 */
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
+  border-radius: 20px;
 }
 .mini-cell {
   display: flex;
@@ -431,6 +449,11 @@
 }
 
 /* ---- 안내 ---- */
+/* 화면 높이를 채워 본문이 세로 가운데에 놓이고 빛줄기가 화면 아래까지 내려온다(TopBar 56 + 본문 여백 28×2) */
+.mini-intro {
+  min-height: calc(100dvh - 112px);
+  box-sizing: border-box;
+}
 .mini-intro-body {
   display: flex;
   flex-direction: column;
@@ -451,7 +474,41 @@
   min-width: 0;
 }
 .mini-intro-art {
+  position: relative;
   flex: none;
+  /* 그림의 강조 도형은 강조색으로 그린다 */
+  --mini-art-hot: var(--mini-accent);
+}
+/* 그림 뒤에 강조색 빛을 옅게 깐다(강조 도형이 있는 오른쪽에 치우쳐) */
+.mini-intro-art::before {
+  content: '';
+  position: absolute;
+  /* 오른쪽은 본문 여백(40px) 안에서 끝나게 잡아 화면 끝에서 잘리지 않는다 */
+  inset: -80px -40px;
+  background: radial-gradient(ellipse 45% 50% at 70% 50%, color-mix(in srgb, var(--mini-accent) 16%, transparent), transparent 70%);
+  pointer-events: none;
+}
+/* 그림은 빛 위에 그린다 */
+.mini-intro-art > .mini-art {
+  position: relative;
+}
+/* 등장: 글 → 그림 → 숫자 칸 → 버튼 줄 순서로 떠오른다(덩어리마다 60ms). 시간은 토큰이라 모션 줄이기에서는 페이드만 남는다 */
+.mini-intro-text,
+.mini-intro-art,
+.mini-intro .mini-cells,
+.mini-intro-actions {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out) both,
+    motion-rise-in var(--motion-move) var(--ease-out) both;
+}
+.mini-intro-art {
+  animation-delay: 60ms;
+}
+.mini-intro .mini-cells {
+  animation-delay: 120ms;
+}
+.mini-intro-actions {
+  animation-delay: 180ms;
 }
 .mini-intro-cta {
   display: flex;
@@ -485,6 +542,24 @@
   gap: var(--space-xl);
   padding-top: var(--space-s);
 }
+/* 등장: 머리 왼쪽 → 점수 → 숫자 칸 → 차트 판 */
+.mini-result-left,
+.mini-score,
+.mini-result-hero ~ .mini-cells,
+.mini-result-hero ~ .mini-chart-panel {
+  animation:
+    motion-fade-in var(--motion-fade) var(--ease-out) both,
+    motion-rise-in var(--motion-move) var(--ease-out) both;
+}
+.mini-score {
+  animation-delay: 60ms;
+}
+.mini-result-hero ~ .mini-cells {
+  animation-delay: 120ms;
+}
+.mini-result-hero ~ .mini-chart-panel {
+  animation-delay: 180ms;
+}
 .mini-result-left {
   display: flex;
   flex-direction: column;
@@ -498,8 +573,8 @@
   gap: var(--space-s);
 }
 .mini-pill {
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
@@ -550,101 +625,17 @@
   letter-spacing: 0;
 }
 
-/* ---- 초별 막대 ---- */
-.mini-bars {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: var(--space-s);
-  margin: 0;
-  padding: 0;
-}
-.mini-bars-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-}
-.mini-bars-slot {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-}
-.mini-bar {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: max(4px, calc(var(--h) * 1%));
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--perfect) 38%, var(--surface-2));
-}
-.mini-bar.is-peak {
-  background: var(--perfect);
-}
-.mini-bars-compact {
-  gap: 12px;
-  width: 100%;
-  max-width: 600px;
-}
-.mini-bars-compact .mini-bars-slot {
-  height: 56px;
-}
-.mini-bars-compact .mini-bar {
-  background: color-mix(in srgb, var(--brand) 70%, var(--surface-1));
-}
-.mini-bars-chart {
-  border-bottom: 1px solid var(--line-strong);
-  gap: clamp(6px, 1.6vw, 40px);
-  padding: 0 clamp(0px, 1.2vw, 20px);
-}
-.mini-bars-chart .mini-bars-col {
-  margin-bottom: -1px;
-}
-.mini-bars-chart .mini-bars-slot {
-  height: 140px;
-  padding-top: 24px;
-  box-sizing: border-box;
-}
-.mini-bars-chart .mini-bar {
-  max-width: 64px;
-}
-.mini-bar-num {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding-bottom: 6px;
-  color: var(--text-1);
-  font-family: var(--font-num);
-  font-size: 14px;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-}
-.mini-bars-axis {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: clamp(6px, 1.6vw, 40px);
-  padding: 8px clamp(0px, 1.2vw, 20px) 0;
-  color: var(--text-2);
-  font-size: 13px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.mini-chart {
-  margin: 0;
-}
-
 /* ---- 결과 본문 ---- */
 .mini-chart-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-l);
   padding: var(--space-l) 28px 28px;
-  background: var(--surface-1);
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
+  border-radius: 20px;
 }
 .mini-chart-title {
   margin: 0;
@@ -659,15 +650,32 @@
   min-height: calc(100dvh - 112px);
   box-sizing: border-box;
 }
+/* 머리 줄: 자유 연습 .free-stage-head와 같은 모양(제목 15px + 보조 글 12px + 오른쪽 버튼) */
 .mini-stage-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-m);
+  min-height: 36px;
+}
+.mini-stage-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
 }
 .mini-stage-name {
   margin: 0;
-  font-size: 22px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.mini-stage-sub {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .mini-stage-body {
   position: relative;
@@ -677,171 +685,74 @@
   gap: var(--space-l);
   min-height: 0;
 }
-.mini-time {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* ---- 게임 화면 공용 재료 (설계 MODE-006-minigame-speed-ui D1·D2) ----
+ * 자유 연습·드럼 세팅의 값을 그대로 쓴다: 빛줄기 무대, 알약 버튼, 글래스 세그먼트.
+ * tokens.css·components/ui/*는 건드리지 않고 게임 화면(.mini-page 가운데 목록이 아닌 것) 범위에서 덮는다.
+ */
+/* 빛줄기(.free-lights, z 0)가 깔린 화면(플레이 무대)에서는 뒤따르는 내용을 그 위로 올린다 */
+.mini-page > .free-lights ~ * {
+  position: relative;
+  z-index: 1;
 }
-.mini-time-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-m);
+/* 버튼: 알약형. 주 버튼은 강조색 면에 어두운 잉크와 옅은 번짐, 보조는 옅은 채움(테두리 없음) */
+.mini-page:not(.mini-list) .ui-btn {
+  border-color: transparent;
+  border-radius: 999px;
+}
+.mini-page:not(.mini-list) .ui-btn:focus-visible {
+  outline-color: var(--mini-accent);
+}
+.mini-page:not(.mini-list) .ui-btn-md {
+  height: 46px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+.mini-page:not(.mini-list) .ui-btn-sm {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.mini-page:not(.mini-list) .ui-btn-primary {
+  background: var(--mini-accent);
+  color: var(--mini-accent-ink);
+}
+.mini-page:not(.mini-list) .ui-btn-primary:not(:disabled) {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--mini-accent) 30%, transparent);
+}
+.mini-page:not(.mini-list) .ui-btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mini-accent) 86%, var(--text-1));
+}
+.mini-page:not(.mini-list) .ui-btn-secondary {
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+.mini-page:not(.mini-list) .ui-btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+  border-color: transparent;
+}
+.mini-page:not(.mini-list) .ui-btn-text:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+/* 세그먼트: 글래스 알약 판 안의 알약들. 고른 칸만 떠 있는 바탕(드럼 세팅 프리셋 칩 줄과 같은 규칙) */
+.mini-page .ui-seg {
+  height: 46px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.mini-page .ui-seg-item {
+  padding: 0 16px;
+  border-radius: 999px;
   color: var(--text-2);
-  font-size: 14px;
+  font-weight: 500;
 }
-.mini-time-value {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
+.mini-page .ui-seg-item.selected {
+  background: color-mix(in srgb, var(--text-1) 15%, transparent);
   color: var(--text-1);
-  font-family: var(--font-num);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.25;
-  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
-.mini-time-unit {
-  color: var(--text-2);
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 500;
-}
-.mini-time-track {
-  height: 6px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--fill-track);
-}
-/* 막대는 매 프레임 다시 그리지 않고 10초짜리 전환 하나로 줄어든다. 카운트다운 중에는 가득, 마무리 이후에는 0 */
-.mini-time-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--brand);
-  transform: scaleX(1);
-  transform-origin: left center;
-}
-.mini-time-fill.is-running {
-  transform: scaleX(0);
-  transition-property: transform;
-  transition-timing-function: linear;
-}
-.mini-count {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-s);
-  min-height: 0;
-  text-align: center;
-}
-.mini-count-value {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-s);
-  transition: opacity var(--motion-fade) var(--ease-out);
-}
-.mini-count-value.is-hidden {
-  opacity: 0;
-}
-.mini-count-value.is-dim {
-  opacity: 0.25;
-}
-.mini-count-num {
-  display: inline-block;
-  font-family: var(--font-num);
-  font-size: clamp(96px, 26dvh, 220px);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  animation: mini-count-pop var(--motion-move) var(--ease-out);
-}
-.mini-count-unit {
-  color: var(--text-2);
-  font-size: clamp(24px, 4dvh, 34px);
-  font-weight: 500;
-}
-@keyframes mini-count-pop {
-  from {
-    transform: scale(1.06);
-  }
-}
-.mini-count-hint {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 17px;
-  line-height: 1.5;
-}
-/* 「끝!」: 공유 Countdown과 같은 크기·글꼴로 본문 영역에 겹친다 */
-.mini-end {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.mini-end-text {
-  font-family: var(--font-display);
-  font-size: 200px;
-  font-weight: 400;
-  line-height: 1;
-  color: var(--text-1);
-  text-shadow:
-    0 0 24px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    0 0 8px color-mix(in srgb, var(--bg-canvas) 90%, transparent),
-    0 2px 4px color-mix(in srgb, var(--bg-canvas) 80%, transparent);
-  animation: motion-fade-in var(--motion-fade) var(--ease-out);
-}
-.mini-panel {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-xl);
-  padding: var(--space-l) 28px;
-  background: var(--surface-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-}
-.mini-panel-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.mini-panel-item:last-child {
-  align-items: flex-end;
-  text-align: right;
-}
-.mini-panel-label {
-  color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.4;
-}
-.mini-panel-value {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-family: var(--font-num);
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.25;
-  font-variant-numeric: tabular-nums;
-}
-.mini-panel-unit {
-  color: var(--text-2);
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 500;
-}
-.mini-panel-bars {
-  display: flex;
-  justify-content: center;
-  min-width: 0;
+.mini-page .ui-seg-item:focus-visible {
+  outline-color: var(--mini-accent);
 }
 
 /* ---- 반응형: 본문이 좁아지면 쌓는다(태블릿 ≤1024) ---- */
@@ -891,14 +802,6 @@
     border-top: 1px solid var(--line);
     padding-top: var(--space-m);
   }
-  .mini-panel {
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-m);
-  }
-  .mini-panel-bars {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
 }
 @media (max-width: 560px) {
   /* 위 줄에 조작이 여럿인 게임은 이름 아래로 줄을 바꾼다 */
@@ -918,38 +821,6 @@
   .mini-chart-panel {
     padding: var(--space-m);
   }
-  .mini-bars-chart {
-    gap: 4px;
-    padding: 0;
-  }
-  .mini-bars-axis {
-    gap: 4px;
-    padding: 8px 0 0;
-    font-size: 11px;
-  }
-  .mini-bars-chart .mini-bars-slot {
-    height: 120px;
-  }
-  .mini-bar-num {
-    font-size: 12px;
-  }
-  .mini-end-text {
-    font-size: 120px;
-  }
-  .mini-stage-name {
-    font-size: 18px;
-  }
-}
-
-/* 모션 줄이기: 타수 숫자의 튀는 모션과 「끝!」 등장만 뺀다. 남은 시간·초별 막대는 정보라 그대로 둔다 */
-@media (prefers-reduced-motion: reduce) {
-  .mini-count-num,
-  .mini-end-text {
-    animation: none;
-  }
-  .mini-count-value {
-    transition: none;
-  }
 }
 
 /* ---- 그림 ----
@@ -967,6 +838,11 @@
 }
 .mini-art-bar.is-hot {
   fill: var(--mini-art-hot, var(--brand));
+}
+/* 시작 전 안내의 큰 그림: 막대가 왼쪽부터 차례로 나타난다(--i는 막대 순번). 투명도만 바꾼다 */
+.mini-intro-art .mini-art-bar {
+  animation: motion-fade-in var(--motion-fade) var(--ease-out) both;
+  animation-delay: calc(120ms + var(--i, 0) * 30ms);
 }
 /* 「강약중강약」: 큰 원(강)·작은 원(약)·중간 원(중) */
 .mini-art-dot.is-strong {

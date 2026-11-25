@@ -16,11 +16,14 @@
 .play-countdown-clear {
   background: color-mix(in srgb, var(--bg-canvas) 0%, transparent);
 }
+/* 숫자: 본문 글꼴의 굵은 숫자를 자간을 좁혀 크게 둔다(리듬 게임·악보 연습·미니게임 공용) */
 .play-countdown-value {
-  font-family: var(--font-display);
+  font-family: var(--font);
   font-size: 200px;
-  font-weight: 400;
+  font-weight: 800;
   line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: lining-nums;
   color: var(--text-1);
 }
 /* 딤이 없으면 뒤의 노트·악보 위에서 읽히도록 그림자로 가독성을 확보한다 */
