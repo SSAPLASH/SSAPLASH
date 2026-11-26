@@ -89,6 +89,91 @@ describe('CrescendoStage 머리 문구', () => {
   });
 });
 
+describe('CrescendoStage 높이 값과 끝난 까닭', () => {
+  const root = () => screen.getByTestId('mini-cres-stage');
+  const heat = () => Number(root().style.getPropertyValue('--cres-heat'));
+
+  it('무대가 mini-stage이자 mini-cres-stage다', () => {
+    stage();
+    expect(root().className).toContain('mini-stage');
+    expect(root().className).toContain('mini-cres-stage');
+  });
+
+  it('--cres-heat가 마지막 계단의 눈금 비율이다(계단 없음 0, 64 → 0.5, 127 → 1)', () => {
+    const { unmount } = stage();
+    expect(heat()).toBe(0);
+    unmount();
+    const second = stage({ run: progress([30, 64]) });
+    expect(heat()).toBeCloseTo(0.5, 5);
+    second.unmount();
+    stage({ run: top([30, 127]) });
+    expect(heat()).toBeCloseTo(1, 5);
+  });
+
+  it('떨어진 판의 높이 값은 끝낸 타격이 아니라 마지막 계단이다', () => {
+    stage({ run: fell([30, 64], 10) });
+    expect(heat()).toBeCloseTo(0.5, 5);
+  });
+
+  it('data-end가 진행 중에는 없고 떨어지면 fell, 꼭대기면 top이다', () => {
+    const { unmount } = stage({ run: progress([30]) });
+    expect(root().hasAttribute('data-end')).toBe(false);
+    unmount();
+    const second = stage({ run: fell([30, 42], 42) });
+    expect(root().getAttribute('data-end')).toBe('fell');
+    second.unmount();
+    stage({ run: top([30, 127]) });
+    expect(root().getAttribute('data-end')).toBe('top');
+  });
+});
+
+describe('CrescendoStage 숫자의 내려앉음', () => {
+  it('첫 타 전에는 is-pop이 없고 세기 숫자가 is-empty다', () => {
+    stage();
+    expect(screen.getByTestId('mini-cres-count').className).not.toContain('is-pop');
+    expect(last().className).not.toContain('is-pop');
+    expect(last().className).toContain('is-empty');
+  });
+
+  it('계단이 있으면 두 숫자가 is-pop이고 세기 숫자에 is-empty가 없다', () => {
+    stage({ run: progress([30]) });
+    expect(screen.getByTestId('mini-cres-count').className).toContain('is-pop');
+    expect(last().className).toContain('is-pop');
+    expect(last().className).not.toContain('is-empty');
+  });
+
+  it('계단 수가 바뀌면 두 숫자가 새 요소가 되고, 같으면 그대로다', () => {
+    const props = { phase: 'playing' as const, countdown: null, wrongPad: false, onQuit: () => undefined };
+    const { rerender } = render(<CrescendoStage {...props} run={progress([30])} />);
+    const countEl = screen.getByTestId('mini-cres-count');
+    const lastEl = last();
+    rerender(<CrescendoStage {...props} run={progress([30])} wrongPad />);
+    expect(screen.getByTestId('mini-cres-count')).toBe(countEl);
+    expect(last()).toBe(lastEl);
+    rerender(<CrescendoStage {...props} run={progress([30, 42])} />);
+    expect(screen.getByTestId('mini-cres-count')).not.toBe(countEl);
+    expect(last()).not.toBe(lastEl);
+  });
+});
+
+describe('CrescendoStage 빛줄기와 머리 줄', () => {
+  it('플레이·마무리에서 빛줄기가 켜지고 카운트다운 동안은 꺼져 있다', () => {
+    const { unmount } = stage({ phase: 'countdown', countdown: 3 });
+    expect(document.querySelector('.free-lights')?.className).not.toContain('is-on');
+    unmount();
+    const second = stage();
+    expect(document.querySelector('.free-lights')?.className).toContain('is-on');
+    second.unmount();
+    stage({ phase: 'closing', run: fell([30, 42], 42) });
+    expect(document.querySelector('.free-lights')?.className).toContain('is-on');
+  });
+
+  it('머리 줄 보조 글이 「스네어 · 같거나 약하면 끝」이다', () => {
+    stage();
+    expect(screen.getByTestId('mini-cres-meta').textContent).toBe('스네어 · 같거나 약하면 끝');
+  });
+});
+
 describe('CrescendoStage 다른 패드 안내', () => {
   it('wrongPad면 머리 아래가 「스네어를 쳐 주세요」(role=status)이고 원래 글은 없다', () => {
     stage({ run: progress([30]), wrongPad: true });
@@ -116,6 +201,15 @@ describe('CrescendoStage 카운트다운·조작', () => {
     stage({ phase: 'countdown', countdown: 2 });
     expect(document.querySelector('.play-countdown-value')?.textContent).toBe('2');
     expect(prompt()).toBe('약하게 시작하세요.');
+  });
+
+  it('카운트다운은 본문이 아니라 무대 바로 아래 요소다(무대 한가운데에 놓인다)', () => {
+    stage({ phase: 'countdown', countdown: 3 });
+    const value = document.querySelector('.play-countdown-value');
+    expect(value).not.toBeNull();
+    expect(document.querySelector('.mini-stage-body')?.contains(value)).toBe(false);
+    const root = screen.getByTestId('mini-cres-stage');
+    expect(Array.from(root.children).some((el) => el.contains(value))).toBe(true);
   });
 
   it('카운트다운이 아니면 오버레이가 없다', () => {

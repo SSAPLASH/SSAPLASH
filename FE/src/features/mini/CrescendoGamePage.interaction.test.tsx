@@ -113,7 +113,7 @@ const prompt = () => screen.getByTestId('mini-cres-prompt').textContent;
 const count = () => screen.getByTestId('mini-cres-count').textContent;
 const lastShown = () => screen.getByTestId('mini-cres-last');
 const stepLines = () => screen.queryAllByTestId(/^mini-cres-step-/);
-const floor = () => screen.queryByTestId('mini-cres-floor');
+const fill = () => screen.queryByTestId('mini-cres-fill');
 const fall = () => screen.queryByTestId('mini-cres-fall');
 const wrongHint = () => screen.queryByText('스네어를 쳐 주세요');
 const bars = () => screen.queryAllByTestId(/^mini-cres-bar-\d+$/);
@@ -298,7 +298,7 @@ describe('카운트다운', () => {
 });
 
 describe('첫 타 전 화면', () => {
-  it('머리 「약하게 시작하세요.」, 아래 글, 횟수 0, 방금 친 세기 「—」이고 어두운 영역·계단이 없다', () => {
+  it('머리 「약하게 시작하세요.」, 아래 글, 횟수 0, 방금 친 세기 「—」이고 채움·계단이 없다', () => {
     open();
     toPlaying();
     expect(prompt()).toBe('약하게 시작하세요.');
@@ -306,7 +306,7 @@ describe('첫 타 전 화면', () => {
     expect(count()).toBe('0');
     expect(lastShown().textContent).toBe('—');
     expect(lastShown().className).not.toContain('is-warn');
-    expect(floor()).toBeNull();
+    expect(fill()).toBeNull();
     expect(stepLines()).toHaveLength(0);
     expect(fall()).toBeNull();
     expect(screen.getByTestId('mini-cres-ladder')).toBeTruthy();
@@ -314,7 +314,7 @@ describe('첫 타 전 화면', () => {
 });
 
 describe('치는 대로', () => {
-  it('계단 선이 늘고 횟수·방금 친 세기·머리가 바뀌며 어두운 영역의 높이가 직전 계단을 따른다', () => {
+  it('계단 선이 늘고 횟수·방금 친 세기·머리가 바뀌며 채움의 높이가 직전 계단을 따른다', () => {
     open();
     const t0 = toPlaying();
     emit({ tHit: t0 + GAP, velocity: 30 });
@@ -324,20 +324,20 @@ describe('치는 대로', () => {
     expect(prompt()).toBe('30보다 세게.');
     expect(screen.getByText('조금만 더 세게 치세요.')).toBeTruthy();
     expect(screen.queryByText('약할수록 오를 계단이 많아요.')).toBeNull();
-    expect(pct(floor()?.style.height)).toBeCloseTo(velocityRatio(30) * 100, 5);
+    expect(pct(fill()?.style.height)).toBeCloseTo(velocityRatio(30) * 100, 5);
 
     emit({ tHit: t0 + GAP * 2, velocity: 42 });
     expect(stepLines()).toHaveLength(2);
     expect(count()).toBe('2');
     expect(lastShown().textContent).toBe('42');
     expect(prompt()).toBe('42보다 세게.');
-    expect(pct(floor()?.style.height)).toBeCloseTo(velocityRatio(42) * 100, 5);
+    expect(pct(fill()?.style.height)).toBeCloseTo(velocityRatio(42) * 100, 5);
 
     emit({ tHit: t0 + GAP * 3, velocity: 55 });
     expect(stepLines()).toHaveLength(3);
     expect(count()).toBe('3');
     expect(prompt()).toBe('55보다 세게.');
-    expect(pct(floor()?.style.height)).toBeCloseTo(velocityRatio(55) * 100, 5);
+    expect(pct(fill()?.style.height)).toBeCloseTo(velocityRatio(55) * 100, 5);
     expect(screen.getByTestId('mini-cres-step-2').className).toContain('is-top');
     expect(screen.getByTestId('mini-cres-step-1').className).not.toContain('is-top');
     expect(fall()).toBeNull();
@@ -365,8 +365,8 @@ describe('판이 끝나는 경우', () => {
     expect(fall()).not.toBeNull();
     expect(pct(fall()?.style.bottom)).toBeCloseTo(velocityRatio(42) * 100, 5);
     expect(stepLines()).toHaveLength(2);
-    // 끝난 판은 어두운 영역과 머리 아래 글이 없다
-    expect(floor()).toBeNull();
+    // 끝난 판에도 채움은 마지막 계단까지 남고 머리 아래 글은 없다
+    expect(pct(fill()?.style.height)).toBeCloseTo(velocityRatio(42) * 100, 5);
     expect(screen.queryByText('조금만 더 세게 치세요.')).toBeNull();
   });
 
@@ -398,7 +398,7 @@ describe('판이 끝나는 경우', () => {
     expect(lastShown().textContent).toBe('127');
     expect(lastShown().className).not.toContain('is-warn');
     expect(fall()).toBeNull();
-    expect(floor()).toBeNull();
+    expect(pct(fill()?.style.height)).toBeCloseTo(100, 5);
     expect(screen.getByTestId('mini-cres-step-1').className).toContain('is-top');
   });
 

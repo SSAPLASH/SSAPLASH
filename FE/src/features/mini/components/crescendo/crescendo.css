@@ -1,5 +1,19 @@
-/* 「어디까지 올라가는 거예요?」 플레이 화면과 결과 판 (설계 MODE-006-minigame-crescendo).
-   공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+/* 「어디까지 올라가는 거예요?」 플레이 화면과 결과 판 (설계 MODE-006-minigame-crescendo-ui).
+ * 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다.
+ * 재료는 앞의 네 게임과 같다: 상자 없는 무대, 글래스 캡슐, 메인 색 네온, 연보라(--mini-peak), 굵은 숫자(800).
+ * 이 게임의 색은 높이를 따른다: 무대(.mini-cres-stage)가 --cres-heat(마지막 계단의 눈금 비율 0~1)를 달고,
+ * 빛의 색이 메인 색에서 연보라로, 번짐이 옅은 데서 짙은 데로 오른다. 결과 막대는 막대마다 --h(그 계단의 비율)로 같은 색을 낸다. */
+
+.mini-cres-stage,
+.mini-cres-bar {
+  --cres-c: color-mix(in srgb, var(--mini-peak) calc(var(--cres-heat, 0) * 100%), var(--mini-accent));
+}
+.mini-cres-bar {
+  --cres-heat: var(--h, 0);
+}
+.mini-cres-stage[data-end='top'] {
+  --cres-heat: 1;
+}
 
 /* ---- 플레이: 머리 문구 ---- */
 .mini-cres-head {
@@ -12,15 +26,21 @@
 .mini-cres-prompt {
   margin: 0;
   min-height: 1.25em;
-  font-size: 36px;
-  font-weight: 700;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.25;
 }
-/* 직전 계단 숫자를 문구보다 크게 */
+/* 직전 계단 숫자를 문구보다 크게. 색은 지금 높이의 색이다 */
 .mini-cres-prompt-num {
-  font-family: var(--font-num);
-  font-size: 1.6em;
+  margin-right: 0.08em;
+  color: var(--cres-c, var(--mini-accent-text));
+  font-size: 1.5em;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+}
+.mini-cres-stage[data-end='fell'] .mini-cres-prompt-num {
+  color: var(--text-1);
 }
 .mini-cres-sub {
   margin: 0;
@@ -33,7 +53,7 @@
   font-weight: 700;
 }
 
-/* ---- 플레이: 본문 3열 ---- */
+/* ---- 플레이: 본문 3열(지금까지 · 눈금 · 방금 친 세기). 상자 없이 무대 위에 바로 둔다 ---- */
 .mini-cres-board {
   flex: 1;
   display: grid;
@@ -49,15 +69,12 @@
   justify-content: center;
   gap: var(--space-s);
   min-width: 0;
-  padding: var(--space-l) var(--space-m);
-  box-sizing: border-box;
-  background: var(--surface-1);
-  border-radius: var(--radius-panel);
   text-align: center;
 }
 .mini-cres-big-label {
-  color: var(--text-2);
-  font-size: 15px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.4;
 }
 .mini-cres-big-line {
@@ -67,21 +84,46 @@
   gap: 8px;
 }
 .mini-cres-big-value {
-  font-family: var(--font-num);
-  font-size: 96px;
-  font-weight: 700;
-  line-height: 1.1;
+  display: inline-block;
+  font-size: 104px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  transition:
+    color 320ms ease,
+    text-shadow 320ms ease;
+}
+/* 계단을 하나 오를 때마다 횟수와 세기 숫자가 한 번 내려앉는다(화면이 key를 바꿔 다시 그린다) */
+.mini-cres-big-value.is-pop {
+  animation: mini-cres-pop 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes mini-cres-pop {
+  from {
+    transform: scale(1.14);
+  }
+}
+/* 방금 친 세기는 지금 높이의 색으로 빛난다 */
+.mini-cres-big.is-last .mini-cres-big-value {
+  color: var(--cres-c);
+  text-shadow: 0 0 calc(20px + var(--cres-heat, 0) * 24px) color-mix(in srgb, var(--cres-c) calc(18% + var(--cres-heat, 0) * 22%), transparent);
+}
+.mini-cres-big.is-last .mini-cres-big-value.is-empty {
+  color: var(--text-3);
+  text-shadow: none;
 }
 .mini-cres-big-value.is-warn {
-  color: var(--warn);
+  color: var(--miss) !important;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--miss) 30%, transparent) !important;
 }
 .mini-cres-big-unit {
   color: var(--text-2);
   font-size: 20px;
+  font-weight: 600;
 }
 
-/* ---- 플레이: 세로 눈금 ---- */
+/* ---- 플레이: 세로 눈금 ----
+ * 글래스 캡슐 안에 마지막 계단까지 빛이 차 있다(여기보다 위를 쳐야 이어진다). 계단마다 가는 선이 남고 맨 위 선이 가장 밝다 */
 .mini-cres-ladder {
   display: flex;
   justify-content: center;
@@ -92,47 +134,91 @@
   display: flex;
   justify-content: center;
   align-self: stretch;
-  min-height: 280px;
-  padding-inline: 48px;
+  min-height: 320px;
+  padding-inline: 64px;
 }
 .mini-cres-track {
   position: relative;
-  width: 56px;
+  width: 72px;
   height: 100%;
   overflow: hidden;
-  background: var(--fill-track);
-  border-radius: 28px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--cres-c) 45%, var(--line));
+  border-radius: 36px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0 calc(18px + var(--cres-heat, 0) * 34px) color-mix(in srgb, var(--cres-c) calc(12% + var(--cres-heat, 0) * 26%), transparent);
+  transition:
+    border-color 320ms ease,
+    box-shadow 320ms ease;
 }
-/* 마지막 계단 아래: 여기보다 위를 쳐야 이어진다 */
-.mini-cres-floor {
+/* 진행 중에는 캡슐의 빛이 천천히 숨 쉰다(다음 타를 기다린다) */
+.mini-cres-stage:not([data-end]) .mini-cres-track {
+  animation: mini-cres-breathe 3.6s ease-in-out infinite;
+}
+@keyframes mini-cres-breathe {
+  50% {
+    box-shadow: 0 0 calc(28px + var(--cres-heat, 0) * 40px) color-mix(in srgb, var(--cres-c) calc(20% + var(--cres-heat, 0) * 30%), transparent);
+  }
+}
+/* 채움: 바닥에서 마지막 계단까지. 계단을 오르면 그만큼 차오른다 */
+.mini-cres-fill {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--surface-1);
-  opacity: 0.7;
-  transition: height var(--motion-fade) var(--ease-out);
+  background: linear-gradient(to top, color-mix(in srgb, var(--cres-c) 8%, transparent), color-mix(in srgb, var(--cres-c) 46%, transparent));
+  transition:
+    height 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 320ms ease,
+    opacity 420ms ease;
 }
 .mini-cres-step,
 .mini-cres-fall {
   position: absolute;
   left: 0;
   right: 0;
-  height: 2px;
-  margin-bottom: -1px;
-  background: var(--text-2);
-  animation: mini-cres-line-in var(--motion-fade) var(--ease-out);
+  height: 1px;
+  background: color-mix(in srgb, var(--text-1) 34%, transparent);
+  animation: mini-cres-line-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mini-cres-step.is-top {
-  height: 4px;
-  margin-bottom: -2px;
-  background: var(--brand-text);
-  box-shadow: 0 0 8px var(--brand);
+  height: 3px;
+  margin-bottom: -1px;
+  background: var(--cres-c);
+  box-shadow: 0 0 12px var(--cres-c);
 }
+/* 끝낸 타격: 빨간 선. 빛이 식고 눈금이 한 번 흔들린다 */
 .mini-cres-fall {
-  height: 4px;
-  margin-bottom: -2px;
-  background: var(--warn);
+  height: 3px;
+  margin-bottom: -1px;
+  background: var(--miss);
+  box-shadow: 0 0 12px var(--miss);
+}
+.mini-cres-stage[data-end='fell'] .mini-cres-fill {
+  opacity: 0.4;
+}
+.mini-cres-stage[data-end='fell'] .mini-cres-track {
+  border-color: color-mix(in srgb, var(--miss) 55%, var(--line));
+  box-shadow: 0 0 26px color-mix(in srgb, var(--miss) 18%, transparent);
+}
+.mini-cres-stage[data-end='fell'] .mini-cres-scale {
+  animation: mini-cres-shake 320ms ease-in-out;
+}
+@keyframes mini-cres-shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
 }
 @keyframes mini-cres-line-in {
   from {
@@ -140,29 +226,90 @@
     transform: scaleX(0.6);
   }
 }
+/* 울림: 계단을 오른 순간 맨 위 선에서 빛이 옆으로 한 번 퍼진다. 화면이 계단마다 새 요소로 갈아 끼운다 */
+.mini-cres-pulse {
+  position: absolute;
+  left: 50%;
+  width: 72px;
+  height: 3px;
+  margin: 0 0 -1px -36px;
+  border-radius: 999px;
+  background: var(--cres-c);
+  box-shadow: 0 0 16px var(--cres-c);
+  pointer-events: none;
+  animation: mini-cres-pulse 560ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes mini-cres-pulse {
+  from {
+    transform: scaleX(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scaleX(2.6);
+    opacity: 0;
+  }
+}
+/* 꼭대기(127): 더 굵고 멀리, 조금 더 오래 */
+.mini-cres-pulse.is-top {
+  height: 5px;
+  animation-duration: 900ms;
+  animation-name: mini-cres-pulse-top;
+}
+@keyframes mini-cres-pulse-top {
+  from {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  to {
+    transform: scaleX(4.2);
+    opacity: 0;
+  }
+}
+/* 오른 만큼: 맨 위 선 옆에 「+7」이 떠올랐다 남는다. 다음 계단에서 새 요소로 바뀐다 */
+.mini-cres-gain {
+  position: absolute;
+  left: calc(50% + 46px);
+  margin-bottom: -9px;
+  color: var(--cres-c);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 18px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: mini-cres-gain-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes mini-cres-gain-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
 .mini-cres-tick {
   position: absolute;
-  left: calc(50% + 44px);
+  right: calc(50% + 46px);
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .mini-cres-tick.is-max {
-  top: 0;
+  top: 2px;
 }
 .mini-cres-tick.is-min {
-  bottom: 0;
+  bottom: 2px;
 }
 .mini-cres-note {
   margin: 0;
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   text-align: center;
 }
 
-/* ---- 결과: 세기 계단 막대 ---- */
+/* ---- 결과: 세기 계단 막대 ----
+ * 막대마다 그 계단의 높이 색(메인 색에서 연보라)이고 왼쪽부터 차례로 자란다(막대마다 0.04초 차이). 끝낸 타격은 빨강 */
 .mini-cres-bars {
   display: flex;
   align-items: stretch;
@@ -184,26 +331,30 @@
   align-items: flex-end;
   width: 100%;
   height: 180px;
-  background: var(--fill-track);
-  border-radius: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text-1) 4%, transparent);
   overflow: hidden;
 }
 .mini-cres-bar-fill {
   width: 100%;
   min-height: 2px;
-  background: var(--text-3);
+  background: linear-gradient(to top, color-mix(in srgb, var(--cres-c) 24%, transparent), var(--cres-c));
   transform-origin: bottom;
-  animation: mini-cres-bar-in var(--motion-fade) var(--ease-out);
+  animation: mini-cres-bar-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 40ms + 120ms);
 }
-.mini-cres-bar.is-top .mini-cres-bar-fill {
-  background: var(--brand);
+.mini-cres-bar.is-top .mini-cres-bar-area {
+  border-color: color-mix(in srgb, var(--cres-c) 50%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--cres-c) 26%, transparent);
 }
 .mini-cres-bar.is-fall .mini-cres-bar-fill {
-  background: var(--warn);
+  background: linear-gradient(to top, color-mix(in srgb, var(--miss) 24%, transparent), var(--miss));
 }
 @keyframes mini-cres-bar-in {
   from {
-    transform: scaleY(0.3);
+    transform: scaleY(0);
     opacity: 0;
   }
 }
@@ -214,23 +365,23 @@
   font-variant-numeric: tabular-nums;
 }
 .mini-cres-bar-value {
-  font-family: var(--font-num);
+  color: var(--cres-c);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 .mini-cres-bar.is-fall .mini-cres-bar-index,
 .mini-cres-bar.is-fall .mini-cres-bar-value {
-  color: var(--warn);
+  color: var(--miss);
 }
 
 @media (max-width: 1024px) {
   .mini-cres-prompt {
-    font-size: 30px;
+    font-size: 28px;
   }
   .mini-cres-big-value {
-    font-size: 64px;
+    font-size: 72px;
   }
   .mini-cres-board {
     gap: var(--space-m);
@@ -239,20 +390,19 @@
 
 @media (max-width: 560px) {
   .mini-cres-prompt {
-    font-size: 24px;
+    font-size: 22px;
   }
   .mini-cres-sub {
     font-size: 13px;
   }
-  /* 큰 숫자 칸 둘을 눈금 위에 한 줄로, 눈금은 그 아래 */
+  /* 큰 숫자 둘을 눈금 위에 한 줄로, 눈금은 그 아래 */
   .mini-cres-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: auto minmax(0, 1fr);
-    gap: var(--space-s);
+    gap: var(--space-m) var(--space-s);
   }
   .mini-cres-big {
     grid-row: 1;
-    padding: var(--space-m) var(--space-xs);
   }
   .mini-cres-big.is-count {
     grid-column: 1;
@@ -264,26 +414,30 @@
     grid-row: 2;
     grid-column: 1 / -1;
   }
-  .mini-cres-big-label {
-    font-size: 13px;
-  }
   .mini-cres-big-value {
-    font-size: 44px;
+    font-size: 48px;
   }
   .mini-cres-big-unit {
     font-size: 16px;
   }
   .mini-cres-scale {
-    min-height: 220px;
-    padding-inline: 40px;
+    min-height: 240px;
+    padding-inline: 52px;
   }
   .mini-cres-track {
-    width: 40px;
-    border-radius: 20px;
+    width: 52px;
+    border-radius: 26px;
+  }
+  .mini-cres-pulse {
+    width: 52px;
+    margin-left: -26px;
+  }
+  .mini-cres-gain {
+    left: calc(50% + 34px);
+    font-size: 13px;
   }
   .mini-cres-tick {
-    left: calc(50% + 32px);
-    font-size: 12px;
+    right: calc(50% + 34px);
   }
   .mini-cres-bar {
     flex-basis: 38px;
@@ -293,13 +447,23 @@
   }
 }
 
+/* 모션 줄이기: 숨, 울림, 흔들림, 숫자·선·막대의 등장 모션을 뺀다. 채움과 색, 값은 그대로 보인다 */
 @media (prefers-reduced-motion: reduce) {
+  .mini-cres-pulse {
+    display: none;
+  }
+  .mini-cres-stage:not([data-end]) .mini-cres-track,
+  .mini-cres-stage[data-end='fell'] .mini-cres-scale,
+  .mini-cres-big-value.is-pop,
   .mini-cres-step,
   .mini-cres-fall,
+  .mini-cres-gain,
   .mini-cres-bar-fill {
     animation: none;
   }
-  .mini-cres-floor {
+  .mini-cres-fill,
+  .mini-cres-track,
+  .mini-cres-big-value {
     transition: none;
   }
 }
