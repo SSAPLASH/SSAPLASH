@@ -37,6 +37,23 @@ describe('ErrorChart', () => {
     expect(hit(4).classList.contains('is-off')).toBe(true);
   });
 
+  it('정확도 단계: 첫 타는 base, 10 이하는 perfect, 25 이하는 good, 그 밖은 off다', () => {
+    render(<ErrorChart errors={[0, 10, -11, 25, -26, 0]} scaleMs={40} />);
+    expect([0, 1, 2, 3, 4, 5].map((i) => hit(i).getAttribute('data-grade'))).toEqual(['base', 'perfect', 'good', 'good', 'off', 'perfect']);
+  });
+
+  it('줄기와 점은 자라는 층 하나에 있고 층은 타 순번(--i)을 갖는다', () => {
+    render(<ErrorChart errors={[0, 8, -12]} scaleMs={40} />);
+    [0, 1, 2].forEach((i) => {
+      const stem = hit(i).querySelector<SVGGElement>('.mini-tempo-chart-stem');
+      expect(stem?.querySelector('line')).toBeTruthy();
+      expect(stem?.querySelector('circle')).toBeTruthy();
+      expect(stem?.style.getPropertyValue('--i')).toBe(String(i));
+      // 타격 번호는 층 밖에 있어 같이 자라지 않는다
+      expect(stem?.querySelector('text')).toBeNull();
+    });
+  });
+
   it('빠른 타는 가운데 선 위에, 늦은 타는 아래에, 정박은 선 위에 점이 있다', () => {
     render(<ErrorChart errors={[0, -20, 20]} scaleMs={40} />);
     expect(cy(0)).toBe(axisY());
@@ -113,6 +130,13 @@ describe('TempoResult', () => {
     expect(screen.getByRole('heading', { name: '타격마다 벗어난 정도' })).toBeTruthy();
     expect(container.querySelector('.mini-chart-panel')).not.toBeNull();
     expect(hits()).toHaveLength(4);
+  });
+
+  it('색 범례 네 칸: 정박 ±10ms · 가까움 ±25ms · 벗어남 · 기준(첫 타)', () => {
+    render(<TempoResult cells={[]} errors={[0, 8]} scaleMs={40} />);
+    const items = Array.from(screen.getByTestId('mini-tempo-legend').querySelectorAll('.mini-tempo-legend-item'));
+    expect(items.map((item) => item.textContent)).toEqual(['정박 ±10ms', '가까움 ±25ms', '벗어남', '기준(첫 타)']);
+    expect(items.map((item) => item.getAttribute('data-grade'))).toEqual(['perfect', 'good', 'off', 'base']);
   });
 
   it('제목은 그림 판과 연결돼 있다(aria-labelledby)', () => {

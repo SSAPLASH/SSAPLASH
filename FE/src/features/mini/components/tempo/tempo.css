@@ -1,4 +1,15 @@
-/* 「인간 메트로놈」 플레이 화면과 결과 그림. 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+/* 「인간 메트로놈」 플레이 화면과 결과 그림 (설계 MODE-006-minigame-tempo-ui).
+ * 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다.
+ * 재료는 앞의 세 게임과 같다: 상자 없는 무대, 글래스, 메인 색 네온, 연보라(--mini-peak), 굵은 숫자(800).
+ * 이 게임만의 규칙: 측정 중에는 박을 짐작할 단서를 보이지 않는다. 그래서 측정 중에는 스스로 움직이는 모션이 하나도 없고,
+ * 친 순간에만 길이가 고정된 울림이 한 번 퍼진다(빠르기와 무관한 값이다).
+ * 측정 중의 색은 진행률(--tempo-p, 센 타격 수 ÷ 16)을 따른다: 소리가 꺼지면 색도 꺼지고(0), 칠 때마다 메인 색이 조금씩 들어와
+ * 열여섯 번째 타에 다 켜진다(1). 정확도와 무관한 값이라 단서가 되지 않는다. 무대(.mini-tempo-stage)가 --tempo-p를 단다 */
+
+/* 빛줄기: 측정 중에는 진행률만큼만 켜진다(공용 .free-lights의 0.8초 전환을 그대로 탄다) */
+.mini-tempo-stage[data-step='measure'] > .free-lights.is-on {
+  opacity: var(--tempo-p, 0);
+}
 
 /* ---- 화면 낭독기 전용 ---- */
 .mini-tempo-sr {
@@ -13,7 +24,23 @@
   border: 0;
 }
 
-/* ---- 플레이: 가운데 세로줄 ---- */
+/* ---- 정확도 단계 색(결과 그림) ----
+ * 정박(±10ms, domain/tempoRound의 STEADY_BAND_MS) 연보라 · 가까움(±25ms, GOOD_BAND_MS) 메인 색 · 벗어남 흰빛 · 기준(첫 타) 흐림.
+ * 단계는 화면이 data-grade로 달고 색은 여기서 고른다 */
+:is(.mini-tempo-chart-hit, .mini-tempo-legend-item) {
+  --tempo-c: var(--text-1);
+}
+:is(.mini-tempo-chart-hit, .mini-tempo-legend-item)[data-grade='perfect'] {
+  --tempo-c: var(--mini-peak);
+}
+:is(.mini-tempo-chart-hit, .mini-tempo-legend-item)[data-grade='good'] {
+  --tempo-c: var(--mini-accent-text);
+}
+:is(.mini-tempo-chart-hit, .mini-tempo-legend-item)[data-grade='base'] {
+  --tempo-c: color-mix(in srgb, var(--text-1) 42%, transparent);
+}
+
+/* ---- 플레이: 가운데 세로줄. 상자 없이 무대 위에 바로 둔다 ---- */
 .mini-tempo-main {
   flex: 1;
   display: flex;
@@ -24,54 +51,174 @@
   min-width: 0;
   text-align: center;
 }
+
+/* 상태 알약: 글래스 캡슐과 작은 등. 예비 박에서는 등이 메인 색으로 켜지고 소리가 꺼지면 등도 꺼진다 */
 .mini-tempo-tag {
-  background: var(--fill-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
 }
+.mini-tempo-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition:
+    background-color 400ms ease,
+    box-shadow 400ms ease;
+}
+.mini-tempo-main[data-step='listen'] .mini-tempo-tag::before {
+  background: var(--mini-accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mini-accent) 70%, transparent);
+}
+.mini-tempo-main[data-step='measure'] .mini-tempo-tag::before {
+  background: color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 100%), var(--text-3));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 70%), transparent);
+}
+
+/* ---- 박 원반: 글래스 원 안에 빠르기 숫자. 화면의 주인공이다 ----
+ * 예비 박: 메인 색 네온이 켜져 있고 박마다 고리가 퍼진다(강세 박은 더 크게).
+ * 측정: 네온이 꺼졌다가 칠 때마다 조금씩 다시 들어온다. 칠 때마다 흰 고리가 짧게 한 번 퍼진다.
+ * 다 침: 메인 색이 다 켜지고 큰 고리가 한 번 퍼진다 */
+.mini-tempo-pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(62vw, 264px);
+  aspect-ratio: 1;
+  margin-block: var(--space-m);
+}
+.mini-tempo-disc {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition:
+    border-color 500ms ease,
+    box-shadow 500ms ease;
+}
+.mini-tempo-main[data-step='listen'] .mini-tempo-disc {
+  border-color: color-mix(in srgb, var(--mini-accent) 50%, transparent);
+  box-shadow:
+    0 0 36px color-mix(in srgb, var(--mini-accent) 20%, transparent),
+    inset 0 0 44px color-mix(in srgb, var(--mini-accent) 9%, transparent);
+}
+.mini-tempo-main[data-step='measure'] .mini-tempo-disc {
+  border-color: color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 80%), var(--line));
+  box-shadow:
+    0 0 calc(20px + var(--tempo-p, 0) * 32px) color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 30%), transparent),
+    inset 0 0 44px color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 12%), transparent);
+}
+.mini-tempo-ring {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--mini-accent) 80%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: mini-tempo-ring 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes mini-tempo-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.36);
+    opacity: 0;
+  }
+}
+/* 강세 박(마디의 첫 박): 고리가 더 굵고 멀리 퍼진다 */
+.mini-tempo-ring.is-accent {
+  border-width: 3px;
+  animation-name: mini-tempo-ring-accent;
+}
+@keyframes mini-tempo-ring-accent {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.62);
+    opacity: 0;
+  }
+}
+/* 내가 친 순간: 흰 고리가 짧게. 길이(360ms)는 고정이라 빠르기를 알려 주지 않는다 */
+.mini-tempo-ring.is-hit {
+  border-color: color-mix(in srgb, var(--text-1) 70%, transparent);
+  border-width: 1.5px;
+  animation: mini-tempo-ring-hit 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes mini-tempo-ring-hit {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+/* 열여섯 번째 타: 메인 색 고리가 크게 한 번 */
+.mini-tempo-ring.is-done {
+  border-width: 2px;
+  border-color: var(--mini-accent);
+  animation: mini-tempo-ring-done 760ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes mini-tempo-ring-done {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
 .mini-tempo-bpm {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-s);
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   margin: 0;
 }
 .mini-tempo-bpm-value {
   display: inline-block;
-  font-family: var(--font-num);
-  font-size: clamp(72px, 12vw, 128px);
-  font-weight: 700;
-  line-height: 1.1;
+  font-size: 96px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  animation: mini-tempo-pulse 120ms var(--ease-out);
+  transition: text-shadow 500ms ease;
+  animation: mini-tempo-pulse 160ms var(--ease-out);
+}
+.mini-tempo-main[data-step='listen'] .mini-tempo-bpm-value {
+  text-shadow: 0 0 32px color-mix(in srgb, var(--mini-accent) 32%, transparent);
+}
+.mini-tempo-main[data-step='measure'] .mini-tempo-bpm-value {
+  text-shadow: 0 0 32px color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 32%), transparent);
 }
 .mini-tempo-bpm-unit {
-  color: var(--text-2);
-  font-size: 20px;
-  font-weight: 700;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
 }
-.mini-tempo-headline {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-.mini-tempo-desc {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 16px;
-  line-height: 1.5;
-}
-.mini-tempo-panel {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 720px;
-  min-width: 0;
-  margin-top: var(--space-m);
-  padding: var(--space-l);
-  background: var(--surface-1);
-  border-radius: var(--radius-panel);
-}
-
 @keyframes mini-tempo-pulse {
   from {
     transform: scale(1.06);
@@ -81,43 +228,103 @@
   }
 }
 
-/* ---- 점 묶음 ---- */
+.mini-tempo-headline {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.mini-tempo-desc {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+/* 눈금을 담던 판은 면을 없앤다 */
+.mini-tempo-panel {
+  min-width: 0;
+  max-width: 100%;
+  margin-top: var(--space-s);
+}
+
+/* ---- 눈금: 박(또는 타)마다 글래스 캡슐 한 칸, 네 칸씩 묶는다 ----
+ * 예비 박의 켜진 칸은 메인 색이다. 측정 중의 켜진 칸은 흰빛에서 시작해 진행률을 따라 메인 색으로 물들고,
+ * 열여섯 칸을 다 채우면 모두 메인 색이 된다(정확도와 무관한 색이라 단서가 되지 않는다) */
 .mini-tempo-dots {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: var(--space-m);
+  gap: var(--space-s) var(--space-m);
   min-width: 0;
 }
 .mini-tempo-dot-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-m) var(--space-l);
+  justify-content: center;
+  gap: var(--space-s) 14px;
   min-width: 0;
 }
 .mini-tempo-dot-group {
   display: flex;
-  gap: var(--space-s);
+  gap: 5px;
 }
 .mini-tempo-dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--fill-track);
+  flex: none;
+  width: 22px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-float);
+  transition:
+    background-color 320ms ease,
+    box-shadow 320ms ease;
 }
 .mini-tempo-dot.is-on {
-  background: var(--text-1);
+  border-color: transparent;
+  background: var(--mini-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--mini-accent) 30%, transparent);
+  animation: mini-tempo-dot-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.mini-tempo-main[data-step='measure'] .mini-tempo-dot.is-on {
+  background: color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 100%), var(--text-1));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--mini-accent) calc(var(--tempo-p, 0) * 30%), color-mix(in srgb, var(--text-1) 18%, transparent));
+}
+@keyframes mini-tempo-dot-in {
+  from {
+    transform: scaleX(0.4);
+    opacity: 0.4;
+  }
 }
 .mini-tempo-count {
-  color: var(--text-2);
-  font-family: var(--font-num);
-  font-size: 16px;
-  font-weight: 700;
+  color: var(--text-3);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 /* ---- 결과: 오차 그림 ---- */
+.mini-tempo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-m);
+  margin-top: calc(var(--space-s) * -1);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.mini-tempo-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mini-tempo-legend-item::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tempo-c);
+}
 .mini-tempo-chart {
   /* 폰 폭에서는 그림을 줄이지 않고 판 안에서 가로로 민다(글자가 읽히는 크기를 지킨다). 화면 자체는 넘치지 않는다 */
   position: relative;
@@ -130,9 +337,10 @@
   min-width: 560px;
   height: auto;
 }
+/* 정박 띠는 「정박」 단계와 같은 연보라다 */
 .mini-tempo-chart-band {
-  fill: var(--brand-tint);
-  stroke: var(--brand-tint-line);
+  fill: color-mix(in srgb, var(--mini-peak) 9%, transparent);
+  stroke: color-mix(in srgb, var(--mini-peak) 24%, transparent);
   stroke-width: 1;
 }
 .mini-tempo-chart-band-label,
@@ -140,52 +348,78 @@
 .mini-tempo-chart-no {
   fill: var(--text-3);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .mini-tempo-chart-axis {
   stroke: var(--line-strong);
   stroke-width: 1;
 }
+/* 줄기와 점: 정확도 단계 색. 가운데 선에서 왼쪽 타부터 차례로 자란다(타마다 0.04초 차이) */
+.mini-tempo-chart-stem {
+  transform-box: view-box;
+  transform-origin: 0 112px;
+  animation: mini-tempo-stem-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 40ms + 120ms);
+}
+@keyframes mini-tempo-stem-in {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+}
 .mini-tempo-chart-hit line {
-  stroke: var(--text-1);
+  stroke: color-mix(in srgb, var(--tempo-c) 55%, transparent);
   stroke-width: 2;
+  stroke-linecap: round;
 }
 .mini-tempo-chart-hit circle {
-  fill: var(--text-1);
+  fill: var(--tempo-c);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--tempo-c) 55%, transparent));
 }
-.mini-tempo-chart-hit.is-off line {
-  stroke: var(--warn);
-}
-.mini-tempo-chart-hit.is-off circle {
-  fill: var(--warn);
+.mini-tempo-chart-hit[data-grade='base'] circle {
+  filter: none;
 }
 
 /* ---- 좁은 화면 ---- */
 @media (max-width: 560px) {
+  .mini-tempo-pulse {
+    width: min(58vw, 208px);
+    margin-block: var(--space-s);
+  }
+  .mini-tempo-bpm-value {
+    font-size: 72px;
+  }
   .mini-tempo-headline {
-    font-size: 24px;
+    font-size: 22px;
   }
   .mini-tempo-desc {
     font-size: 14px;
   }
-  .mini-tempo-panel {
-    padding: var(--space-m);
-  }
   .mini-tempo-dot {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 6px;
   }
   .mini-tempo-dot-row {
-    gap: var(--space-s) var(--space-m);
+    gap: var(--space-s) 10px;
   }
   .mini-tempo-dot-group {
-    gap: 6px;
+    gap: 4px;
   }
 }
 
-/* 모션 줄이기: 박마다 튀는 숫자만 뺀다 */
+/* 모션 줄이기: 고리, 박마다 튀는 숫자, 눈금·줄기의 등장 모션을 뺀다. 색과 값은 그대로 보인다 */
 @media (prefers-reduced-motion: reduce) {
-  .mini-tempo-bpm-value {
+  .mini-tempo-ring {
+    display: none;
+  }
+  .mini-tempo-bpm-value,
+  .mini-tempo-dot.is-on,
+  .mini-tempo-chart-stem {
     animation: none;
+  }
+  .mini-tempo-disc,
+  .mini-tempo-tag::before,
+  .mini-tempo-dot {
+    transition: none;
   }
 }

@@ -21,6 +21,8 @@ export const IDLE_LIMIT_MS = 5000;
 export const TEMPO_CLOSING_MS = 600;
 /** 「정박」 띠의 폭(±). 흐름을 가리는 기준이기도 하다(D14) */
 export const STEADY_BAND_MS = 10;
+/** 결과 그림에서 「가까움」으로 보는 폭(±, 설계 MODE-006-minigame-tempo-ui D12). 초안 값이라 스틱으로 쳐 본 뒤 이 상수만 고친다 */
+export const GOOD_BAND_MS = 25;
 /** 흐름과 끝날 때 빠르기를 보는 마지막 타 수 */
 export const TAIL_HITS = 4;
 /** 그림 세로 눈금 끝의 아래 한도 */
@@ -35,6 +37,9 @@ export interface TempoHit {
   beat: number;
   errorMs: number;
 }
+
+/** 결과 그림의 정확도 단계: 정박(±10ms 안) · 가까움(±25ms 안) · 벗어남. 색은 화면(CSS)이 고른다 */
+export type TempoGrade = 'perfect' | 'good' | 'off';
 
 /** 흐름. `from`은 그 뒤로 끝까지 같은 쪽으로 벗어난 첫 타의 번호(1부터). 없으면 비운다 */
 export interface TempoFlow {
@@ -108,6 +113,13 @@ export function collectTempoHits(measureFrom: number | null, hits: readonly { pa
 /** 평균 오차: 2번째 타부터의 절대 오차 평균(정수). 첫 타는 기준이라 넣지 않는다. 타가 하나 이하면 null */
 export function averageErrorMs(hits: readonly Pick<TempoHit, 'errorMs'>[]): number | null {
   return meanAbsMs(hits.slice(1).map((hit) => hit.errorMs));
+}
+
+/** 오차 하나의 정확도 단계. 경계 값은 안쪽이다(10은 정박, 25는 가까움). 첫 타(기준)는 그림이 따로 가린다 */
+export function hitGrade(errorMs: number): TempoGrade {
+  const size = Math.abs(errorMs);
+  if (size <= STEADY_BAND_MS) return 'perfect';
+  return size <= GOOD_BAND_MS ? 'good' : 'off';
 }
 
 /** 가장 벗어난 타: 2번째 타부터 절대 오차가 가장 큰 타의 번호(1부터)와 오차. 같으면 앞의 타. 타가 하나 이하면 null */

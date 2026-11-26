@@ -7,6 +7,8 @@ import {
   IDLE_LIMIT_MS,
   MIN_GAP_RATIO,
   STEADY_BAND_MS,
+  GOOD_BAND_MS,
+  hitGrade,
   TAIL_HITS,
   TEMPO_BPMS,
   TEMPO_CLOSING_MS,
@@ -47,6 +49,32 @@ describe('상수', () => {
     expect(STEADY_BAND_MS).toBe(10);
     expect(TAIL_HITS).toBe(4);
     expect(CHART_MIN_SCALE_MS).toBe(40);
+  });
+});
+
+describe('hitGrade', () => {
+  it('절댓값이 10 이하면 perfect다(경계 포함, 빠름·늦음 같다)', () => {
+    expect(hitGrade(0)).toBe('perfect');
+    expect(hitGrade(10)).toBe('perfect');
+    expect(hitGrade(-10)).toBe('perfect');
+  });
+
+  it('10을 넘고 25 이하면 good이다(경계 포함)', () => {
+    expect(hitGrade(11)).toBe('good');
+    expect(hitGrade(-11)).toBe('good');
+    expect(hitGrade(25)).toBe('good');
+    expect(hitGrade(-25)).toBe('good');
+  });
+
+  it('25를 넘으면 off다', () => {
+    expect(hitGrade(26)).toBe('off');
+    expect(hitGrade(-26)).toBe('off');
+    expect(hitGrade(400)).toBe('off');
+  });
+
+  it('경계 상수는 정박 10 · 가까움 25다', () => {
+    expect(STEADY_BAND_MS).toBe(10);
+    expect(GOOD_BAND_MS).toBe(25);
   });
 });
 

@@ -1,6 +1,9 @@
 // 타격마다 박 격자에서 벗어난 정도 그림. 가운데 선이 정박, 위가 빠름·아래가 늦음이다.
 // 눈에 보이는 그림은 장식이고(aria-hidden), 같은 내용을 화면 낭독기용 목록으로 따로 둔다.
-import { STEADY_BAND_MS } from '@/features/mini/domain/tempoRound';
+// 타마다 정확도 단계(data-grade: 첫 타 base, 그 밖은 domain/tempoRound의 hitGrade)를 달고 색은 tempo.css가 고른다.
+// 줄기와 점은 한 층(.mini-tempo-chart-stem)으로 묶어 가운데 선에서 왼쪽 타부터 차례로 자라게 한다(--i가 순번).
+import type { CSSProperties } from 'react';
+import { STEADY_BAND_MS, hitGrade } from '@/features/mini/domain/tempoRound';
 import { errorSide, formatError } from '@/features/mini/domain/timingError';
 import './tempo.css';
 
@@ -32,7 +35,7 @@ export function ErrorChart({ errors, scaleMs }: Props) {
   return (
     <div className="mini-tempo-chart">
       <svg className="mini-tempo-chart-svg" viewBox={`0 0 ${W} ${H}`} aria-hidden="true" focusable="false">
-        <rect className="mini-tempo-chart-band" x={LEFT} y={CENTER_Y - bandH} width={plotW} height={bandH * 2} />
+        <rect className="mini-tempo-chart-band" x={LEFT} y={CENTER_Y - bandH} width={plotW} height={bandH * 2} rx={4} />
         {/* 띠 이름은 왼쪽 여백에 둔다. 그림 안에 두면 타격 점과 겹친다 */}
         <text className="mini-tempo-chart-band-label" x={LEFT - 8} y={CENTER_Y + 4} textAnchor="end">
           {`정박 ±${STEADY_BAND_MS}ms`}
@@ -54,9 +57,12 @@ export function ErrorChart({ errors, scaleMs }: Props) {
               className={`mini-tempo-chart-hit is-${errorSide(error)}${off ? ' is-off' : ''}`}
               data-testid={`mini-tempo-hit-${i}`}
               data-error={error}
+              data-grade={i === 0 ? 'base' : hitGrade(error)}
             >
-              <line x1={x} y1={CENTER_Y} x2={x} y2={y} />
-              <circle cx={x} cy={y} r={DOT_R} />
+              <g className="mini-tempo-chart-stem" style={{ '--i': i } as CSSProperties}>
+                <line x1={x} y1={CENTER_Y} x2={x} y2={y} />
+                <circle cx={x} cy={y} r={DOT_R} />
+              </g>
               <text className="mini-tempo-chart-no" x={x} y={H - 10} textAnchor="middle">
                 {i + 1}
               </text>
