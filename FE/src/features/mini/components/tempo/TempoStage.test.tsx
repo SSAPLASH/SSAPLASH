@@ -25,6 +25,8 @@ function stage(over: { phase?: MiniPhase; countdown?: number | null; bpm?: numbe
 
 const dots = () => Array.from(document.querySelectorAll('.mini-tempo-dot'));
 const dotsOn = () => dots().filter((dot) => dot.getAttribute('data-state') === 'on').length;
+const main = () => screen.getByTestId('mini-tempo-main');
+const ringEl = () => screen.queryByTestId('mini-tempo-ring');
 
 describe('TempoStage', () => {
   it('예비 박 단계: 「예비 박」·「박을 들어 보세요」·안내 글·「n / 8」과 여덟 개 점(네 개씩 두 묶음)', () => {
@@ -62,6 +64,129 @@ describe('TempoStage', () => {
     stage({ phase: 'countdown', countdown: 3 });
     expect(document.querySelector('.play-countdown-value')?.textContent).toBe('3');
   });
+
+  it('카운트다운은 무대 바로 아래 요소다(무대 한가운데에 놓인다)', () => {
+    const { container } = stage({ phase: 'countdown', countdown: 3 });
+    expect(container.querySelector('.mini-stage > .play-countdown')).toBeTruthy();
+    expect(container.querySelector('.mini-stage-body .play-countdown')).toBeNull();
+  });
+
+  it('data-step은 카운트다운 idle · 예비 박 listen · 측정 measure이고 무대와 가운데 영역이 같다', () => {
+    const cases: [MiniPhase, TempoStep, string][] = [
+      ['countdown', 'listen', 'idle'],
+      ['playing', 'listen', 'listen'],
+      ['playing', 'measure', 'measure'],
+      ['closing', 'measure', 'measure'],
+    ];
+    for (const [phase, step, want] of cases) {
+      const { container } = stage({ phase, step, countdown: phase === 'countdown' ? 3 : null });
+      expect(main().getAttribute('data-step')).toBe(want);
+      expect(container.querySelector('.mini-tempo-stage')?.getAttribute('data-step')).toBe(want);
+      cleanup();
+    }
+  });
+
+  it('빛줄기는 카운트다운에 꺼져 있고 그 뒤로 켜져 있다', () => {
+    const first = stage({ phase: 'countdown', countdown: 3 });
+    expect(first.container.querySelector('.free-lights')?.classList.contains('is-on')).toBe(false);
+    cleanup();
+    for (const step of ['listen', 'measure'] as const) {
+      const { container } = stage({ phase: 'playing', step });
+      expect(container.querySelector('.free-lights')?.classList.contains('is-on')).toBe(true);
+      cleanup();
+    }
+  });
+
+  it('진행률(--tempo-p)은 측정 중 센 타격 수 ÷ 16이고 그 밖에는 0이다', () => {
+    const cases: [TempoStep, number, string][] = [
+      ['listen', 0, '0'],
+      ['listen', 5, '0'],
+      ['measure', 0, '0'],
+      ['measure', 4, '0.25'],
+      ['measure', 8, '0.5'],
+      ['measure', 16, '1'],
+      ['measure', 20, '1'],
+    ];
+    for (const [step, hits, want] of cases) {
+      const { container } = stage({ step, hits });
+      expect(container.querySelector<HTMLElement>('.mini-tempo-stage')?.style.getPropertyValue('--tempo-p')).toBe(want);
+      cleanup();
+    }
+  });
+
+  it('머리 줄 보조 글은 「예비 박 8개 · 16타」다', () => {
+    stage({});
+    expect(screen.getByTestId('mini-tempo-sub').textContent).toBe('예비 박 8개 · 16타');
+  });
+
+  it('빠르기 숫자는 박 원반 안에 있고 원반 면은 낭독기에서 숨긴다', () => {
+    const { container } = stage({});
+    const pulse = container.querySelector('.mini-tempo-pulse');
+    expect(pulse?.querySelector('[data-testid="mini-tempo-bpm"]')).toBeTruthy();
+    expect(pulse?.querySelector('.mini-tempo-disc')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('TempoStage 고리', () => {
+  it('카운트다운 중과, 예비 박·타격이 아직 0일 때는 고리가 없다', () => {
+    stage({ phase: 'countdown', countdown: 3, beats: 0 });
+    expect(ringEl()).toBeNull();
+    cleanup();
+    stage({ step: 'listen', beats: 0 });
+    expect(ringEl()).toBeNull();
+    cleanup();
+    stage({ step: 'measure', beats: 8, hits: 0 });
+    expect(ringEl()).toBeNull();
+  });
+
+  it('예비 박의 1·5번째는 강세 고리, 나머지는 보통 고리다', () => {
+    for (let beats = 1; beats <= 8; beats += 1) {
+      stage({ step: 'listen', beats });
+      const el = ringEl();
+      expect(el).toBeTruthy();
+      expect(el?.classList.contains('is-accent')).toBe(beats === 1 || beats === 5);
+      expect(el?.classList.contains('is-hit')).toBe(false);
+      expect(el?.getAttribute('aria-hidden')).toBe('true');
+      cleanup();
+    }
+  });
+
+  it('예비 박 수가 늘면 고리가 새 요소로 바뀐다(모션이 다시 재생된다)', () => {
+    const view = stage({ step: 'listen', beats: 2 });
+    const first = ringEl();
+    view.rerender(<TempoStage phase="playing" countdown={null} bpm={96} step="listen" beats={3} hits={0} onQuit={() => undefined} />);
+    expect(ringEl()).not.toBe(first);
+  });
+
+  it('타격을 셀 때마다 타격 고리가 새 요소로 바뀌고, 수가 같으면 그대로다', () => {
+    const view = stage({ step: 'measure', beats: 8, hits: 3 });
+    const first = ringEl();
+    expect(first?.classList.contains('is-hit')).toBe(true);
+    view.rerender(<TempoStage phase="playing" countdown={null} bpm={96} step="measure" beats={8} hits={3} onQuit={() => undefined} />);
+    expect(ringEl()).toBe(first);
+    view.rerender(<TempoStage phase="playing" countdown={null} bpm={96} step="measure" beats={8} hits={4} onQuit={() => undefined} />);
+    expect(ringEl()).not.toBe(first);
+    expect(ringEl()?.classList.contains('is-hit')).toBe(true);
+  });
+
+  it('열여섯 번째 타에는 다 침 고리이고 가운데 영역에 data-done이 붙는다', () => {
+    stage({ step: 'measure', beats: 8, hits: 15 });
+    expect(main().hasAttribute('data-done')).toBe(false);
+    expect(ringEl()?.classList.contains('is-done')).toBe(false);
+    cleanup();
+    stage({ phase: 'closing', step: 'measure', beats: 8, hits: 16 });
+    expect(main().hasAttribute('data-done')).toBe(true);
+    expect(ringEl()?.classList.contains('is-done')).toBe(true);
+    expect(ringEl()?.classList.contains('is-hit')).toBe(false);
+  });
+
+  it('예비 박 단계에는 data-done이 없다', () => {
+    stage({ step: 'listen', beats: 8, hits: 0 });
+    expect(main().hasAttribute('data-done')).toBe(false);
+  });
+});
+
+describe('TempoStage 그 밖', () => {
 
   it('플레이 단계에서는 카운트다운이 없다', () => {
     stage({ phase: 'playing', countdown: null });
