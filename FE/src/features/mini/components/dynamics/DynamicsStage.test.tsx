@@ -172,6 +172,138 @@ describe('DynamicsStage 숫자 맞추기', () => {
   });
 });
 
+describe('DynamicsStage 모양(정확도·채움·단계 표시)', () => {
+  const steps = () => Array.from(screen.getByRole('list', { name: '단계' }).querySelectorAll('.mini-dyn-step'));
+  const subTitle = () => document.querySelector('.mini-stage-sub')?.textContent;
+
+  it('숫자 맞추기에서 친 눈금의 data-grade가 차이 5 이하 perfect, 12 이하 near, 그 밖 far다', () => {
+    matching({ shots: [match(0, 83), match(1, 64), match(2, 80)] });
+    expect([0, 1, 2].map((i) => gauge(i).getAttribute('data-grade'))).toEqual(['perfect', 'near', 'far']);
+  });
+
+  it('아직 치지 않은 눈금과 감 잡기의 타에는 data-grade가 없다', () => {
+    matching({ shots: [match(0, 82)] });
+    expect(gauge(1).hasAttribute('data-grade')).toBe(false);
+    cleanup();
+    stage({ feel: [FEEL[0]] });
+    expect(gauge(0).hasAttribute('data-grade')).toBe(false);
+  });
+
+  it('감 잡기에서 친 눈금은 세기 색(data-tone)이고 --dyn-v가 친 세기의 비율이다', () => {
+    stage({ feel: [FEEL[0]] });
+    expect(gauge(0).getAttribute('data-tone')).toBe('strength');
+    expect(Number(gauge(0).style.getPropertyValue('--dyn-v'))).toBeCloseTo(velocityRatio(42), 5);
+    expect(gauge(1).hasAttribute('data-tone')).toBe(false);
+    cleanup();
+    // 숫자 맞추기의 타는 정확도 색이라 세기 색을 쓰지 않는다
+    matching({ shots: [match(0, 82)] });
+    expect(gauge(0).hasAttribute('data-tone')).toBe(false);
+  });
+
+  it('친 눈금에만 채움이 있고 높이가 친 세기의 비율이다', () => {
+    matching({ shots: [match(0, 82)] });
+    const fill = gauge(0).querySelector<HTMLElement>('.mini-dyn-track .mini-dyn-fill');
+    expect(pct(fill?.style.height)).toBeCloseTo(velocityRatio(82) * 100, 5);
+    expect(gauge(1).querySelector('.mini-dyn-fill')).toBeNull();
+  });
+
+  it('목표 선·내 세기 표시·내 타격 선은 트랙이 아니라 겹친 층에 있다', () => {
+    matching({ shots: [match(0, 82)] });
+    const lines = gauge(0).querySelector('.mini-dyn-lines');
+    expect(lines?.querySelector('.mini-dyn-target-line')).toBeTruthy();
+    expect(lines?.querySelectorAll('.mini-dyn-mark')).toHaveLength(3);
+    expect(lines?.querySelector('.mini-dyn-marker')).toBeTruthy();
+    expect(gauge(0).querySelector('.mini-dyn-track .mini-dyn-marker')).toBeNull();
+  });
+
+  it('단계 표시는 감 잡기·내 세기 보이기에서 1을, 숫자 맞추기에서 2를 지금 단계로 가리킨다', () => {
+    stage();
+    expect(steps().map((el) => el.textContent)).toEqual(['1감 잡기', '2숫자 맞추기']);
+    expect(steps().map((el) => el.getAttribute('aria-current'))).toEqual(['step', null]);
+    cleanup();
+    stage({ step: 'review', feel: FEEL });
+    expect(steps().map((el) => el.getAttribute('aria-current'))).toEqual(['step', null]);
+    cleanup();
+    matching();
+    expect(steps().map((el) => el.getAttribute('aria-current'))).toEqual([null, 'step']);
+    expect(steps()[0].className).toContain('is-done');
+  });
+
+  it('머리 줄 보조 글이 단계에 따라 바뀐다', () => {
+    stage();
+    expect(subTitle()).toBe('감 잡기 · 스네어');
+    cleanup();
+    matching();
+    expect(subTitle()).toBe('숫자 맞추기 · 스네어');
+  });
+
+  it('빛줄기는 카운트다운 동안 꺼져 있고 플레이에서 켜진다', () => {
+    stage({ phase: 'countdown', countdown: 3 });
+    expect(document.querySelector('.free-lights')?.className).not.toContain('is-on');
+    cleanup();
+    stage();
+    expect(document.querySelector('.free-lights')?.className).toContain('is-on');
+  });
+
+  it('카운트다운은 본문이 아니라 무대 바로 아래에 겹친다(무대 한가운데)', () => {
+    stage({ phase: 'countdown', countdown: 3 });
+    expect(document.querySelector('.mini-stage > .play-countdown')).toBeTruthy();
+  });
+});
+
+describe('DynamicsStage 친 순간의 큰 숫자', () => {
+  const props = (over: Partial<StageProps>): StageProps => ({
+    phase: 'playing',
+    countdown: null,
+    step: 'feel',
+    feel: [],
+    targets: [],
+    shots: [],
+    wrongPad: false,
+    onQuit: () => undefined,
+    ...over,
+  });
+  const pop = () => document.querySelector<HTMLElement>('.mini-dyn-pop');
+
+  it('처음 그릴 때 이미 있던 타에는 띄우지 않는다', () => {
+    stage({ feel: [FEEL[0]] });
+    expect(pop()).toBeNull();
+    expect(screen.getByTestId('mini-dyn-actual-0').className).not.toContain('is-waiting');
+  });
+
+  it('새 타를 받으면 큰 숫자를 띄우고 그 눈금의 아래 숫자를 숨긴다', () => {
+    const view = stage();
+    view.rerender(<DynamicsStage {...props({ feel: [FEEL[0]] })} />);
+    expect(pop()).toBeTruthy();
+    expect(pop()?.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector('.mini-stage')?.className).toContain('is-popping');
+    expect(screen.getByTestId('mini-dyn-actual-0').className).toContain('is-waiting');
+  });
+
+  it('큰 숫자는 세기 색이라 숫자 맞추기에서도 정확도 단계를 받지 않는다(앉은 숫자의 눈금이 받는다)', () => {
+    const view = matching();
+    view.rerender(<DynamicsStage {...props({ step: 'match', feel: FEEL, targets: TARGETS, shots: [match(0, 86)] })} />);
+    expect(pop()).toBeTruthy();
+    expect(pop()?.hasAttribute('data-grade')).toBe(false);
+    expect(gauge(0).getAttribute('data-grade')).toBe('perfect');
+  });
+
+  it('다음 타를 치면 앞 연출을 끊고 새 눈금으로 옮긴다', () => {
+    const view = stage();
+    view.rerender(<DynamicsStage {...props({ feel: [FEEL[0]] })} />);
+    view.rerender(<DynamicsStage {...props({ feel: [FEEL[0], FEEL[1]] })} />);
+    expect(document.querySelectorAll('.mini-dyn-pop')).toHaveLength(1);
+    expect(screen.getByTestId('mini-dyn-actual-0').className).not.toContain('is-waiting');
+    expect(screen.getByTestId('mini-dyn-actual-1').className).toContain('is-waiting');
+  });
+
+  it('감 잡기에서 숫자 맞추기로 넘어갈 때는 띄우지 않는다', () => {
+    const view = stage({ step: 'review', feel: FEEL });
+    view.rerender(<DynamicsStage {...props({ step: 'match', feel: FEEL, targets: TARGETS })} />);
+    expect(pop()).toBeNull();
+  });
+});
+
 describe('DynamicsStage 다른 패드 안내', () => {
   it('감 잡기에서 wrongPad면 지금 차례 눈금에만 「스네어를 쳐 주세요」가 is-hint로 보인다', () => {
     stage({ feel: [FEEL[0]], wrongPad: true });

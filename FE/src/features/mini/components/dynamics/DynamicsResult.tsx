@@ -1,7 +1,9 @@
 // 「강약중강약」 결과 본문 (설계 MODE-006-minigame-dynamics-match 4절 「결과 화면」). 예전 시안(Figma 1183:38610)을 고쳐 쓴 것이다.
 // 「타격별 세기」 판: 위에 내 세기 줄, 타마다 목표 선·내 세기 표시·친 세기를 가로 눈금 위에 보인다.
+// 행마다 정확도 단계(data-grade)를 달아 타격 점·친 값·오차 꼬리표가 플레이 화면과 같은 색이 된다(설계 MODE-006-minigame-dynamics-ui D10).
+import type { CSSProperties } from 'react';
 import { FeelStrip } from '@/features/mini/components/dynamics/FeelStrip';
-import { shotRemark, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
+import { shotGrade, shotRemark, type FeelShot, type MatchShot } from '@/features/mini/domain/dynamicsRound';
 import { velocityRatio } from '@/features/mini/domain/velocityShot';
 import './dynamics.css';
 
@@ -33,14 +35,18 @@ export function DynamicsResult({ feel, shots, highlight }: Props) {
       </div>
       <ol className="mini-dyn-rows">
         {shots.map((shot, i) => (
-          <li key={i} className="mini-dyn-row" data-testid={`mini-dyn-row-${i}`}>
+          <li key={i} className="mini-dyn-row" data-testid={`mini-dyn-row-${i}`} data-grade={shotGrade(shot.diff)}>
             <span className="mini-dyn-row-label">{i + 1}타</span>
             <div className="mini-dyn-row-scale" aria-hidden="true">
               <div className="mini-dyn-row-target" style={{ left: `${velocityRatio(shot.target) * 100}%` }} />
               {feel.map((mark) => (
                 <div key={mark.level} className="mini-dyn-row-mark" style={{ left: `${velocityRatio(mark.actual) * 100}%` }} />
               ))}
-              <div className="mini-dyn-row-dot" style={{ left: `${velocityRatio(shot.actual) * 100}%` }} />
+              {/* --i: 점이 차례로 나타나는 순번 */}
+              <div
+                className="mini-dyn-row-dot"
+                style={{ left: `${velocityRatio(shot.actual) * 100}%`, '--i': i } as CSSProperties}
+              />
             </div>
             <span className="mini-dyn-row-actual">{shot.actual}</span>
             <span className={`mini-dyn-row-meta${i === highlight ? ' is-warn' : ''}`}>

@@ -69,6 +69,26 @@ describe('DynamicsResult', () => {
     });
   });
 
+  it('행의 data-grade가 차이 5 이하 perfect, 12 이하 near, 그 밖 far다', () => {
+    render(
+      <DynamicsResult
+        feel={FEEL}
+        shots={[
+          { target: 88, actual: 83, diff: -5 },
+          { target: 60, actual: 72, diff: 12 },
+          { target: 100, actual: 80, diff: -20 },
+        ]}
+      />,
+    );
+    expect([0, 1, 2].map((i) => row(i).getAttribute('data-grade'))).toEqual(['perfect', 'near', 'far']);
+  });
+
+  it('타격 점에 행 차례(--i)가 있다', () => {
+    render(<DynamicsResult feel={FEEL} shots={SHOTS} />);
+    const order = [0, 1, 2].map((i) => row(i).querySelector<HTMLElement>('.mini-dyn-row-dot')?.style.getPropertyValue('--i'));
+    expect(order).toEqual(['0', '1', '2']);
+  });
+
   it('눈금 위 자리는 1이 0%, 64가 50%, 127이 100%다', () => {
     render(
       <DynamicsResult

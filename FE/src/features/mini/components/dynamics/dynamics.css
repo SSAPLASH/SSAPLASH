@@ -1,5 +1,58 @@
-/* 「강약중강약」 플레이 화면과 결과 판 (설계 MODE-006-minigame-dynamics-match). 예전 시안(Figma 1183:38406, 1183:38610)을 고쳐 쓴 것이다.
+/* 「강약중강약」 플레이 화면과 결과 판 (설계 MODE-006-minigame-dynamics-match, 모양은 MODE-006-minigame-dynamics-ui).
+   재료는 「누구보다 빠르게」와 같다: 상자 없는 무대, 글래스 캡슐, 메인 색 네온, 가장 좋은 상태는 연보라(--mini-peak).
    공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+
+/* ---- 단계 표시: 1 감 잡기 → 2 숫자 맞추기 ---- */
+.mini-dyn-steps {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.mini-dyn-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+/* 단계 사이의 화살표 */
+.mini-dyn-step-arrow {
+  color: var(--text-3);
+}
+.mini-dyn-step i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+  color: var(--text-2);
+  font: 600 11px var(--font-num);
+}
+.mini-dyn-step.is-now {
+  border-color: var(--line);
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--text-1);
+}
+.mini-dyn-step.is-now i {
+  background: var(--mini-accent);
+  color: var(--mini-accent-ink);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mini-accent) 45%, transparent);
+}
+.mini-dyn-step.is-done i {
+  background: color-mix(in srgb, var(--mini-accent) 30%, transparent);
+  color: var(--text-1);
+}
 
 /* ---- 내 세기 줄 (숫자 맞추기 화면 위·결과 판) ---- */
 .mini-dyn-feel {
@@ -26,6 +79,22 @@
   justify-content: flex-start;
   margin-top: calc(var(--space-s) * -1);
 }
+/* 플레이 화면에서는 위쪽 가운데에 뜬 글래스 캡슐이다(숫자 맞추기 내내 참고하는 값) */
+.mini-stage .mini-dyn-feel {
+  align-self: center;
+  gap: var(--space-xs) var(--space-m);
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  font-size: 13px;
+}
+.mini-stage .mini-dyn-feel-item strong {
+  font-weight: 500;
+  font-size: 15px;
+}
 
 /* ---- 플레이: 머리 문구 ---- */
 .mini-dyn-head {
@@ -34,19 +103,35 @@
   align-items: center;
   gap: 6px;
   text-align: center;
+  transition: opacity var(--motion-fade) var(--ease-out);
 }
 .mini-dyn-prompt {
   margin: 0;
-  min-height: 1.25em;
-  font-size: 36px;
-  font-weight: 700;
-  line-height: 1.25;
+  min-height: 1.15em;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
-/* 숫자 맞추기 머리: 목표 숫자를 문구보다 크게 */
+/* 숫자 맞추기 머리: 굵은 큰 목표 숫자 뒤에 작은 글을 붙인다 */
+.mini-dyn-prompt:has(.mini-dyn-prompt-num) {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 .mini-dyn-prompt-num {
-  font-family: var(--font-num);
-  font-size: 1.6em;
+  margin-right: 10px;
+  color: var(--mini-accent-text);
+  font-family: var(--font);
+  font-size: 2.6em;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--mini-accent) 30%, transparent);
 }
 .mini-dyn-sub {
   margin: 0;
@@ -55,34 +140,45 @@
   line-height: 1.4;
 }
 
-/* ---- 플레이: 눈금 카드 3장 ---- */
+/* ---- 플레이: 눈금 셋. 카드 면 없이 무대 위에 바로 둔다 ---- */
 .mini-dyn-gauges {
   flex: 1;
+  align-self: center;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-m);
+  gap: var(--space-l);
+  width: 100%;
+  max-width: 880px;
   min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  transition: opacity var(--motion-fade) var(--ease-out);
 }
 .mini-dyn-gauge {
+  /* 정확도 색: 딱 맞음(오차 5 이하) 연보라 · 가까움(12 이하) 메인 색 · 그 밖은 흰빛. 감 잡기의 타는 단계가 없어 세기 색을 쓴다 */
+  --dyn-c: var(--mini-accent);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-m);
   min-width: 0;
-  padding: var(--space-l) var(--space-m);
+  padding: var(--space-m) var(--space-s);
   box-sizing: border-box;
-  background: var(--surface-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius-panel);
+  transition: opacity var(--motion-fade) var(--ease-out);
 }
-.mini-dyn-gauge.is-current {
-  border-color: var(--brand);
+.mini-dyn-gauge[data-grade='perfect'] {
+  --dyn-c: var(--mini-peak);
+}
+.mini-dyn-gauge[data-grade='far'] {
+  --dyn-c: var(--text-1);
+}
+/* 세기 색(감 잡기): 약하면 흰빛, 셀수록 메인 색. --dyn-v는 친 세기의 비율(0~1)이다. 연보라는 「딱 맞음」에만 쓴다 */
+.mini-dyn-gauge[data-tone='strength'] {
+  --dyn-c: color-mix(in srgb, var(--mini-accent-text) calc(var(--dyn-v, 1) * 100%), var(--text-1));
 }
 .mini-dyn-gauge.is-next {
-  opacity: 0.45;
+  opacity: 0.38;
 }
 .mini-dyn-gauge-head {
   display: flex;
@@ -91,14 +187,22 @@
   gap: 2px;
 }
 .mini-dyn-gauge-turn {
-  color: var(--text-2);
-  font-size: 14px;
+  color: var(--text-3);
+  font-size: 12px;
   line-height: 1.4;
 }
 .mini-dyn-gauge-level {
-  font-size: 56px;
-  font-weight: 700;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.1;
+}
+/* 숫자 맞추기의 목표 숫자: 굵은 큰 숫자 */
+.mini-dyn-gauge-head:has(.mini-dyn-gauge-turn) .mini-dyn-gauge-level {
+  font-family: var(--font);
+  font-size: 52px;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 세로 눈금: 트랙이 남는 높이를 채운다 */
@@ -108,37 +212,79 @@
   display: flex;
   justify-content: center;
   align-self: stretch;
-  min-height: 180px;
+  min-height: 220px;
 }
+/* 트랙: 글래스 캡슐. 지금 칠 차례는 메인 색 네온이 천천히 숨 쉰다(드럼 세팅의 「적용 중」 슬롯과 같은 표현) */
 .mini-dyn-track {
   position: relative;
-  width: 32px;
+  width: 56px;
   height: 100%;
-  background: var(--fill-track);
-  border-radius: 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition:
+    border-color var(--motion-fade) var(--ease-out),
+    box-shadow 320ms ease;
 }
-/* 목표 선: 가는 실선 + 강조색. 내 타격 표시(굵은 흰 선·점)와 구분된다. 지금 칠 차례는 더 밝게 */
+.mini-dyn-gauge.is-current .mini-dyn-track {
+  border-color: color-mix(in srgb, var(--mini-accent) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mini-accent) 18%, transparent),
+    0 0 26px color-mix(in srgb, var(--mini-accent) 18%, transparent);
+  animation: mini-dyn-breathe 3.6s ease-in-out infinite;
+}
+@keyframes mini-dyn-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--mini-accent) 28%, transparent),
+      0 0 38px color-mix(in srgb, var(--mini-accent) 28%, transparent);
+  }
+}
+/* 채움: 친 세기까지 아래에서 차오른다. 높이는 화면이 친 세기의 비율로 준다 */
+.mini-dyn-fill {
+  position: absolute;
+  inset: auto 0 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--dyn-c) 6%, transparent), color-mix(in srgb, var(--dyn-c) 34%, transparent));
+  transform-origin: center bottom;
+  animation: mini-dyn-fill-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes mini-dyn-fill-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+/* 트랙 밖으로 나가는 선(목표·내 세기·내 타격)은 트랙이 아니라 눈금 영역에 겹친 층에 둔다 */
+.mini-dyn-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* 목표 선: 가는 실선 + 강조색. 지금 칠 차례는 옅게 번진다 */
 .mini-dyn-target-line {
   position: absolute;
   left: 50%;
-  width: 64px;
+  width: 92px;
   height: 2px;
   margin-bottom: -1px;
   transform: translateX(-50%);
-  background: var(--brand-text);
-  opacity: 0.6;
+  border-radius: 1px;
+  background: var(--mini-accent-text);
+  opacity: 0.55;
 }
 .mini-dyn-gauge.is-current .mini-dyn-target-line {
   opacity: 1;
-  box-shadow: 0 0 6px var(--brand);
+  box-shadow: 0 0 10px var(--mini-accent);
 }
 /* 내 세기 표시: 트랙 왼쪽의 흐린 짧은 눈금과 작은 글자 */
 .mini-dyn-mark {
   position: absolute;
-  right: 50%;
-  width: 14px;
+  left: calc(50% - 46px);
+  width: 10px;
   height: 1px;
-  margin-right: -7px;
   background: var(--text-3);
   opacity: 0.8;
 }
@@ -153,26 +299,18 @@
   line-height: 1;
   white-space: nowrap;
 }
+/* 내 타격 선: 정확도 색과 옅은 번짐 */
 .mini-dyn-marker {
   position: absolute;
   left: 50%;
-  width: 78px;
-  height: 2px;
-  margin-bottom: -1px;
+  width: 76px;
+  height: 3px;
+  margin-bottom: -1.5px;
   transform: translateX(-50%);
-  background: var(--text-1);
-  animation: mini-dyn-marker-in var(--motion-fade) var(--ease-out);
-}
-.mini-dyn-marker::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  transform: translate(-50%, -50%);
-  background: var(--text-1);
-  border-radius: 50%;
+  border-radius: 2px;
+  background: var(--dyn-c);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--dyn-c) 60%, transparent);
+  animation: mini-dyn-marker-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @keyframes mini-dyn-marker-in {
   from {
@@ -180,9 +318,33 @@
     transform: translateX(-50%) scaleX(0.6);
   }
 }
+/* 친 순간 타격 자리에서 한 번 퍼지는 울림 */
+.mini-dyn-marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border: 1px solid color-mix(in srgb, var(--dyn-c) 55%, transparent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: mini-dyn-ripple 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes mini-dyn-ripple {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
 .mini-dyn-tick {
   position: absolute;
-  left: calc(50% + 44px);
+  left: calc(50% + 54px);
   color: var(--text-3);
   font-size: 12px;
   line-height: 1;
@@ -213,11 +375,30 @@
   gap: 6px;
 }
 .mini-dyn-gauge-actual {
-  font-family: var(--font-num);
-  font-size: 34px;
-  font-weight: 700;
+  color: var(--dyn-c);
+  font-family: var(--font);
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--dyn-c) 24%, transparent);
+}
+.mini-dyn-gauge[data-grade='far'] .mini-dyn-gauge-actual {
+  text-shadow: none;
+}
+/* 큰 숫자가 떠 있는 동안은 자리를 지킨 채 숨고, 앉는 순간 살짝 튄다 */
+.mini-dyn-gauge-actual.is-waiting {
+  visibility: hidden;
+}
+.mini-dyn-gauge-actual.is-landed {
+  display: inline-block;
+  animation: mini-dyn-land 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes mini-dyn-land {
+  from {
+    transform: scale(1.25);
+  }
 }
 .mini-dyn-gauge-target {
   color: var(--text-2);
@@ -230,12 +411,12 @@
 }
 .mini-dyn-gauge-status {
   color: var(--text-3);
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.4;
 }
 .mini-dyn-gauge.is-current .mini-dyn-gauge-status {
-  color: var(--brand-text);
-  font-weight: 700;
+  color: var(--mini-accent-text);
+  font-weight: 600;
 }
 .mini-dyn-gauge.is-current .mini-dyn-gauge-status.is-hint {
   color: var(--warn);
@@ -243,9 +424,40 @@
 .mini-dyn-note {
   margin: 0;
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   text-align: center;
+}
+
+/* ---- 친 순간의 큰 숫자 (useShotPop) ----
+ * 무대 한가운데에서 0부터 친 세기까지 올라간 뒤 그 눈금의 아래 숫자 자리로 날아가 앉는다. 올라가는 값·자리 옮김은 화면 코드가 한다.
+ * 세기에 따라 크기(0.5~1.3배)·진하기(투명도 0.4~1)·색이 달라진다: 약하면 작고 연한 흰빛, 세면 크고 또렷한 메인 색(--pop-v는 올라가는 값의 비율).
+ * 숫자 맞추기에서는 눈금에 앉는 순간 그 타의 정확도 색으로 바뀐다(앉은 숫자가 정확도 색이다) */
+.mini-page.mini-stage > .mini-dyn-pop {
+  --pop-c: color-mix(in srgb, var(--mini-accent-text) calc(var(--pop-v, 0) * 100%), var(--text-1));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%) scale(0.5);
+  transform-origin: center;
+  opacity: 0.4;
+  color: var(--pop-c);
+  font-family: var(--font);
+  font-size: clamp(120px, 24dvh, 200px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 36px color-mix(in srgb, var(--pop-c) 35%, transparent);
+  pointer-events: none;
+  will-change: transform;
+}
+/* 큰 숫자가 올라가는 동안 뒤의 머리 문구와 눈금은 한 걸음 물러난다 */
+.mini-stage.is-popping .mini-dyn-head,
+.mini-stage.is-popping .mini-dyn-gauges {
+  opacity: 0.35;
+  transition-duration: var(--motion-fast);
 }
 
 /* ---- 결과: 타격별 세기 ---- */
@@ -265,7 +477,7 @@
 .mini-dyn-legend-line {
   width: 18px;
   height: 2px;
-  background: var(--brand-text);
+  background: var(--mini-accent-text);
 }
 .mini-dyn-legend-mark {
   width: 2px;
@@ -275,7 +487,7 @@
 .mini-dyn-legend-dot {
   width: 10px;
   height: 10px;
-  background: var(--text-1);
+  background: var(--mini-accent);
   border-radius: 50%;
 }
 .mini-dyn-rows {
@@ -286,12 +498,20 @@
   list-style: none;
 }
 .mini-dyn-row {
+  /* 정확도 색: 플레이 화면의 눈금과 같은 규칙이다 */
+  --dyn-c: var(--mini-accent);
   display: grid;
   /* 오른쪽 세 칸의 폭을 고정한다. 글 길이에 따라 눈금 길이가 행마다 달라지면 같은 세기가 행마다 다른 자리에 그려진다 */
-  grid-template-columns: 96px minmax(0, 1fr) 64px 150px 64px;
+  grid-template-columns: 96px minmax(0, 1fr) 64px 150px 76px;
   align-items: center;
   column-gap: var(--space-l);
   padding: var(--space-l) 0;
+}
+.mini-dyn-row[data-grade='perfect'] {
+  --dyn-c: var(--mini-peak);
+}
+.mini-dyn-row[data-grade='far'] {
+  --dyn-c: var(--text-1);
 }
 .mini-dyn-row:first-child {
   padding-top: 0;
@@ -317,10 +537,10 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 6px;
+  height: 8px;
   transform: translateY(-50%);
   background: var(--fill-track);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 .mini-dyn-row-target {
   position: absolute;
@@ -328,7 +548,8 @@
   width: 2px;
   height: 100%;
   transform: translateX(-50%);
-  background: var(--brand-text);
+  background: var(--mini-accent-text);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mini-accent) 60%, transparent);
 }
 .mini-dyn-row-mark {
   position: absolute;
@@ -345,15 +566,21 @@
   width: 16px;
   height: 16px;
   transform: translate(-50%, -50%);
-  background: var(--text-1);
+  background: var(--dyn-c);
   border-radius: 50%;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--dyn-c) 55%, transparent);
+  /* 타격 점은 행 차례(--i)대로 나타난다 */
+  animation: motion-fade-in var(--motion-fade) var(--ease-out) both;
+  animation-delay: calc(260ms + var(--i, 0) * 80ms);
 }
 .mini-dyn-row-actual {
   min-width: 2ch;
   text-align: right;
-  font-family: var(--font-num);
+  color: var(--dyn-c);
+  font-family: var(--font);
   font-size: 30px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.04em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -365,12 +592,17 @@
 .mini-dyn-row-meta.is-warn {
   color: var(--warn);
 }
+/* 오차 꼬리표: 정확도 색 알약 */
 .mini-dyn-row-score {
-  min-width: 3.5em;
-  color: var(--text-1);
-  font-size: 15px;
+  justify-self: end;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dyn-c) 14%, transparent);
+  color: var(--dyn-c);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: center;
+  white-space: nowrap;
 }
 
 @media (max-width: 1024px) {
@@ -399,33 +631,43 @@
 
 @media (max-width: 560px) {
   .mini-dyn-prompt {
-    font-size: 26px;
+    font-size: 28px;
+  }
+  .mini-dyn-prompt:has(.mini-dyn-prompt-num) {
+    font-size: 18px;
   }
   .mini-dyn-sub {
     font-size: 13px;
+  }
+  .mini-dyn-steps {
+    font-size: 12px;
   }
   .mini-dyn-gauges {
     gap: var(--space-s);
   }
   .mini-dyn-gauge {
     gap: var(--space-s);
-    padding: var(--space-m) var(--space-xs);
+    padding: var(--space-s) 0;
   }
   .mini-dyn-gauge-level {
+    font-size: 32px;
+  }
+  .mini-dyn-gauge-head:has(.mini-dyn-gauge-turn) .mini-dyn-gauge-level {
     font-size: 40px;
   }
   .mini-dyn-track {
-    width: 22px;
+    width: 40px;
+    border-radius: 20px;
   }
   .mini-dyn-target-line {
-    width: 44px;
+    width: 64px;
   }
   .mini-dyn-marker {
     width: 54px;
   }
   .mini-dyn-mark {
-    width: 10px;
-    margin-right: -5px;
+    left: calc(50% - 32px);
+    width: 8px;
   }
   .mini-dyn-mark-text {
     margin-right: 4px;
@@ -435,7 +677,7 @@
     gap: var(--space-xs) var(--space-m);
     font-size: 13px;
   }
-  /* 카드가 좁아 눈금 숫자를 옆에 둘 자리가 없다. 트랙 위·아래 가운데로 옮긴다 */
+  /* 눈금이 좁아 눈금 숫자를 옆에 둘 자리가 없다. 트랙 위·아래 가운데로 옮긴다 */
   .mini-dyn-scale {
     margin-block: 14px;
   }
@@ -457,8 +699,9 @@
   .mini-dyn-gauge-remark {
     font-size: 12px;
   }
-  .mini-dyn-gauge-status {
-    font-size: 13px;
+  /* 큰 숫자: 가장 센 값(1.3배)의 세 자리 숫자도 화면 폭 안에 들어오게 크기에 상한을 둔다 */
+  .mini-page.mini-stage > .mini-dyn-pop {
+    font-size: clamp(72px, 26vw, 120px);
   }
   /* 폰 폭에서는 첫 칸과 간격을 줄여 「목표 · 차이」 글이 들어갈 자리를 남긴다 */
   .mini-dyn-row {
@@ -476,8 +719,15 @@
   }
 }
 
+/* 모션 줄이기: 숨 쉬는 네온·채움이 자라는 모션·울림·앉는 모션·점의 차례 등장을 뺀다. 채움과 선, 정확도 색은 정보라 그대로 둔다.
+ * 친 순간의 큰 숫자는 화면 코드가 띄우지 않는다 */
 @media (prefers-reduced-motion: reduce) {
-  .mini-dyn-marker {
+  .mini-dyn-gauge.is-current .mini-dyn-track,
+  .mini-dyn-fill,
+  .mini-dyn-marker,
+  .mini-dyn-marker::after,
+  .mini-dyn-gauge-actual.is-landed,
+  .mini-dyn-row-dot {
     animation: none;
   }
 }
