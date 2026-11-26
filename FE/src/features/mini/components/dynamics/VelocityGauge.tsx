@@ -1,6 +1,8 @@
 // 「강약중강약」 한 타의 세로 눈금 카드 (설계 MODE-006-minigame-dynamics-match 4절). 값만 받는다.
 // 감 잡기(1단계)에서는 머리 글자와 친 뒤의 내 타격 표시만, 숫자 맞추기(2단계)에서는 목표 숫자·목표 선·내 세기 표시를 더한다.
-import { LEVEL_LABEL, labeledMarks, shotRemark, type FeelShot } from '@/features/mini/domain/dynamicsRound';
+// 모양(설계 MODE-006-minigame-dynamics-ui): 트랙은 글래스 캡슐이고 친 세기까지 채움이 차오른다. 트랙 밖으로 나가는 선(목표·내 세기·내 타격)은 눈금 영역에 겹친 층에 둔다.
+// 숫자 맞추기에서 친 타에는 정확도 단계(data-grade)를 달아 색을 CSS가 고르게 한다. 감 잡기의 타에는 목표가 없어 단계가 없다.
+import { LEVEL_LABEL, labeledMarks, shotGrade, shotRemark, type FeelShot } from '@/features/mini/domain/dynamicsRound';
 import { velocityRatio, VELOCITY_MAX, VELOCITY_MIN } from '@/features/mini/domain/velocityShot';
 
 interface Props {
@@ -17,15 +19,19 @@ interface Props {
   actual?: number;
   /** 지금 차례에 「지금 칠 차례」 대신 보일 안내 */
   hint?: string;
+  /** 친 순간의 큰 숫자 연출: `waiting`이면 큰 숫자가 떠 있어 아래 숫자를 숨기고, `landed`면 방금 앉아 앉는 모션을 건다 */
+  pop?: 'waiting' | 'landed';
 }
 
-export function VelocityGauge({ index, title, target, marks, state, actual, hint }: Props) {
+export function VelocityGauge({ index, title, target, marks, state, actual, hint, pop }: Props) {
   const done = state === 'done' && actual !== undefined;
+  const grade = done && target !== undefined ? shotGrade(actual - target) : undefined;
+  const actualClass = `mini-dyn-gauge-actual${pop ? ` is-${pop}` : ''}`;
   // 내 세기 값이 서로 붙어 있으면 글자가 겹친다. 떨어진 것만 글자를 단다
   const labeled = marks ? labeledMarks(marks) : [];
 
   return (
-    <li className={`mini-dyn-gauge is-${state}`} data-testid={`mini-dyn-gauge-${index}`} data-state={state}>
+    <li className={`mini-dyn-gauge is-${state}`} data-testid={`mini-dyn-gauge-${index}`} data-state={state} data-grade={grade}>
       <div className="mini-dyn-gauge-head">
         {target === undefined ? (
           <span className="mini-dyn-gauge-level">{title}</span>
@@ -41,6 +47,9 @@ export function VelocityGauge({ index, title, target, marks, state, actual, hint
 
       <div className="mini-dyn-scale" aria-hidden="true">
         <div className="mini-dyn-track">
+          {done ? <div className="mini-dyn-fill" style={{ height: `${velocityRatio(actual) * 100}%` }} /> : null}
+        </div>
+        <div className="mini-dyn-lines">
           {target !== undefined ? <div className="mini-dyn-target-line" style={{ bottom: `${velocityRatio(target) * 100}%` }} /> : null}
           {marks?.map((mark) => (
             <div key={mark.level} className="mini-dyn-mark" style={{ bottom: `${velocityRatio(mark.actual) * 100}%` }}>
@@ -57,14 +66,14 @@ export function VelocityGauge({ index, title, target, marks, state, actual, hint
         {done ? (
           target === undefined ? (
             <div className="mini-dyn-gauge-result">
-              <span className="mini-dyn-gauge-actual" data-testid={`mini-dyn-actual-${index}`}>
+              <span className={actualClass} data-testid={`mini-dyn-actual-${index}`} data-pop-dest={index}>
                 {actual}
               </span>
             </div>
           ) : (
             <>
               <div className="mini-dyn-gauge-result">
-                <span className="mini-dyn-gauge-actual" data-testid={`mini-dyn-actual-${index}`}>
+                <span className={actualClass} data-testid={`mini-dyn-actual-${index}`} data-pop-dest={index}>
                   {actual}
                 </span>
                 <span className="mini-dyn-gauge-target">목표 {target}</span>
