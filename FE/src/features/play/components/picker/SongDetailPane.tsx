@@ -2,6 +2,7 @@
 // 악보 연습·리듬 게임이 같은 모양을 쓴다(설계 MODE-001-MODE-003-picker-quick-start, MODE-001-play-quick-start). 기록 종류는 `quickStart.bestKind`가 정한다.
 // similar가 있으면 맨 아래에 구분선과 「✦ 이 곡과 비슷한 곡」 한 줄 + [이 곡 보기](설계 COACH-004-song-picker-ai-tab 3-3, Figma 666:33647).
 // 스틱 연결 문구는 두지 않는다 — 상단 바 스틱 상태로 충분하다(Figma 11/03).
+// 커버 오른쪽 위에 즐겨찾기 별(설계 MODE-001-MODE-003-song-favorite). 어떤 커버 그림 위에서도 보이게 둥근 반투명 바탕을 깐다. onToggleFavorite가 없으면 그리지 않는다.
 // props만 받는다 — 스토어 구독·채보 조회는 호출자(SongPicker)가 한다.
 import { useEffect, useRef } from 'react';
 import type { Difficulty } from '@/domain/song/chart';
@@ -13,6 +14,7 @@ import { PlayIcon } from '@/components/song/StudioIcons';
 import { Segmented } from '@/components/ui/form/Segmented';
 import { SongCover } from '@/components/song/SongCover';
 import { SongMeta } from '@/features/play/components/picker/SongMeta';
+import { FavoriteButton } from './FavoriteButton';
 import './song-detail.css';
 import { InlineError } from '@/components/ui/feedback/InlineError';
 
@@ -47,6 +49,10 @@ export interface SongDetailPaneProps {
   similar?: RecommendCard;
   /** [이 곡 보기] */
   onSimilarPick?: () => void;
+  /** 선택한 곡이 즐겨찾기인지 */
+  favorite?: boolean;
+  /** 커버 오른쪽 위 별. 없으면 별을 그리지 않는다 */
+  onToggleFavorite?: () => void;
   quickStart: QuickStartProps;
 }
 
@@ -57,6 +63,8 @@ export function SongDetailPane({
   onRetry,
   similar,
   onSimilarPick,
+  favorite = false,
+  onToggleFavorite,
   quickStart,
 }: SongDetailPaneProps) {
   const paneRef = useRef<HTMLElement>(null);
@@ -93,7 +101,10 @@ export function SongDetailPane({
   return (
     <aside ref={paneRef} className="play-sd play-sd-quick" aria-label="선택한 곡">
       <span className="play-sd-caption">선택한 곡</span>
-      <SongCover coverUrl={song.coverUrl} className="play-sd-cover" />
+      <div className="play-sd-coverwrap">
+        <SongCover coverUrl={song.coverUrl} className="play-sd-cover" />
+        {onToggleFavorite && <FavoriteButton size="cover" on={favorite} onToggle={onToggleFavorite} />}
+      </div>
       <div className="play-sd-head">
         <h2 className="play-sd-title">{song.title}</h2>
         <p className="play-sd-artist">{artistLabel(song.artist)}</p>

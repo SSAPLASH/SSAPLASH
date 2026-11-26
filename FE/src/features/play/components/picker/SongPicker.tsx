@@ -14,6 +14,8 @@
 // 리듬 게임에는 학습 코스가 없어 `?tab=lessons`는 기본 곡으로 본다. 주소 값 없이 들어오면 마지막에 본 범위가 아니라 기본 곡에서 시작한다.
 // 리듬 게임은 제목 줄 오른쪽에 「미니게임」 링크를 둔다(설계 MODE-006-minigame-list-ui D1). 범위 줄은 범위 버튼만 가진다.
 // 링크는 사이드바가 펼쳐져 있어도 항상 그린다(접히거나 태블릿 폭이면 하위 메뉴가 안 보여서).
+// 즐겨찾기(설계 MODE-001-MODE-003-song-favorite): 난이도 칩 뒤 구분선 다음의 별 칩이 지금 범위에서 즐겨찾기한 곡만 남긴다(난이도·검색과 함께 적용).
+// 별은 표의 행과 선택한 곡 패널에 있다. 필터를 켠 채 별을 끈 곡은 탭·검색어·난이도·필터를 바꿀 때까지 목록에 남는다.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { filterRecommended, pickSimilar, type RecommendCard } from '@/domain/song/recommendation';
@@ -34,7 +36,10 @@ import { bestAccuracyByChart, bestAccuracyBySong, bestScoreByChart, bestScoreByS
 import { presetDisplayName } from '@/domain/kit/preset';
 import { loadPlayLogs } from '@/engine/playLog';
 import { useBestRecords } from '@/features/play/useBestRecords';
+import { useSongFavorites } from '@/features/play/useSongFavorites';
+import { visibleSongs } from '@/features/play/domain/favoriteFilter';
 import { BestRecordsNotice } from './BestRecordsNotice';
+import { StarIcon } from './FavoriteButton';
 import { useSongs } from '@/store/songStore';
 import { songListQuery } from '@/api/song/songQueries';
 import { useApiQuery } from '@/runtime/useApiQuery';
@@ -48,6 +53,7 @@ import { EmptyState } from '@/components/ui/feedback/EmptyState';
 import { Input } from '@/components/ui/form/Input';
 import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { Segmented } from '@/components/ui/form/Segmented';
+import { Toast } from '@/components/ui/feedback/Toast';
 import { SongTable } from './SongTable';
 import { SongDetailPane } from './SongDetailPane';
 import { LessonCourse } from '@/features/play/components/picker/lesson/LessonCourse';
@@ -70,6 +76,10 @@ const SIMILAR_DELAY_MS = 300;
 const RECOMMEND_SIZE = 10;
 /** 패널은 한 건만 보이지만 선택한 곡이 섞여 와도 남도록 여유 있게 받는다 */
 const SIMILAR_SIZE = 3;
+/** 즐겨찾기 저장 실패 토스트가 보이는 시간 */
+const FAVORITE_TOAST_MS = 3000;
+const FAVORITE_ERROR_TEXT = '즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.';
+const NO_KEPT: ReadonlySet<number> = new Set();
 
 // 제목 아래 설명 줄은 두지 않는다(설계 QA-page-header-dock-fold)
 const COPY: Record<Props['mode'], { title: string }> = {
@@ -103,9 +113,20 @@ function isLocked(tab: PickerTab, song: SongSummary): boolean {
   return tab === 'MINE' && !isPlayableStatus(song.status);
 }
 
-/** 0곡 안내(설계 4-2): 추천 없음 → 난이도로 빈 경우 → 라이브러리 탭 → 기본 곡 탭 순으로 고른다 */
-function emptyCopy(tab: PickerTab, level: LevelFilter, query: string, noRecommend: boolean): { title: string; description?: ReactNode } {
+/** 0곡 안내(설계 4-2): 추천 없음 → 즐겨찾기 필터 → 난이도로 빈 경우 → 라이브러리 탭 → 기본 곡 탭 순으로 고른다 */
+function emptyCopy(
+  tab: PickerTab,
+  level: LevelFilter,
+  query: string,
+  noRecommend: boolean,
+  favoriteOnly: boolean,
+): { title: string; description?: ReactNode } {
   if (noRecommend) return { title: '아직 추천할 곡이 없어요', description: '연주 기록을 모아서 실력에 맞는 곡을 추천해 드릴게요.' };
+  if (favoriteOnly) {
+    if (query.trim()) return { title: '즐겨찾기에 맞는 곡이 없어요', description: '검색어를 바꿔 보세요.' };
+    if (level !== 'ALL') return { title: '이 난이도의 즐겨찾기 곡이 없어요', description: '다른 난이도를 골라 보세요.' };
+    return { title: '아직 즐겨찾기한 곡이 없어요', description: '곡 오른쪽의 ☆을 누르면 여기에 모여요.' };
+  }
   if (level !== 'ALL') return { title: '이 난이도의 곡이 없어요', description: '다른 난이도를 골라 보세요.' };
   if (tab === 'MINE') {
     return {
@@ -163,6 +184,17 @@ export function SongPicker({ onStart, mode, starting }: Props) {
   const isAi = tab === 'RECOMMEND';
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState<LevelFilter>('ALL');
+  // 즐겨찾기한 곡만 보기. 난이도 칩처럼 기억하지 않는다(화면을 열면 꺼져 있다)
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [favoriteToast, setFavoriteToast] = useState<string | null>(null);
+  const showFavoriteError = useCallback(() => setFavoriteToast(FAVORITE_ERROR_TEXT), []);
+  const favorites = useSongFavorites(source, showFavoriteError);
+  // 필터를 켠 채 별을 끈 곡. 조건(filterKey)이 바뀌면 비운 것으로 본다
+  const filterKey = `${tab}|${query}|${level}|${favoriteOnly}`;
+  const [kept, setKept] = useState<{ key: string; ids: ReadonlySet<number> }>({ key: filterKey, ids: NO_KEPT });
+  // 조건이 바뀐 렌더에서 바로 비운다 — 같은 조건으로 돌아와도 되살아나지 않는다
+  if (kept.key !== filterKey) setKept({ key: filterKey, ids: NO_KEPT });
+  const keptIds = kept.key === filterKey ? kept.ids : NO_KEPT;
   // null: 사용자가 아직 고르지 않았다(이때는 `?song=` 딥링크 곡, 없으면 첫 곡이 선택된다).
   // 곡 객체를 기억해 필터로 목록에서 빠져도 패널에 그대로 보인다(U5)
   const [manual, setManual] = useState<SongSummary | null>(null);
@@ -202,7 +234,12 @@ export function SongPicker({ onStart, mode, starting }: Props) {
     [recoEntry, query, level],
   );
   const recoIds = useMemo(() => new Set(recoEntry.status === 'ready' ? recoEntry.cards.map((c) => c.song.id) : []), [recoEntry]);
-  const songs: SongSummary[] = useMemo(() => (isAi ? aiCards.map((c) => c.song) : items), [isAi, aiCards, items]);
+  // 범위·검색·난이도까지 거른 목록. 최고 기록은 이 목록 기준으로 읽어 즐겨찾기 칩을 눌러도 다시 읽지 않는다
+  const scopeSongs: readonly SongSummary[] = useMemo(() => (isAi ? aiCards.map((c) => c.song) : items), [isAi, aiCards, items]);
+  const songs: readonly SongSummary[] = useMemo(
+    () => visibleSongs(scopeSongs, favorites.ids, keptIds, favoriteOnly),
+    [scopeSongs, favorites.ids, keptIds, favoriteOnly],
+  );
   const ready = isAi ? recoEntry.status === 'ready' || recoEntry.status === 'hidden' : status === 'ready';
   const listLoading = isAi ? !ready : status === 'loading';
 
@@ -212,7 +249,7 @@ export function SongPicker({ onStart, mode, starting }: Props) {
     if (source !== 'builtin') return new Map<number, number>();
     return mode === 'play' ? bestScoreByChart(loadPlayLogs(), 'RHYTHM') : bestAccuracyByChart(loadPlayLogs(), 'SHEET');
   }, [mode, source]);
-  const records = useBestRecords(recordsReady ? songs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
+  const records = useBestRecords(recordsReady ? scopeSongs.map((song) => song.id) : [], mode === 'play' ? 'RHYTHM' : 'SHEET', recordsReady, source);
   const bests = source === 'builtin' ? localBests : { scores: records.scoresBySong, accuracies: records.accuraciesBySong };
 
   useEffect(() => {
@@ -234,6 +271,19 @@ export function SongPicker({ onStart, mode, starting }: Props) {
     const t = setTimeout(() => setSentQuery(query), delay);
     return () => clearTimeout(t);
   }, [query]);
+
+  // 즐겨찾기 저장 실패 토스트는 잠깐 보였다 사라진다
+  useEffect(() => {
+    if (favoriteToast === null) return;
+    const t = setTimeout(() => setFavoriteToast(null), FAVORITE_TOAST_MS);
+    return () => clearTimeout(t);
+  }, [favoriteToast]);
+
+  // 필터를 켠 채 별을 끄면 그 행을 남겨 둔다 — 누르는 순간 행이 사라져 아래 곡을 잘못 누르지 않게(D5)
+  const toggleFavorite = (id: number) => {
+    if (favoriteOnly && favorites.ids.has(id)) setKept({ key: filterKey, ids: new Set([...keptIds, id]) });
+    favorites.toggle(id);
+  };
 
   // 다음 진입의 기본 탭을 위해 마지막 목록 탭을 기억한다(기존 동작 유지, 설계 TECH-350 U4)
   useEffect(() => {
@@ -404,12 +454,25 @@ export function SongPicker({ onStart, mode, starting }: Props) {
                 placeholder="곡 제목 또는 아티스트 검색"
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <div className="play-sp-levels" role="group" aria-label="곡 난이도">
-                {LEVEL_OPTIONS.map((o) => (
-                  <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
-                    {o.label}
-                  </Chip>
-                ))}
+              {/* 난이도 칩 · 구분선 · 즐겨찾기 칩은 한 묶음으로 줄바꿈된다 */}
+              <div className="play-sp-chips">
+                <div className="play-sp-levels" role="group" aria-label="곡 난이도">
+                  {LEVEL_OPTIONS.map((o) => (
+                    <Chip key={o.value} selected={level === o.value} onClick={() => setLevel(o.value)}>
+                      {o.label}
+                    </Chip>
+                  ))}
+                </div>
+                <span className="play-sp-chips-sep" aria-hidden="true" />
+                <Chip
+                  className="play-sp-fav"
+                  selected={favoriteOnly}
+                  aria-label="즐겨찾기한 곡만 보기"
+                  title="즐겨찾기한 곡만 보기"
+                  onClick={() => setFavoriteOnly((v) => !v)}
+                >
+                  <StarIcon filled={favoriteOnly} size={18} />
+                </Chip>
               </div>
             </div>
 
@@ -429,8 +492,11 @@ export function SongPicker({ onStart, mode, starting }: Props) {
 
             {ready && (
               <SongTable
-                key={`${tab}|${query}|${level}`}
+                key={filterKey}
                 songs={songs}
+                favoriteIds={favorites.ids}
+                onToggleFavorite={toggleFavorite}
+                countLabel={favoriteOnly ? '즐겨찾기' : undefined}
                 selectedId={selectedId}
                 revealId={deepTarget?.id ?? null}
                 onSelect={pick}
@@ -443,7 +509,7 @@ export function SongPicker({ onStart, mode, starting }: Props) {
                 bestAccuracies={bests.accuracies}
                 isLocked={(s) => isLocked(tab, s)}
                 isRecommended={tab === 'BUILTIN' ? (s) => recoIds.has(s.id) : undefined}
-                emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden')} />}
+                emptyState={<EmptyState {...emptyCopy(tab, level, query, isAi && recoEntry.status === 'hidden', favoriteOnly)} />}
               />
             )}
           </div>
@@ -466,10 +532,13 @@ export function SongPicker({ onStart, mode, starting }: Props) {
               }}
               similar={similarCard}
               onSimilarPick={viewSimilar}
+              favorite={selectedId !== null && favorites.ids.has(selectedId)}
+              onToggleFavorite={() => selectedId !== null && toggleFavorite(selectedId)}
             />
           )}
         </div>
       )}
+      <Toast variant="error" text={favoriteToast} regionClassName="play-sp-toast-region" />
     </div>
   );
 }
