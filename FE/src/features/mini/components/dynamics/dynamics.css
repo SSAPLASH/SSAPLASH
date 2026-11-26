@@ -156,7 +156,7 @@
   transition: opacity var(--motion-fade) var(--ease-out);
 }
 .mini-dyn-gauge {
-  /* 정확도 색: 딱 맞음(오차 5 이하) 연보라 · 가까움(12 이하) 메인 색 · 그 밖은 흰빛. 감 잡기의 타는 단계가 없어 메인 색이다 */
+  /* 정확도 색: 딱 맞음(오차 5 이하) 연보라 · 가까움(12 이하) 메인 색 · 그 밖은 흰빛. 감 잡기의 타는 단계가 없어 세기 색을 쓴다 */
   --dyn-c: var(--mini-accent);
   display: flex;
   flex-direction: column;
@@ -172,6 +172,10 @@
 }
 .mini-dyn-gauge[data-grade='far'] {
   --dyn-c: var(--text-1);
+}
+/* 세기 색(감 잡기): 약하면 흰빛, 셀수록 메인 색. --dyn-v는 친 세기의 비율(0~1)이다. 연보라는 「딱 맞음」에만 쓴다 */
+.mini-dyn-gauge[data-tone='strength'] {
+  --dyn-c: color-mix(in srgb, var(--mini-accent-text) calc(var(--dyn-v, 1) * 100%), var(--text-1));
 }
 .mini-dyn-gauge.is-next {
   opacity: 0.38;
@@ -427,9 +431,10 @@
 
 /* ---- 친 순간의 큰 숫자 (useShotPop) ----
  * 무대 한가운데에서 0부터 친 세기까지 올라간 뒤 그 눈금의 아래 숫자 자리로 날아가 앉는다. 올라가는 값·자리 옮김은 화면 코드가 한다.
- * 세기에 따라 크기(0.5~1.3배)와 진하기(투명도 0.4~1)가 달라진다: 약하면 작고 연하게, 세면 크고 또렷하게. 색은 정확도 색이다 */
+ * 세기에 따라 크기(0.5~1.3배)·진하기(투명도 0.4~1)·색이 달라진다: 약하면 작고 연한 흰빛, 세면 크고 또렷한 메인 색(--pop-v는 올라가는 값의 비율).
+ * 숫자 맞추기에서는 눈금에 앉는 순간 그 타의 정확도 색으로 바뀐다(앉은 숫자가 정확도 색이다) */
 .mini-page.mini-stage > .mini-dyn-pop {
-  --pop-c: var(--mini-accent);
+  --pop-c: color-mix(in srgb, var(--mini-accent-text) calc(var(--pop-v, 0) * 100%), var(--text-1));
   position: absolute;
   left: 50%;
   top: 50%;
@@ -447,12 +452,6 @@
   text-shadow: 0 0 36px color-mix(in srgb, var(--pop-c) 35%, transparent);
   pointer-events: none;
   will-change: transform;
-}
-.mini-page.mini-stage > .mini-dyn-pop[data-grade='perfect'] {
-  --pop-c: var(--mini-peak);
-}
-.mini-page.mini-stage > .mini-dyn-pop[data-grade='far'] {
-  --pop-c: var(--text-1);
 }
 /* 큰 숫자가 올라가는 동안 뒤의 머리 문구와 눈금은 한 걸음 물러난다 */
 .mini-stage.is-popping .mini-dyn-head,

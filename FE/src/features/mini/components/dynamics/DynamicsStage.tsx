@@ -14,7 +14,6 @@ import {
   LEVEL_LABEL,
   MATCH_PROMPT_TAIL,
   feelPrompt,
-  shotGrade,
   type DynamicsStep,
   type FeelShot,
   type MatchShot,
@@ -64,9 +63,6 @@ export function DynamicsStage({ phase, countdown, step, feel, targets, shots, wr
         };
   const { pop, popRef, rising, waiting, landed } = useShotPop(lastShot, rootRef);
   const popState = (i: number) => (waiting === i ? 'waiting' : landed === i ? 'landed' : undefined);
-  // 큰 숫자의 색: 숫자 맞추기는 그 타의 정확도 단계, 감 잡기는 단계가 없어 메인 색이다
-  const popGrade = pop !== null && matching && shots[pop.index] ? shotGrade(shots[pop.index].diff) : undefined;
-
   let gauges: ReactNode;
   let prompt: ReactNode;
   let sub: string | null;
@@ -172,7 +168,7 @@ export function DynamicsStage({ phase, countdown, step, feel, targets, shots, wr
       </div>
 
       {pop !== null ? (
-        <span key={pop.id} ref={popRef} className="mini-dyn-pop" data-grade={popGrade} aria-hidden="true">
+        <span key={pop.id} ref={popRef} className="mini-dyn-pop" aria-hidden="true">
           0
         </span>
       ) : null}

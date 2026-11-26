@@ -1,6 +1,6 @@
 // 「강약중강약」 친 순간의 큰 숫자 연출 (설계 MODE-006-minigame-dynamics-ui D11).
 // 무대 한가운데에서 숫자가 0부터 친 세기까지 올라간 뒤(0.52초) 그 눈금의 아래 숫자 자리로 날아가 앉는다(0.38초).
-// 올라가는 값·크기·진하기는 프레임마다 요소에 바로 쓴다(다시 그리지 않는다). 다음 타를 치면 앞 연출을 끊고 새로 시작한다.
+// 올라가는 값·크기·진하기·세기 색은 프레임마다 요소에 바로 쓴다(다시 그리지 않는다). 색은 세기를 따른다: 약하면 흰빛, 셀수록 메인 색(CSS가 --pop-v로 섞는다). 다음 타를 치면 앞 연출을 끊고 새로 시작한다.
 // 모션 줄이기에서는 하지 않는다 — 친 값은 눈금 아래에 바로 보인다.
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -83,6 +83,7 @@ export function useShotPop(shot: PopShot | null, rootRef: RefObject<HTMLElement 
       el.textContent = String(value);
       el.style.transform = `translate(-50%, -50%) scale(${scale})`;
       el.style.opacity = String(POP_OPACITY_MIN + POP_OPACITY_SPAN * ratio);
+      el.style.setProperty('--pop-v', String(ratio));
       if (k < 1) {
         frame = requestAnimationFrame(up);
         return;

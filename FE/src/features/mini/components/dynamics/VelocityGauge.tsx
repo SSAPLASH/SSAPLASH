@@ -1,7 +1,9 @@
 // 「강약중강약」 한 타의 세로 눈금 카드 (설계 MODE-006-minigame-dynamics-match 4절). 값만 받는다.
 // 감 잡기(1단계)에서는 머리 글자와 친 뒤의 내 타격 표시만, 숫자 맞추기(2단계)에서는 목표 숫자·목표 선·내 세기 표시를 더한다.
 // 모양(설계 MODE-006-minigame-dynamics-ui): 트랙은 글래스 캡슐이고 친 세기까지 채움이 차오른다. 트랙 밖으로 나가는 선(목표·내 세기·내 타격)은 눈금 영역에 겹친 층에 둔다.
-// 숫자 맞추기에서 친 타에는 정확도 단계(data-grade)를 달아 색을 CSS가 고르게 한다. 감 잡기의 타에는 목표가 없어 단계가 없다.
+// 숫자 맞추기에서 친 타에는 정확도 단계(data-grade)를 달아 색을 CSS가 고르게 한다. 감 잡기의 타에는 목표가 없어 단계가 없고,
+// 대신 세기 색(data-tone="strength", --dyn-v)을 쓴다: 약하면 흰빛, 셀수록 메인 색.
+import type { CSSProperties } from 'react';
 import { LEVEL_LABEL, labeledMarks, shotGrade, shotRemark, type FeelShot } from '@/features/mini/domain/dynamicsRound';
 import { velocityRatio, VELOCITY_MAX, VELOCITY_MIN } from '@/features/mini/domain/velocityShot';
 
@@ -26,12 +28,20 @@ interface Props {
 export function VelocityGauge({ index, title, target, marks, state, actual, hint, pop }: Props) {
   const done = state === 'done' && actual !== undefined;
   const grade = done && target !== undefined ? shotGrade(actual - target) : undefined;
+  // 감 잡기에서 친 타: 세기 비율을 CSS에 넘겨 색을 섞게 한다
+  const strength = done && target === undefined;
   const actualClass = `mini-dyn-gauge-actual${pop ? ` is-${pop}` : ''}`;
   // 내 세기 값이 서로 붙어 있으면 글자가 겹친다. 떨어진 것만 글자를 단다
   const labeled = marks ? labeledMarks(marks) : [];
 
   return (
-    <li className={`mini-dyn-gauge is-${state}`} data-testid={`mini-dyn-gauge-${index}`} data-state={state} data-grade={grade}>
+    <li
+      className={`mini-dyn-gauge is-${state}`}
+      data-testid={`mini-dyn-gauge-${index}`} data-state={state}
+      data-grade={grade}
+      data-tone={strength ? 'strength' : undefined}
+      style={strength ? ({ '--dyn-v': velocityRatio(actual) } as CSSProperties) : undefined}
+    >
       <div className="mini-dyn-gauge-head">
         {target === undefined ? (
           <span className="mini-dyn-gauge-level">{title}</span>
