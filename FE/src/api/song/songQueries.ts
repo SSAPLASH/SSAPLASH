@@ -16,6 +16,8 @@ export const songKeys = {
   lists: () => ['songs', 'list'] as const,
   list: (p: SongListParams) =>
     ['songs', 'list', { scope: p.scope, q: p.q?.trim() ?? '', songLevel: p.songLevel ?? null, playableOnly: p.playableOnly === true }] as const,
+  /** 즐겨찾기한 곡 id 목록. remote는 서버 저장 여부(브라우저 저장과 캐시를 나눈다) */
+  favorites: (remote: boolean) => ['songs', 'favorites', remote ? 'remote' : 'local'] as const,
 };
 
 /**
