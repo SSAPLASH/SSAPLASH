@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// StepLadder 렌더 검증: 값만 받는 세로 눈금이라 판(CrescendoRun)을 직접 넣어 계단 선·어두운 영역·끝낸 타격 선의 개수와 위치를 읽는다.
+// StepLadder 렌더 검증: 값만 받는 세로 눈금이라 판(CrescendoRun)을 직접 넣어 계단 선·채움·울림·오른 만큼·끝낸 타격 선의 개수와 위치를 읽는다.
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { StepLadder } from '@/features/mini/components/crescendo/StepLadder';
@@ -16,12 +16,15 @@ const lines = () => screen.queryAllByTestId(/^mini-cres-step-/);
 const pct = (value: string | undefined) => Number.parseFloat(value ?? '');
 
 describe('StepLadder 계단 선', () => {
-  it('계단이 없으면 선도 어두운 영역도 끝낸 타격 선도 없다', () => {
+  it('계단이 없으면 선도 채움도 울림도 오른 만큼도 끝낸 타격 선도 없다', () => {
     render(<StepLadder run={progress([])} />);
     expect(screen.getByTestId('mini-cres-ladder')).toBeTruthy();
     expect(lines()).toHaveLength(0);
-    expect(screen.queryByTestId('mini-cres-floor')).toBeNull();
+    expect(screen.queryByTestId('mini-cres-fill')).toBeNull();
+    expect(screen.queryByTestId('mini-cres-pulse')).toBeNull();
+    expect(screen.queryByTestId('mini-cres-gain')).toBeNull();
     expect(screen.queryByTestId('mini-cres-fall')).toBeNull();
+    expect(document.querySelector('.mini-cres-floor')).toBeNull();
   });
 
   it('계단 수만큼 선이 있고 bottom이 세기의 눈금 비율이다(64 → 50%)', () => {
@@ -49,23 +52,86 @@ describe('StepLadder 계단 선', () => {
   });
 });
 
-describe('StepLadder 어두운 영역', () => {
-  it('진행 중이면 있고 높이가 직전(마지막) 계단과 맞다', () => {
+describe('StepLadder 채움', () => {
+  it('진행 중이면 있고 높이가 마지막 계단과 맞다', () => {
     render(<StepLadder run={progress([30, 42, 55])} />);
-    expect(pct(screen.getByTestId('mini-cres-floor').style.height)).toBeCloseTo(velocityRatio(55) * 100, 5);
+    expect(pct(screen.getByTestId('mini-cres-fill').style.height)).toBeCloseTo(velocityRatio(55) * 100, 5);
   });
 
-  it('계단이 하나여도 그 계단 아래가 어둡다(64 → 50%)', () => {
+  it('계단이 하나여도 그 계단까지 차 있다(64 → 50%)', () => {
     render(<StepLadder run={progress([64])} />);
-    expect(pct(screen.getByTestId('mini-cres-floor').style.height)).toBeCloseTo(50, 5);
+    expect(pct(screen.getByTestId('mini-cres-fill').style.height)).toBeCloseTo(50, 5);
   });
 
-  it('끝난 판(fell·top)에는 없다', () => {
-    const { unmount } = render(<StepLadder run={fell([30, 42], 42)} />);
-    expect(screen.queryByTestId('mini-cres-floor')).toBeNull();
+  it('끝난 판(fell·top)에도 마지막 계단까지 차 있다', () => {
+    const { unmount } = render(<StepLadder run={fell([30, 42], 12)} />);
+    expect(pct(screen.getByTestId('mini-cres-fill').style.height)).toBeCloseTo(velocityRatio(42) * 100, 5);
     unmount();
     render(<StepLadder run={top([30, 127])} />);
-    expect(screen.queryByTestId('mini-cres-floor')).toBeNull();
+    expect(pct(screen.getByTestId('mini-cres-fill').style.height)).toBeCloseTo(100, 5);
+  });
+
+  it('「아래 어두운 영역」은 어느 판에도 없다', () => {
+    render(<StepLadder run={progress([30, 42])} />);
+    expect(document.querySelector('.mini-cres-floor')).toBeNull();
+  });
+});
+
+describe('StepLadder 울림', () => {
+  it('계단이 하나 이상이면 맨 위 선의 높이에 있다', () => {
+    render(<StepLadder run={progress([30, 64])} />);
+    const pulse = screen.getByTestId('mini-cres-pulse');
+    expect(pct(pulse.style.bottom)).toBeCloseTo(50, 5);
+    expect(pulse.className).not.toContain('is-top');
+  });
+
+  it('계단 수가 바뀌면 새 요소가 되고, 같으면 그대로다', () => {
+    const { rerender } = render(<StepLadder run={progress([30])} />);
+    const first = screen.getByTestId('mini-cres-pulse');
+    rerender(<StepLadder run={progress([30])} />);
+    expect(screen.getByTestId('mini-cres-pulse')).toBe(first);
+    rerender(<StepLadder run={progress([30, 42])} />);
+    expect(screen.getByTestId('mini-cres-pulse')).not.toBe(first);
+  });
+
+  it('꼭대기로 끝났으면 is-top이다', () => {
+    render(<StepLadder run={top([30, 127])} />);
+    const pulse = screen.getByTestId('mini-cres-pulse');
+    expect(pulse.className).toContain('is-top');
+    expect(pct(pulse.style.bottom)).toBeCloseTo(100, 5);
+  });
+
+  it('떨어진 판에는 없다', () => {
+    render(<StepLadder run={fell([30, 42], 12)} />);
+    expect(screen.queryByTestId('mini-cres-pulse')).toBeNull();
+  });
+});
+
+describe('StepLadder 오른 만큼', () => {
+  it('계단이 하나뿐이면 없다', () => {
+    render(<StepLadder run={progress([30])} />);
+    expect(screen.queryByTestId('mini-cres-gain')).toBeNull();
+  });
+
+  it('둘 이상이면 「+(마지막 계단 − 그 앞 계단)」이고 맨 위 선의 높이에 있다', () => {
+    render(<StepLadder run={progress([30, 42, 55])} />);
+    const gain = screen.getByTestId('mini-cres-gain');
+    expect(gain.textContent).toBe('+13');
+    expect(pct(gain.style.bottom)).toBeCloseTo(velocityRatio(55) * 100, 5);
+  });
+
+  it('계단을 오르면 새 요소가 되고 값이 바뀐다', () => {
+    const { rerender } = render(<StepLadder run={progress([30, 42])} />);
+    const first = screen.getByTestId('mini-cres-gain');
+    expect(first.textContent).toBe('+12');
+    rerender(<StepLadder run={progress([30, 42, 43])} />);
+    expect(screen.getByTestId('mini-cres-gain')).not.toBe(first);
+    expect(screen.getByTestId('mini-cres-gain').textContent).toBe('+1');
+  });
+
+  it('끝난 판에도 마지막으로 오른 만큼이 남는다', () => {
+    render(<StepLadder run={fell([30, 42], 12)} />);
+    expect(screen.getByTestId('mini-cres-gain').textContent).toBe('+12');
   });
 });
 

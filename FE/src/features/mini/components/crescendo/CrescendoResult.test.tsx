@@ -68,6 +68,20 @@ describe('CrescendoResult 세기 계단 판', () => {
     expect(fillHeight(bars()[1])).toBeCloseTo(100, 5);
   });
 
+  it('막대가 그 계단의 비율(--h)과 순번(--i)을 갖는다', () => {
+    render(<CrescendoResult run={fell([30, 64, 127], 49)} />);
+    const fill = (el: HTMLElement) => el.querySelector<HTMLElement>('.mini-cres-bar-fill');
+    [30, 64, 127].forEach((value, i) => {
+      expect(Number(bars()[i].style.getPropertyValue('--h'))).toBeCloseTo(velocityRatio(value), 5);
+      expect(fill(bars()[i])?.style.getPropertyValue('--i')).toBe(String(i));
+    });
+    expect(Number(bars()[1].style.getPropertyValue('--h'))).toBeCloseTo(0.5, 5);
+    // 끝낸 타격의 막대는 계단 뒤에 자라고 높이 색을 쓰지 않는다
+    const end = screen.getByTestId('mini-cres-bar-fall');
+    expect(fill(end)?.style.getPropertyValue('--i')).toBe('3');
+    expect(end.style.getPropertyValue('--h')).toBe('');
+  });
+
   it('마지막 계단 막대만 is-top이다', () => {
     render(<CrescendoResult run={fell([30, 42, 55], 49)} />);
     expect(screen.getByTestId('mini-cres-bar-2').className).toContain('is-top');
