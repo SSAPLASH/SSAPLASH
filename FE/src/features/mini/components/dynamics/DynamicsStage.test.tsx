@@ -189,6 +189,17 @@ describe('DynamicsStage 모양(정확도·채움·단계 표시)', () => {
     expect(gauge(0).hasAttribute('data-grade')).toBe(false);
   });
 
+  it('감 잡기에서 친 눈금은 세기 색(data-tone)이고 --dyn-v가 친 세기의 비율이다', () => {
+    stage({ feel: [FEEL[0]] });
+    expect(gauge(0).getAttribute('data-tone')).toBe('strength');
+    expect(Number(gauge(0).style.getPropertyValue('--dyn-v'))).toBeCloseTo(velocityRatio(42), 5);
+    expect(gauge(1).hasAttribute('data-tone')).toBe(false);
+    cleanup();
+    // 숫자 맞추기의 타는 정확도 색이라 세기 색을 쓰지 않는다
+    matching({ shots: [match(0, 82)] });
+    expect(gauge(0).hasAttribute('data-tone')).toBe(false);
+  });
+
   it('친 눈금에만 채움이 있고 높이가 친 세기의 비율이다', () => {
     matching({ shots: [match(0, 82)] });
     const fill = gauge(0).querySelector<HTMLElement>('.mini-dyn-track .mini-dyn-fill');
@@ -269,10 +280,12 @@ describe('DynamicsStage 친 순간의 큰 숫자', () => {
     expect(screen.getByTestId('mini-dyn-actual-0').className).toContain('is-waiting');
   });
 
-  it('숫자 맞추기의 큰 숫자는 그 타의 정확도 단계를 받는다', () => {
+  it('큰 숫자는 세기 색이라 숫자 맞추기에서도 정확도 단계를 받지 않는다(앉은 숫자의 눈금이 받는다)', () => {
     const view = matching();
     view.rerender(<DynamicsStage {...props({ step: 'match', feel: FEEL, targets: TARGETS, shots: [match(0, 86)] })} />);
-    expect(pop()?.getAttribute('data-grade')).toBe('perfect');
+    expect(pop()).toBeTruthy();
+    expect(pop()?.hasAttribute('data-grade')).toBe(false);
+    expect(gauge(0).getAttribute('data-grade')).toBe('perfect');
   });
 
   it('다음 타를 치면 앞 연출을 끊고 새 눈금으로 옮긴다', () => {
