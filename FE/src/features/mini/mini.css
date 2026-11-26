@@ -13,6 +13,8 @@
   --mini-accent: var(--mini-c, var(--brand));
   --mini-accent-text: var(--mini-c, var(--brand-text));
   --mini-accent-ink: var(--brand-on);
+  /* 가장 좋은 상태의 색: 연보라. 「누구보다 빠르게」의 달아오름 끝 색과 「강약중강약」의 딱 맞음이 같이 쓴다 */
+  --mini-peak: #b3a3ff;
 }
 
 /* 큰 제목 두 줄·설명 (목록·안내·결과 공통) */
@@ -684,6 +686,46 @@
   flex-direction: column;
   gap: var(--space-l);
   min-height: 0;
+}
+/* 카운트다운(3·2·1)과 친 순간의 큰 숫자처럼 무대 전체에 겹치는 것은 무대 한가운데에 놓는다.
+ * 빛줄기 뒤의 내용을 올리는 아래 규칙(position: relative)보다 앞서도록 선택자를 무대에 묶는다 */
+.mini-page.mini-stage > .play-countdown {
+  position: absolute;
+  z-index: 10;
+}
+/* 플레이 화면의 3·2·1: 글꼴은 공용 Countdown의 굵은 숫자 그대로이고, 숫자마다 또렷하게 나타났다가 1초에 걸쳐
+ * 흰색에서 강조색으로 물들며 사라진다. 숫자 하나의 길이(1초)는 domain/miniFlow의 COUNTDOWN_STEP_MS와 같다.
+ * 자간을 좁힌 만큼 글자가 오른쪽으로 밀리므로 그만큼 여백을 주어 숫자가 정확히 가운데에 온다 */
+.mini-stage .play-countdown-value:not([data-value='go']) {
+  margin-right: 0.05em;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--mini-accent) 30%, transparent);
+  animation:
+    mini-count-fade 1000ms linear both,
+    mini-count-settle var(--motion-move) var(--ease-out) both;
+}
+@keyframes mini-count-fade {
+  0% {
+    opacity: 0;
+    color: var(--text-1);
+  }
+  12% {
+    opacity: 1;
+    color: var(--text-1);
+  }
+  35% {
+    opacity: 1;
+    color: var(--text-1);
+  }
+  100% {
+    opacity: 0;
+    color: var(--mini-accent-text);
+  }
+}
+/* scale 1.08 → 1 (모션 줄이기에서는 시간이 0이라 사라지는 것만 남는다) */
+@keyframes mini-count-settle {
+  from {
+    transform: scale(1.08);
+  }
 }
 /* ---- 게임 화면 공용 재료 (설계 MODE-006-minigame-speed-ui D1·D2) ----
  * 자유 연습·드럼 세팅의 값을 그대로 쓴다: 빛줄기 무대, 알약 버튼, 글래스 세그먼트.
