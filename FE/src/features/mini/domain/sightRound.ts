@@ -23,6 +23,9 @@ export const HOLD_MS = 800;
 export const NOTICE_MS = 1500;
 /** 평균을 반올림하는 단위(D11). 화면에 보이는 자리(초 소수 둘째 자리)와 같다 */
 export const SCORE_STEP_MS = 10;
+/** 속도 단계의 경계(설계 MODE-006-minigame-sight-ui D5). 문제 시간이 이 값 이하면 그 단계다. 초안 값이라 스틱 실기 뒤 상수만 고친다 */
+export const FAST_MS = 600;
+export const GOOD_MS = 1000;
 /** 결과 막대 눈금 끝의 아래·위 한도 */
 export const BAR_MIN_MS = 1000;
 export const BAR_MAX_MS = 2000;
@@ -33,6 +36,9 @@ export type SightHint = 'on' | 'off';
 export type SightStep = 'wait' | 'shown' | 'hold';
 /** 타격 하나를 가린 결과 */
 export type SightVerdict = 'early' | 'correct' | 'wrong' | 'ignore';
+
+/** 속도 단계: 빠름·보통·느림, 그리고 틀렸거나 시간이 다 된 문제 */
+export type SightGrade = 'fast' | 'good' | 'slow' | 'bad';
 
 /** 끝난 문제 하나. `ms`는 벌점을 더하고 상한을 적용한 문제 시간(정수) */
 export interface SightAnswer {
@@ -212,6 +218,16 @@ export function solvedCount(answers: readonly Pick<SightAnswer, 'timedOut'>[]): 
 /** 틀린 타격의 합 */
 export function wrongCount(answers: readonly Pick<SightAnswer, 'wrongs'>[]): number {
   return answers.reduce((sum, answer) => sum + answer.wrongs, 0);
+}
+
+/**
+ * 끝난 문제의 속도 단계. 색은 CSS가 고른다(빠름 연보라 · 보통 메인 색 · 느림 흰빛 · 틀림 빨강).
+ * 시간이 다 됐거나 한 번이라도 틀렸으면 문제 시간과 상관없이 `bad`다(진행 눈금이 가르는 기준과 같다)
+ */
+export function answerGrade(answer: Pick<SightAnswer, 'ms' | 'wrongs' | 'timedOut'>): SightGrade {
+  if (answer.timedOut || answer.wrongs > 0) return 'bad';
+  if (answer.ms <= FAST_MS) return 'fast';
+  return answer.ms <= GOOD_MS ? 'good' : 'slow';
 }
 
 /** 결과 한 줄 평. 시간 초과가 있으면 그것을, 없고 틀린 타격이 있으면 그 횟수를 말한다 */

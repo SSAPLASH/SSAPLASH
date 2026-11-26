@@ -124,13 +124,15 @@ function notePad(): PadId | null {
   return (document.querySelector('.lesson-solo-note')?.getAttribute('data-pad') as PadId | null) ?? null;
 }
 
-/** 칸 하나의 전체 글자(라벨·값·단위·아래 한 줄). 없으면 null */
+/** 칸 하나의 전체 글자(라벨·값·단위·아래 한 줄). 안내의 숫자 칸과 플레이 화면의 값 캡슐을 같이 찾는다. 없으면 null */
 function cell(label: string): string | null {
-  for (const dt of Array.from(document.querySelectorAll('.mini-cell-label'))) {
+  for (const dt of Array.from(document.querySelectorAll('.mini-cell-label, .mini-sight-stat dt'))) {
     if (dt.textContent === label) return dt.parentElement?.textContent ?? null;
   }
   return null;
 }
+/** 플레이 화면 머리 줄의 보조 글(「힌트 끔 · 10문제」) */
+const stageSub = () => screen.getByTestId('mini-sight-sub').textContent;
 
 const rowPads = () => Array.from(document.querySelectorAll('.mini-sight-row-pad')).map((el) => el.textContent);
 
@@ -501,7 +503,6 @@ describe('답하기', () => {
     const average = cell('지금까지 평균');
     expect(average).toContain('0.38');
     expect(average).toContain('초');
-    expect(average).toContain('1문제');
     // 확인 0.8초 뒤 다음 문제의 대기가 시작된다
     expect(count()).toBe('2 / 10');
     advance(799);
@@ -674,19 +675,15 @@ describe('힌트', () => {
     expect(kit().getAttribute('data-lit')).toBe('');
   });
 
-  it('한 판 중에는 힌트 라디오가 둘 다 꺼져 있고 안내에서 고른 값이 선택돼 있다', () => {
+  it('한 판 중에는 힌트를 바꿀 조작이 없고 머리 줄이 안내에서 고른 값을 보인다', () => {
     open();
     fireEvent.click(radio('힌트 끔'));
     clickStart();
     for (const phase of ['countdown', 'playing']) {
-      expect(radio('힌트 끔').disabled).toBe(true);
-      expect(radio('힌트 켬').disabled).toBe(true);
-      expect(radio('힌트 끔').getAttribute('aria-checked')).toBe('true');
-      expect(radio('힌트 켬').getAttribute('aria-checked')).toBe('false');
+      expect(screen.queryByRole('radio')).toBeNull();
+      expect(stageSub()).toBe('힌트 끔 · 10문제');
       if (phase === 'countdown') advance(3000);
     }
-    fireEvent.click(radio('힌트 켬'));
-    expect(radio('힌트 끔').getAttribute('aria-checked')).toBe('true');
     expect(localStorage.getItem(HINT_KEY)).toBe('off');
   });
 });
@@ -734,7 +731,6 @@ describe('한 판의 끝과 결과', () => {
       expect(screen.getByTestId(`mini-sight-row-${i}`).querySelector('.mini-sight-row-time')?.textContent).toBe('0.40초');
     }
     expect(document.querySelector('.mini-sight-bar-penalty')).toBeNull();
-    expect(screen.queryByText('빨간 부분은 틀려서 더해진 0.5초예요.')).toBeNull();
   });
 
   it('틀린 문제가 있으면 횟수 한 줄·벌점 막대·설명이 나온다', () => {
@@ -750,7 +746,7 @@ describe('한 판의 끝과 결과', () => {
     expect(row.querySelector('.mini-sight-row-time')?.textContent).toBe('1.20초');
     expect(screen.getByTestId('mini-sight-row-0').querySelector('.mini-sight-bar-penalty')).toBeNull();
     expect(document.querySelectorAll('.mini-sight-bar-penalty')).toHaveLength(1);
-    expect(screen.getByText('빨간 부분은 틀려서 더해진 0.5초예요.')).toBeTruthy();
+    expect(row.getAttribute('data-grade')).toBe('bad');
   });
 
   it('시간 초과가 있으면 한 줄 평이 그것을 말하고 그 행은 「시간 초과」다', () => {
@@ -938,9 +934,8 @@ describe('[다시 하기]', () => {
     expect(countdownValue()).toBe('3');
     expect(count()).toBe('1 / 10');
     expect(dots().every((s) => s === 'now' || s === 'rest')).toBe(true);
-    expect(cell('지금까지 평균')).toContain('0문제');
-    expect(radio('힌트 끔').getAttribute('aria-checked')).toBe('true');
-    expect(radio('힌트 끔').disabled).toBe(true);
+    expect(cell('지금까지 평균')).toContain('–');
+    expect(stageSub()).toBe('힌트 끔 · 10문제');
     expect(lastActive()).toBe(true);
   });
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// SightResult 검증: 문제별 행(번호·패드·시간)과 막대 두 부분의 너비·시간 초과·설명 줄.
+// SightResult 검증: 문제별 행(번호·패드·시간·속도 단계)과 막대 두 부분의 너비·시간 초과·범례.
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
@@ -16,7 +16,6 @@ function answers(over: Partial<Record<number, Partial<SightAnswer>>> = {}): Sigh
 
 const row = (i: number) => screen.getByTestId(`mini-sight-row-${i}`);
 const width = (el: Element | null) => (el as HTMLElement | null)?.style.width ?? null;
-const NOTE = '빨간 부분은 틀려서 더해진 0.5초예요.';
 
 describe('SightResult', () => {
   it('제목과 열 행이 낸 순서대로 번호·패드 이름·시간을 보인다', () => {
@@ -60,16 +59,21 @@ describe('SightResult', () => {
     expect(row(3).querySelector('.mini-sight-row-time')?.textContent).toBe('0.55초');
   });
 
-  it('틀린 문제가 있을 때만 설명 줄이 나온다', () => {
-    render(<SightResult answers={answers()} />);
-    expect(screen.queryByText(NOTE)).toBeNull();
-    cleanup();
-    render(<SightResult answers={answers({ 7: { wrongs: 1, ms: 950 } })} />);
-    expect(screen.getByText(NOTE)).toBeTruthy();
+  it('행의 속도 단계는 answerGrade와 같고 막대는 순번(--i)을 가진 층 안에 있다', () => {
+    // 400 · 450 · 500 · (틀림) · 600은 fast, 650 · 700 · 750 · 850은 good, 8번은 느림
+    const list = answers({ 3: { ms: 1050, wrongs: 1 }, 8: { ms: 1400 } });
+    render(<SightResult answers={list} />);
+    const grades = list.map((_, i) => row(i).getAttribute('data-grade'));
+    expect(grades).toEqual(['fast', 'fast', 'fast', 'bad', 'fast', 'good', 'good', 'good', 'slow', 'good']);
+    const fill = row(4).querySelector('.mini-sight-row-bar > .mini-sight-row-fill') as HTMLElement | null;
+    expect(fill?.style.getPropertyValue('--i')).toBe('4');
+    expect(fill?.querySelector('.mini-sight-bar-base')).toBeTruthy();
   });
 
-  it('시간 초과만 있고 틀린 타격이 없으면 설명 줄이 없다', () => {
-    render(<SightResult answers={answers({ 1: { ms: 5000, timedOut: true } })} />);
-    expect(screen.queryByText(NOTE)).toBeNull();
+  it('범례 네 칸이 속도 단계와 경계 값을 보인다', () => {
+    render(<SightResult answers={answers()} />);
+    const items = Array.from(document.querySelectorAll('.mini-sight-legend-item'));
+    expect(items.map((el) => el.getAttribute('data-grade'))).toEqual(['fast', 'good', 'slow', 'bad']);
+    expect(items.map((el) => el.textContent)).toEqual(['빠름 0.60초 이하', '보통 1.00초 이하', '느림', '틀려서 더해진 0.5초']);
   });
 });

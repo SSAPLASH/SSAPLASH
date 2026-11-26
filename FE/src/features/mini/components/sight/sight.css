@@ -1,57 +1,88 @@
-/* 「악보 보고 빨리 치기」 플레이 화면과 결과 판. 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다. */
+/* 「악보 보고 빨리 치기」 플레이 화면과 결과 판 (설계 MODE-006-minigame-sight-ui).
+ * 공용 .mini-* 클래스는 mini.css에서 가져다 쓰고 여기서 다시 정의하지 않는다.
+ * 재료는 「누구보다 빠르게」「강약중강약」과 같다: 상자 없는 무대, 글래스 캡슐, 메인 색 네온, 연보라(--mini-peak), 굵은 숫자(800). */
 
-/* ---- 플레이: 위쪽 ---- */
-.mini-sight-top-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  min-width: 0;
+/* ---- 속도 단계 색 ----
+ * 빠름(0.60초 이하, domain/sightRound의 FAST_MS) 연보라 · 보통(1.00초 이하) 메인 색 · 느림 흰빛 · 틀림/시간 초과 빨강.
+ * 단계는 화면이 data-grade로 달고 색은 여기서 고른다 */
+:is(.mini-sight-problem, .mini-sight-dot, .mini-sight-row, .mini-sight-legend-item) {
+  --sight-c: var(--text-1);
+}
+:is(.mini-sight-problem, .mini-sight-dot, .mini-sight-row, .mini-sight-legend-item)[data-grade='fast'] {
+  --sight-c: var(--mini-peak);
+}
+:is(.mini-sight-problem, .mini-sight-dot, .mini-sight-row, .mini-sight-legend-item)[data-grade='good'] {
+  --sight-c: var(--mini-accent-text);
+}
+:is(.mini-sight-problem, .mini-sight-dot, .mini-sight-row, .mini-sight-legend-item)[data-grade='bad'] {
+  --sight-c: var(--miss);
 }
 
-/* ---- 플레이: 진행 점 ---- */
+/* ---- 플레이: 진행 눈금 ----
+ * 문제마다 글래스 캡슐 한 칸. 끝난 칸은 그 문제의 속도 단계 색으로 차고, 지금 칸은 메인 색 네온이 숨 쉰다 */
 .mini-sight-progress {
   display: flex;
   align-items: center;
-  gap: var(--space-s);
+  justify-content: center;
+  gap: var(--space-m);
 }
 .mini-sight-dots {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .mini-sight-dot {
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 30px;
+  height: 8px;
   box-sizing: border-box;
-  border-radius: 50%;
-  background: var(--fill-track);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-float);
+  transition:
+    background-color 320ms ease,
+    border-color 320ms ease,
+    box-shadow 320ms ease;
 }
-.mini-sight-dot.is-ok {
-  background: var(--text-1);
-}
+.mini-sight-dot.is-ok,
 .mini-sight-dot.is-bad {
-  background: var(--miss);
+  border-color: transparent;
+  background: var(--sight-c);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--sight-c) 26%, transparent);
+  animation: mini-sight-dot-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes mini-sight-dot-in {
+  from {
+    transform: scaleX(0.4);
+    opacity: 0.4;
+  }
 }
 .mini-sight-dot.is-now {
-  background: transparent;
-  border: 2px solid var(--brand);
+  border-color: color-mix(in srgb, var(--mini-accent) 60%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--mini-accent) 22%, transparent);
+  animation: mini-sight-breathe-dot 3.6s ease-in-out infinite;
+}
+@keyframes mini-sight-breathe-dot {
+  50% {
+    box-shadow: 0 0 20px color-mix(in srgb, var(--mini-accent) 36%, transparent);
+  }
 }
 .mini-sight-count {
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- 플레이: 두 단 ---- */
+/* ---- 플레이: 두 단(문제 · 드럼). 상자 없이 무대 위에 바로 둔다 ---- */
 .mini-sight-layout {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  gap: var(--space-m);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-xl);
   min-height: 0;
 }
 .mini-sight-problem {
@@ -59,38 +90,196 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-l);
+  gap: var(--space-m);
   min-width: 0;
-  padding: var(--space-l);
-  box-sizing: border-box;
-  background: var(--surface-1);
-  border-radius: var(--radius-panel);
 }
 .mini-sight-message {
   margin: 0;
-  min-height: 1.3em;
+  min-height: 1.2em;
   color: var(--text-1);
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   text-align: center;
+  transition: color var(--motion-fade) var(--ease-out);
 }
 .mini-sight-message.is-bad {
   color: var(--miss);
 }
+/* 맞힘 문구는 초록 대신 그 문제의 속도 단계 색을 쓴다 */
 .mini-sight-message.is-good {
-  color: var(--good);
+  color: var(--sight-c);
 }
+
+/* 오선과 렌즈: 음표가 뜨는 자리에 세로 글래스 캡슐(렌즈)을 둔다. 공용 SoloStaff의 자리 표시 상자는 이 화면에서 숨긴다 */
+.mini-sight-staff {
+  position: relative;
+  width: min(100%, 560px);
+}
+.mini-sight-staff .lesson-read-cursor {
+  display: none;
+}
+.mini-sight-staff .lesson-staff svg {
+  position: relative;
+  color: var(--sight-c);
+  transition: color 240ms ease;
+}
+.mini-sight-staff .lesson-staff-line {
+  stroke: color-mix(in srgb, var(--text-1) 26%, transparent);
+}
+.mini-sight-lens {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 19%;
+  height: 92%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  transition:
+    border-color 240ms ease,
+    box-shadow 320ms ease;
+}
+/* 대기: 렌즈가 메인 색으로 천천히 숨 쉰다. 숨의 길이는 문제 간격과 무관해 음표가 뜰 때를 알려 주지 않는다 */
+.mini-sight-problem[data-step='wait'] .mini-sight-lens {
+  border-color: color-mix(in srgb, var(--mini-accent) 40%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--mini-accent) 14%, transparent);
+  animation: mini-sight-breathe 3.6s ease-in-out infinite;
+}
+@keyframes mini-sight-breathe {
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--mini-accent) 22%, transparent),
+      0 0 38px color-mix(in srgb, var(--mini-accent) 26%, transparent);
+  }
+}
+/* 제시: 렌즈 테두리가 또렷해진다. 음표는 첫 프레임부터 온전히 보인다(투명도 1). 모션은 크기와 빛뿐이다 */
+.mini-sight-problem[data-step='shown'] .mini-sight-lens {
+  border-color: color-mix(in srgb, var(--mini-accent) 80%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mini-accent) 30%, transparent),
+    0 0 34px color-mix(in srgb, var(--mini-accent) 24%, transparent);
+}
+.mini-sight-problem[data-step='shown'] .lesson-solo-note {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mini-sight-note-in 140ms var(--ease-out) both;
+}
+@keyframes mini-sight-note-in {
+  from {
+    transform: scale(1.18);
+  }
+}
+/* 확인: 렌즈와 음표가 그 문제의 속도 단계 색으로 물든다 */
+.mini-sight-problem[data-step='hold'] .mini-sight-lens {
+  border-color: color-mix(in srgb, var(--sight-c) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sight-c) 26%, transparent),
+    0 0 40px color-mix(in srgb, var(--sight-c) 24%, transparent);
+}
+/* 시간 초과: 음표가 흐려진다 */
+.mini-sight-problem[data-timeout] .lesson-solo-note {
+  opacity: 0.45;
+}
+/* 틀림·미리 침: 렌즈가 빨갛게 바뀌고, 틀리면 오선이 좌우로 한 번 흔들린다 */
+.mini-sight-problem[data-notice] .mini-sight-lens {
+  border-color: color-mix(in srgb, var(--miss) 80%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--miss) 30%, transparent),
+    0 0 34px color-mix(in srgb, var(--miss) 22%, transparent);
+  animation: none;
+}
+/* 틀린 동안에는 음표도 빨갛다. 알림이 끝나면 흰빛으로 돌아온다 */
+.mini-sight-problem[data-notice='wrong'] .mini-sight-staff .lesson-staff svg {
+  color: var(--miss);
+}
+.mini-sight-problem[data-notice='wrong'] .mini-sight-staff {
+  animation: mini-sight-shake 320ms var(--ease-out);
+}
+@keyframes mini-sight-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+/* 울림: 음표가 뜰 때와 맞힌 순간 렌즈에서 고리가 한 번 퍼진다. 화면이 순간마다 새 요소로 갈아 끼운다 */
+.mini-sight-ring {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 19%;
+  height: 92%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ring-c, var(--mini-accent));
+  border-radius: 999px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: mini-sight-ripple 520ms var(--ease-out) both;
+}
+.mini-sight-ring.is-hit {
+  --ring-c: var(--sight-c);
+  animation-duration: 640ms;
+}
+/* 빠름: 고리가 한 겹 더 퍼진다 */
+.mini-sight-problem[data-grade='fast'] .mini-sight-ring.is-hit::after {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border: 1.5px solid var(--ring-c);
+  border-radius: inherit;
+  animation: mini-sight-ripple-in 640ms 90ms var(--ease-out) both;
+}
+@keyframes mini-sight-ripple {
+  0% {
+    opacity: 0.9;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.5, 1.22);
+  }
+}
+@keyframes mini-sight-ripple-in {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4, 1.16);
+  }
+}
+
 .mini-sight-hint {
   margin: 0;
   min-height: 1.4em;
   color: var(--text-2);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.4;
   text-align: center;
 }
 
-/* 큰 숫자 */
+/* 큰 숫자: 굵은 숫자(800). 흐르는 동안은 흰빛이고 멈추면 속도 단계 색이 된다 */
+.mini-sight-clock-wrap {
+  position: relative;
+}
 .mini-sight-clock {
   display: flex;
   align-items: baseline;
@@ -100,68 +289,159 @@
   color: var(--text-1);
 }
 .mini-sight-clock-value {
-  font-family: var(--font-num);
-  font-size: 64px;
-  font-weight: 700;
-  line-height: 1.1;
+  font-family: var(--font);
+  font-size: 88px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
 .mini-sight-clock-unit {
   color: var(--text-2);
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 500;
 }
 .mini-sight-clock.is-idle {
-  opacity: 0.4;
+  opacity: 0.28;
+}
+.mini-sight-clock.is-frozen .mini-sight-clock-value {
+  color: var(--sight-c);
+  text-shadow: 0 0 32px color-mix(in srgb, var(--sight-c) 30%, transparent);
+  animation: mini-sight-clock-land 260ms var(--ease-out) both;
+}
+@keyframes mini-sight-clock-land {
+  from {
+    transform: scale(1.12);
+  }
+}
+/* 벌점: 틀릴 때마다 「+0.5」가 숫자 옆에서 떠올랐다가 사라진다 */
+.mini-sight-penalty {
+  position: absolute;
+  left: 100%;
+  top: 8px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--miss) 16%, transparent);
+  color: var(--miss);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  animation: mini-sight-penalty 1100ms var(--ease-out) both;
+}
+@keyframes mini-sight-penalty {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 
-/* ---- 플레이: 오른쪽 ---- */
+/* ---- 플레이: 드럼. 판 없이 무대 위에 둔다 ---- */
 .mini-sight-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-m);
-  min-width: 0;
-}
-.mini-sight-kit-panel {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-m);
   min-width: 0;
-  padding: var(--space-l) var(--space-m);
-  box-sizing: border-box;
-  background: var(--surface-1);
-  border-radius: var(--radius-panel);
 }
 .mini-sight-kit {
-  width: min(100%, 420px);
+  width: min(100%, 480px);
   min-width: 0;
   margin: 0 auto;
 }
-.mini-sight-kit-note {
+
+/* ---- 플레이: 지금까지의 값(글래스 캡슐 한 줄)과 아래 안내 ---- */
+.mini-sight-stats {
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-xs) var(--space-m);
+  margin: 0;
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.mini-sight-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.mini-sight-stat dt {
+  color: var(--text-3);
+}
+.mini-sight-stat dd {
+  margin: 0;
+}
+.mini-sight-stat strong {
+  color: var(--text-1);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.mini-sight-note {
   margin: 0;
   color: var(--text-3);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   text-align: center;
 }
 
 /* ---- 결과: 문제별 막대 ---- */
+.mini-sight-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-m);
+  margin-top: calc(var(--space-s) * -1);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.mini-sight-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mini-sight-legend-item::before {
+  content: '';
+  width: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sight-c);
+}
 .mini-sight-rows {
   display: grid;
   grid-auto-flow: column;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(5, auto);
   column-gap: var(--space-xl);
-  row-gap: var(--space-s);
+  row-gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .mini-sight-row {
   display: grid;
-  grid-template-columns: 24px 64px minmax(0, 1fr) 72px;
+  grid-template-columns: 24px 64px minmax(0, 1fr) 84px;
   align-items: center;
   gap: var(--space-s);
   min-width: 0;
@@ -180,54 +460,69 @@
 }
 .mini-sight-row-bar {
   display: flex;
-  height: 10px;
+  height: 8px;
   overflow: hidden;
-  background: var(--fill-track);
-  border-radius: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-1) 8%, transparent);
+}
+/* 막대는 왼쪽부터 차례로 자란다(--i는 행 순번) */
+.mini-sight-row-fill {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  animation: mini-sight-bar-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(120ms + var(--i, 0) * 45ms);
+}
+@keyframes mini-sight-bar-in {
+  from {
+    transform: scaleX(0);
+  }
 }
 .mini-sight-bar-base {
   flex: none;
   height: 100%;
-  background: var(--brand);
+  border-radius: 999px;
+  background: var(--sight-c);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sight-c) 30%, transparent);
+}
+/* 틀린 문제의 걸린 시간은 흐린 흰빛, 벌점은 빨간 끝 */
+.mini-sight-row[data-grade='bad'] .mini-sight-bar-base {
+  border-radius: 999px 0 0 999px;
+  background: color-mix(in srgb, var(--text-1) 46%, transparent);
+  box-shadow: none;
 }
 .mini-sight-bar-penalty {
   flex: none;
   height: 100%;
+  border-radius: 0 999px 999px 0;
   background: var(--miss);
 }
 .mini-sight-row-time {
-  color: var(--text-1);
-  font-family: var(--font-num);
+  color: var(--sight-c);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.mini-sight-row-time.is-bad {
-  color: var(--miss);
-}
-.mini-sight-result-note {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 13px;
-  line-height: 1.4;
+.mini-sight-row-time small {
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 /* ---- 반응형 ---- */
 @media (max-width: 1024px) {
   .mini-sight-layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-l);
   }
-  .mini-sight-problem {
-    padding: var(--space-xl) var(--space-l);
-  }
-}
-@media (min-width: 640px) and (max-width: 1024px) {
-  .mini-sight-side {
-    flex-direction: row;
-    align-items: stretch;
-  }
-  .mini-sight-side > * {
-    flex: 1 1 0;
+  .mini-sight-kit {
+    width: min(100%, 380px);
   }
 }
 @media (max-width: 720px) {
@@ -238,29 +533,53 @@
   }
 }
 @media (max-width: 560px) {
-  /* 이름·힌트 전환·[그만하기]가 한 줄에 안 들어간다. 조작을 아랫줄 오른쪽으로 내린다 */
-  .mini-sight-top-actions {
-    gap: var(--space-xs);
-    margin-left: auto;
-  }
   .mini-sight-dots {
-    gap: 6px;
+    gap: 4px;
   }
-  .mini-sight-problem {
-    gap: var(--space-m);
-    padding: var(--space-l) var(--space-s);
+  .mini-sight-dot {
+    width: 20px;
+    height: 6px;
   }
   .mini-sight-message {
-    font-size: 20px;
+    font-size: 22px;
   }
   .mini-sight-clock-value {
-    font-size: 48px;
+    font-size: 60px;
   }
-  .mini-sight-kit-panel {
-    padding: var(--space-m) var(--space-s);
+  .mini-sight-clock-unit {
+    font-size: 18px;
+  }
+  /* 숫자 옆에 자리가 없어 벌점을 숫자 위로 올린다 */
+  .mini-sight-penalty {
+    left: auto;
+    right: 0;
+    top: -22px;
+    margin-left: 0;
+  }
+  .mini-sight-kit {
+    width: min(100%, 300px);
   }
   .mini-sight-row {
-    grid-template-columns: 20px 56px minmax(0, 1fr) 64px;
+    grid-template-columns: 20px 56px minmax(0, 1fr) 72px;
     gap: var(--space-xs);
+  }
+}
+
+/* ---- 모션 줄이기: 숨·울림·흔들림·등장 모션을 뺀다. 색과 값은 그대로 보인다 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .mini-sight-dot,
+  .mini-sight-problem .mini-sight-lens,
+  .mini-sight-problem .lesson-solo-note,
+  .mini-sight-problem .mini-sight-staff,
+  .mini-sight-clock.is-frozen .mini-sight-clock-value,
+  .mini-sight-row-fill {
+    animation: none;
+  }
+  .mini-sight-ring {
+    display: none;
+  }
+  .mini-sight-penalty {
+    animation: none;
+    opacity: 1;
   }
 }
