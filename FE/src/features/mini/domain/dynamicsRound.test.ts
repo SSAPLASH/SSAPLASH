@@ -18,7 +18,9 @@ import {
   MATCH_PROMPT_TAIL,
   matchScore,
   NEAR_DIFF,
+  PERFECT_DIFF,
   roundRemark,
+  shotGrade,
   shotRemark,
   worstShot,
 } from './dynamicsRound';
@@ -47,6 +49,7 @@ describe('상수', () => {
   it('값이 설계와 같다', () => {
     expect(DYNAMICS_SHOTS).toBe(3);
     expect(NEAR_DIFF).toBe(12);
+    expect(PERFECT_DIFF).toBe(5);
     expect(DYNAMICS_CLOSING_MS).toBe(1200);
   });
 
@@ -351,6 +354,27 @@ describe('shotRemark', () => {
   it('스타일을 생략하면 sentence', () => {
     expect(shotRemark(-6)).toBe('6 약했어요');
     expect(shotRemark(0)).toBe('딱 맞았어요');
+  });
+});
+
+describe('shotGrade', () => {
+  it('차이가 5 이하면 perfect다(방향은 보지 않는다)', () => {
+    expect(shotGrade(0)).toBe('perfect');
+    expect(shotGrade(5)).toBe('perfect');
+    expect(shotGrade(-5)).toBe('perfect');
+  });
+
+  it('5를 넘고 12 이하면 near다', () => {
+    expect(shotGrade(6)).toBe('near');
+    expect(shotGrade(-6)).toBe('near');
+    expect(shotGrade(12)).toBe('near');
+    expect(shotGrade(-12)).toBe('near');
+  });
+
+  it('12를 넘으면 far다', () => {
+    expect(shotGrade(13)).toBe('far');
+    expect(shotGrade(-13)).toBe('far');
+    expect(shotGrade(100)).toBe('far');
   });
 });
 
