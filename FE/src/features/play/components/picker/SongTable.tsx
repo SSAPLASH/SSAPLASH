@@ -2,12 +2,14 @@
 // 행 클릭 = 선택, 더블클릭·Enter = 준비. 위·아래 키로 행 이동. 한 페이지 6곡, 쪽 번호는 ui/Pagination(10개 묶음). 곡 로딩은 호출자가 한다(props만 받는다).
 // 추천 곡(isRecommended)은 제목 옆에 「✦ AI 추천」 라벨을 붙인다 — 제목만 말줄임하고 라벨은 줄이지 않는다(Figma SongRow `AI 추천 라벨`, 설계 COACH-004-song-picker-ai-tab 3-3).
 // 곡이 없으면 머리글과 아래 줄(「총 0곡」)은 두고 본문 자리 가운데에 emptyState를 그린다(Figma 666:33746).
+// 즐겨찾기(설계 MODE-001-MODE-003-song-favorite): favoriteIds·onToggleFavorite를 받으면 맨 오른쪽에 별 열이 붙는다. 선택 행의 별만 Tab 순서에 들고, 행에 포커스가 있을 때 F 키로도 바꾼다.
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { artistLabel, songLevelLabel, songStatusView, type SongSummary } from '@/domain/song/songCatalog';
 import { formatDuration } from '@/domain/time/formatTime';
 import { formatAccuracy } from '@/engine/playLog';
 import { SongCover } from '@/components/song/SongCover';
 import { Pagination } from '@/components/ui/layout/Pagination';
+import { FavoriteButton } from './FavoriteButton';
 import '@/components/ui/layout/table.css';
 import './song-table.css';
 
@@ -80,7 +82,7 @@ const COLUMNS_BY_MODE = {
 };
 
 interface Props {
-  songs: SongSummary[];
+  songs: readonly SongSummary[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   /** 더블클릭·Enter */
@@ -99,10 +101,31 @@ interface Props {
   emptyState?: ReactNode;
   /** 처음 보일 때 이 곡이 있는 쪽을 연다(주소로 골라 둔 곡: 다시 하기·추천·세팅 복귀). 사용자가 쪽을 넘기면 더 따르지 않는다 */
   revealId?: number | null;
+  /** 즐겨찾기한 곡 id. onToggleFavorite와 함께 받으면 맨 오른쪽에 별 열을 그린다 */
+  favoriteIds?: ReadonlySet<number>;
+  onToggleFavorite?: (id: number) => void;
+  /** 아래 줄 곡 수 앞말(「{countLabel} N곡」). 기본 「총」 */
+  countLabel?: string;
 }
 
-export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', bestScores, bestAccuracies, isLocked, isRecommended, emptyState, revealId = null }: Props) {
+export function SongTable({
+  songs,
+  selectedId,
+  onSelect,
+  onOpen,
+  mode = 'play',
+  bestScores,
+  bestAccuracies,
+  isLocked,
+  isRecommended,
+  emptyState,
+  revealId = null,
+  favoriteIds,
+  onToggleFavorite,
+  countLabel = '총',
+}: Props) {
   const columns = COLUMNS_BY_MODE[mode];
+  const favorites = favoriteIds !== undefined && onToggleFavorite !== undefined ? { ids: favoriteIds, toggle: onToggleFavorite } : null;
   const bests = mode === 'sheet' ? bestAccuracies : bestScores;
   // null = 아직 쪽을 넘기지 않음. 그동안은 revealId 곡이 있는 쪽(없으면 첫 쪽)을 보인다
   const [rawPage, setPage] = useState<number | null>(null);
@@ -157,12 +180,13 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
                 {c.header}
               </th>
             ))}
+            {favorites && <th scope="col" className="play-st-fav" aria-label="즐겨찾기" />}
           </tr>
         </thead>
         <tbody ref={bodyRef} onKeyDown={onKeyDown}>
           {songs.length === 0 && (
             <tr className="play-st-empty">
-              <td colSpan={columns.length}>{emptyState}</td>
+              <td colSpan={columns.length + (favorites ? 1 : 0)}>{emptyState}</td>
             </tr>
           )}
           {rows.map((song) => {
@@ -179,9 +203,14 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
                 onClick={() => !isLock && onSelect(song.id)}
                 onDoubleClick={() => !isLock && onOpen(song.id)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !isLock && e.target === e.currentTarget) {
+                  if (isLock || e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter') {
                     e.preventDefault();
                     onOpen(song.id);
+                  } else if (favorites && e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    // 한글 자판에서도 같은 자리 키로 동작하게 글자(key)가 아니라 자리(code)를 본다
+                    e.preventDefault();
+                    favorites.toggle(song.id);
                   }
                 }}
               >
@@ -190,13 +219,26 @@ export function SongTable({ songs, selectedId, onSelect, onOpen, mode = 'play', 
                     {c.render(song, { best: bests?.get(song.id), locked: isLock, recommended: isRecommended?.(song) ?? false })}
                   </td>
                 ))}
+                {favorites && (
+                  <td className="play-st-fav">
+                    {!isLock && (
+                      <FavoriteButton
+                        on={favorites.ids.has(song.id)}
+                        onToggle={() => favorites.toggle(song.id)}
+                        tabIndex={song.id === tabStopId ? 0 : -1}
+                      />
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}
         </tbody>
       </table>
       <div className="play-st-foot">
-        <span className="play-st-total">총 {songs.length}곡</span>
+        <span className="play-st-total">
+          {countLabel} {songs.length}곡
+        </span>
         <Pagination page={page} pageCount={pageCount} onChange={setPage} label="곡 목록 쪽" />
       </div>
     </div>

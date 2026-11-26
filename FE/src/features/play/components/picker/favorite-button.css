@@ -1,0 +1,71 @@
+/* 곡 즐겨찾기 별 (설계 MODE-001-MODE-003-song-favorite). 꺼짐은 빈 별·흐린 글자색, 켜짐은 채운 별·브랜드색 */
+.play-fav {
+  min-height: 0; /* 전역 button { min-height: 44px }을 풀고 크기는 아래 값으로 정한다 */
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast),
+    background-color var(--motion-fast);
+}
+.play-fav-row {
+  width: 36px;
+  height: 36px;
+}
+/* 커버 위 별: 오른쪽 위 8px 안쪽, 지름 36 원. 커버 그림과 겹쳐도 보이게 반투명 바탕과 테두리를 둔다 */
+.play-fav-cover {
+  position: absolute;
+  top: var(--space-s);
+  right: var(--space-s);
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-float);
+  color: var(--text-1);
+}
+.play-fav-cover:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
+}
+.play-fav-cover.on {
+  border-color: var(--brand-tint-line);
+}
+.play-fav:hover {
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+  color: var(--text-1);
+}
+.play-fav.on,
+.play-fav.on:hover {
+  color: var(--brand-text);
+}
+.play-fav-icon {
+  display: block;
+}
+.play-fav.pop .play-fav-icon {
+  animation: play-fav-pop 160ms ease-out;
+}
+@keyframes play-fav-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* 모션 줄이기: 색만 바뀐다 */
+@media (prefers-reduced-motion: reduce) {
+  .play-fav.pop .play-fav-icon {
+    animation: none;
+  }
+}
