@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// SightStage·ProblemDots 렌더 검증: 값만 받는 화면이라 props를 바꿔 가며 음표·이름·문구·칸·점을 읽는다.
+// SightStage·ProblemDots 렌더 검증: 값만 받는 화면이라 props를 바꿔 가며 음표·이름·문구·값 캡슐·눈금과 문제 영역의 속성(단계·속도 단계·알림)을 읽는다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PAD_META, type PadId } from '@/domain/kit/pads';
@@ -46,12 +46,11 @@ const staffLabel = () => document.querySelector('.lesson-solo-staff svg')?.getAt
 const kit = () => screen.getByTestId('kit');
 const dots = () => Array.from(document.querySelectorAll('.mini-sight-dot')).map((el) => el.getAttribute('data-state'));
 
-function cell(label: string): string | null {
-  for (const dt of Array.from(document.querySelectorAll('.mini-cell-label'))) {
-    if (dt.textContent === label) return dt.parentElement?.textContent ?? null;
-  }
-  return null;
-}
+const problem = () => screen.getByTestId('mini-sight-problem');
+const average = () => screen.getByTestId('mini-sight-average').textContent;
+const wrongs = () => screen.getByTestId('mini-sight-wrongs').textContent;
+const ring = () => document.querySelector('.mini-sight-ring');
+const penalty = () => document.querySelector('.mini-sight-penalty');
 
 describe('SightStage 카운트다운', () => {
   it('숫자 오버레이가 보이고 음표는 없고 문구는 「음표가 뜨면 바로 치세요.」다', () => {
@@ -160,44 +159,38 @@ describe('SightStage 문제 단계', () => {
   });
 });
 
-describe('SightStage 옆 칸', () => {
-  it('답이 없으면 평균은 「–」, 0문제, 틀림 0번', () => {
+describe('SightStage 값 캡슐', () => {
+  it('답이 없으면 평균은 「–」, 틀림 0', () => {
     stage();
-    const average = cell('지금까지 평균');
-    expect(average).toContain('–');
-    expect(average).toContain('0문제');
-    expect(average).not.toContain('초');
-    expect(cell('틀림')).toContain('0번');
+    expect(average()).toBe('–');
+    expect(wrongs()).toBe('0');
   });
 
-  it('평균은 끝난 문제의 평균(10ms 단위)과 문제 수를 보인다', () => {
+  it('평균은 끝난 문제의 평균(10ms 단위)이다', () => {
     stage({ answers: [ok('SNARE', 300), ok('KICK', 400), ok('RIDE', 504)], step: 'wait' });
-    const average = cell('지금까지 평균');
     // (300 + 400 + 504) / 3 = 401.3 → 400
-    expect(average).toContain('0.40');
-    expect(average).toContain('초');
-    expect(average).toContain('3문제');
+    expect(average()).toBe('0.40초');
   });
 
   it('틀림은 끝난 문제의 틀림과 지금 문제의 틀림을 더한다', () => {
     const answers: SightAnswer[] = [{ pad: 'SNARE', ms: 900, wrongs: 2, timedOut: false }, ok('KICK')];
     stage({ answers, step: 'shown', wrongs: 1 });
-    expect(cell('틀림')).toContain('3번');
+    expect(wrongs()).toBe('3');
   });
 
   it('확인 중에는 지금 문제의 틀림을 또 더하지 않는다', () => {
     const answers: SightAnswer[] = [{ pad: 'SNARE', ms: 900, wrongs: 2, timedOut: false }];
     stage({ answers, step: 'hold', wrongs: 2 });
-    expect(cell('틀림')).toContain('2번');
+    expect(wrongs()).toBe('2');
   });
 
   it('대기 중에는 끝난 문제의 틀림만 보인다', () => {
     stage({ answers: [{ pad: 'SNARE', ms: 900, wrongs: 2, timedOut: false }], step: 'wait', wrongs: 0 });
-    expect(cell('틀림')).toContain('2번');
+    expect(wrongs()).toBe('2');
   });
 });
 
-describe('SightStage 조작', () => {
+describe('SightStage 무대', () => {
   it('[그만하기]가 onQuit을 부른다', () => {
     const onQuit = vi.fn();
     stage({ onQuit });
@@ -205,24 +198,135 @@ describe('SightStage 조작', () => {
     expect(onQuit).toHaveBeenCalledTimes(1);
   });
 
-  it('힌트 라디오는 둘 다 꺼져 있고 선택은 hint를 따른다', () => {
+  it('머리 줄 보조 글이 힌트를 따르고 누를 수 없는 힌트 조작은 없다', () => {
     stage({ hint: 'off' });
-    const on = screen.getByRole('radio', { name: '힌트 켬' }) as HTMLButtonElement;
-    const off = screen.getByRole('radio', { name: '힌트 끔' }) as HTMLButtonElement;
-    expect(on.disabled).toBe(true);
-    expect(off.disabled).toBe(true);
-    expect(on.getAttribute('aria-checked')).toBe('false');
-    expect(off.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('mini-sight-sub').textContent).toBe('힌트 끔 · 10문제');
+    expect(screen.queryByRole('radio')).toBeNull();
     cleanup();
     stage({ hint: 'on' });
-    expect(screen.getByRole('radio', { name: '힌트 켬' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: '힌트 끔' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByTestId('mini-sight-sub').textContent).toBe('힌트 켬 · 10문제');
   });
 
-  it('힌트 라디오를 눌러도 선택이 바뀌지 않는다', () => {
-    stage({ hint: 'on' });
-    fireEvent.click(screen.getByRole('radio', { name: '힌트 끔' }));
-    expect(screen.getByRole('radio', { name: '힌트 켬' }).getAttribute('aria-checked')).toBe('true');
+  it('빛줄기는 카운트다운 동안 꺼져 있고 플레이에서 켜진다', () => {
+    stage({ phase: 'countdown', countdown: 3 });
+    expect(document.querySelector('.free-lights')?.className).not.toContain('is-on');
+    cleanup();
+    stage();
+    expect(document.querySelector('.free-lights')?.className).toContain('is-on');
+  });
+
+  it('카운트다운은 본문이 아니라 무대 바로 아래에 겹친다(무대 한가운데)', () => {
+    stage({ phase: 'countdown', countdown: 3 });
+    expect(document.querySelector('.mini-stage > .play-countdown')).toBeTruthy();
+  });
+
+  it('렌즈는 오선 틀 안에 있고 낭독기에서 숨긴다', () => {
+    stage();
+    const lens = document.querySelector('.mini-sight-staff > .mini-sight-lens');
+    expect(lens?.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector('.mini-sight-staff .lesson-solo-staff')).toBeTruthy();
+  });
+});
+
+describe('SightStage 문제 영역의 속성', () => {
+  it('data-step은 카운트다운 idle, 그 밖에는 문제 상태다', () => {
+    stage({ phase: 'countdown', countdown: 3, step: 'shown' });
+    expect(problem().getAttribute('data-step')).toBe('idle');
+    for (const step of ['wait', 'shown'] as const) {
+      cleanup();
+      stage({ step });
+      expect(problem().getAttribute('data-step')).toBe(step);
+    }
+    cleanup();
+    stage({ step: 'hold', answers: [ok('SNARE')] });
+    expect(problem().getAttribute('data-step')).toBe('hold');
+  });
+
+  it('확인 중에만 방금 문제의 속도 단계가 붙는다', () => {
+    stage({ step: 'shown' });
+    expect(problem().hasAttribute('data-grade')).toBe(false);
+    const cases: [SightAnswer, string][] = [
+      [ok('SNARE', 480), 'fast'],
+      [ok('SNARE', 820), 'good'],
+      [ok('SNARE', 1340), 'slow'],
+      [{ pad: 'SNARE', ms: 900, wrongs: 1, timedOut: false }, 'bad'],
+    ];
+    for (const [answer, grade] of cases) {
+      cleanup();
+      stage({ step: 'hold', answers: [answer] });
+      expect(problem().getAttribute('data-grade')).toBe(grade);
+    }
+    // 다음 문제의 대기로 넘어가면 떼어 낸다
+    cleanup();
+    stage({ step: 'wait', answers: [ok('SNARE', 480)] });
+    expect(problem().hasAttribute('data-grade')).toBe(false);
+  });
+
+  it('시간 초과는 bad이고 시간 초과 표시가 붙으며 고리가 없다', () => {
+    stage({ step: 'hold', answers: [{ pad: 'SNARE', ms: 5000, wrongs: 0, timedOut: true }] });
+    expect(problem().getAttribute('data-grade')).toBe('bad');
+    expect(problem().hasAttribute('data-timeout')).toBe(true);
+    expect(ring()).toBeNull();
+    cleanup();
+    stage({ step: 'hold', answers: [ok('SNARE')] });
+    expect(problem().hasAttribute('data-timeout')).toBe(false);
+  });
+
+  it('알림 속성은 대기 중의 early와 제시 중의 wrong에만 붙는다', () => {
+    stage({ step: 'wait', notice: 'early' });
+    expect(problem().getAttribute('data-notice')).toBe('early');
+    cleanup();
+    stage({ step: 'shown', notice: 'wrong', wrongs: 1 });
+    expect(problem().getAttribute('data-notice')).toBe('wrong');
+    cleanup();
+    // 맞힌 뒤에 남은 틀림 알림은 확인·대기에서 보이지 않는다
+    stage({ step: 'hold', notice: 'wrong', answers: [{ pad: 'SNARE', ms: 900, wrongs: 1, timedOut: false }] });
+    expect(problem().hasAttribute('data-notice')).toBe(false);
+    cleanup();
+    stage({ step: 'wait', notice: 'wrong' });
+    expect(problem().hasAttribute('data-notice')).toBe(false);
+    cleanup();
+    stage({ step: 'wait' });
+    expect(problem().hasAttribute('data-notice')).toBe(false);
+  });
+});
+
+describe('SightStage 울림 고리와 벌점', () => {
+  const base: StageProps = { phase: 'playing', countdown: null, hint: 'on', total: 10, answers: [], step: 'shown', pad: 'SNARE', shownAt: null, wrongs: 0, notice: null, onQuit: () => undefined };
+
+  it('대기에는 고리가 없고, 음표가 뜨면 생기며, 맞히면 is-hit 고리로 바뀐다', () => {
+    const view = stage({ step: 'wait' });
+    expect(ring()).toBeNull();
+    view.rerender(<SightStage {...base} />);
+    const shown = ring();
+    expect(shown).toBeTruthy();
+    expect(shown?.classList.contains('is-hit')).toBe(false);
+    expect(shown?.getAttribute('aria-hidden')).toBe('true');
+    // 틀려도 같은 고리다(다시 재생하지 않는다)
+    view.rerender(<SightStage {...base} wrongs={1} notice="wrong" />);
+    expect(ring()).toBe(shown);
+    view.rerender(<SightStage {...base} step="hold" answers={[ok('SNARE')]} />);
+    expect(ring()).not.toBe(shown);
+    expect(ring()?.classList.contains('is-hit')).toBe(true);
+  });
+
+  it('카운트다운 중에는 제시 단계의 값이 들어와도 고리가 없다', () => {
+    stage({ phase: 'countdown', countdown: 2, step: 'shown', pad: 'RIDE' });
+    expect(ring()).toBeNull();
+  });
+
+  it('벌점 표시는 제시 중 틀린 횟수가 있을 때만 있고, 틀릴 때마다 새 요소다', () => {
+    const view = render(<SightStage {...base} />);
+    expect(penalty()).toBeNull();
+    view.rerender(<SightStage {...base} wrongs={1} notice="wrong" />);
+    const first = penalty();
+    expect(first?.textContent).toBe('+0.5');
+    expect(first?.getAttribute('aria-hidden')).toBe('true');
+    view.rerender(<SightStage {...base} wrongs={2} notice="wrong" />);
+    expect(penalty()).not.toBe(first);
+    // 맞히면 사라진다
+    view.rerender(<SightStage {...base} step="hold" wrongs={2} answers={[{ pad: 'SNARE', ms: 1900, wrongs: 2, timedOut: false }]} />);
+    expect(penalty()).toBeNull();
   });
 });
 
@@ -232,9 +336,9 @@ describe('ProblemDots', () => {
       <ProblemDots
         total={10}
         answers={[
-          { wrongs: 0, timedOut: false },
-          { wrongs: 2, timedOut: false },
-          { wrongs: 0, timedOut: true },
+          { ms: 400, wrongs: 0, timedOut: false },
+          { ms: 1900, wrongs: 2, timedOut: false },
+          { ms: 5000, wrongs: 0, timedOut: true },
         ]}
       />,
     );
@@ -250,9 +354,25 @@ describe('ProblemDots', () => {
   });
 
   it('열 문제를 다 냈으면 「10 / 10」이고 now가 없다', () => {
-    render(<ProblemDots total={10} answers={Array.from({ length: 10 }, () => ({ wrongs: 0, timedOut: false }))} />);
+    render(<ProblemDots total={10} answers={Array.from({ length: 10 }, () => ({ ms: 400, wrongs: 0, timedOut: false }))} />);
     expect(dots()).toEqual(Array(10).fill('ok'));
     expect(screen.getByTestId('mini-sight-count').textContent).toBe('10 / 10');
+  });
+
+  it('끝난 칸에만 속도 단계가 붙는다', () => {
+    render(
+      <ProblemDots
+        total={6}
+        answers={[
+          { ms: 480, wrongs: 0, timedOut: false },
+          { ms: 820, wrongs: 0, timedOut: false },
+          { ms: 1340, wrongs: 0, timedOut: false },
+          { ms: 700, wrongs: 1, timedOut: false },
+        ]}
+      />,
+    );
+    const grades = Array.from(document.querySelectorAll('.mini-sight-dot')).map((el) => el.getAttribute('data-grade'));
+    expect(grades).toEqual(['fast', 'good', 'slow', 'bad', null, null]);
   });
 
   it('점은 낭독기에서 숨기고 total만큼 그린다', () => {

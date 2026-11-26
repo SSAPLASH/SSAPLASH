@@ -4,6 +4,8 @@ import {
   BAR_MAX_MS,
   BAR_MIN_MS,
   EARLY_GUARD_MS,
+  FAST_MS,
+  GOOD_MS,
   HOLD_MS,
   NOTICE_MS,
   PROBLEM_LIMIT_MS,
@@ -14,6 +16,7 @@ import {
   WAIT_MAX_MS,
   WAIT_MIN_MS,
   WRONG_PENALTY_MS,
+  answerGrade,
   averageMs,
   barParts,
   barScaleMs,
@@ -370,6 +373,26 @@ describe('solvedCount·wrongCount', () => {
   it('틀린 타격의 합', () => {
     expect(wrongCount(list)).toBe(3);
     expect(wrongCount([])).toBe(0);
+  });
+});
+
+describe('answerGrade', () => {
+  const ok = (ms: number) => ({ ms, wrongs: 0, timedOut: false });
+
+  it('경계 값: 0.60초 이하 fast, 1.00초 이하 good, 그 밖 slow', () => {
+    expect(FAST_MS).toBe(600);
+    expect(GOOD_MS).toBe(1000);
+    expect(answerGrade(ok(0))).toBe('fast');
+    expect(answerGrade(ok(FAST_MS))).toBe('fast');
+    expect(answerGrade(ok(FAST_MS + 1))).toBe('good');
+    expect(answerGrade(ok(GOOD_MS))).toBe('good');
+    expect(answerGrade(ok(GOOD_MS + 1))).toBe('slow');
+    expect(answerGrade(ok(PROBLEM_LIMIT_MS))).toBe('slow');
+  });
+
+  it('한 번이라도 틀렸거나 시간이 다 됐으면 문제 시간과 상관없이 bad', () => {
+    expect(answerGrade({ ms: 300, wrongs: 1, timedOut: false })).toBe('bad');
+    expect(answerGrade({ ms: PROBLEM_LIMIT_MS, wrongs: 0, timedOut: true })).toBe('bad');
   });
 });
 
