@@ -17,6 +17,8 @@ export const MATCH_MIN_SPAN = 45;
 export const MATCH_ZONE_INNER = 0.6;
 /** 한 줄 평에서 「조금」과 「많이」를 가르는 차이 */
 export const NEAR_DIFF = 12;
+/** 이 값 이하의 차이는 「딱 맞음」으로 본다(설계 MODE-006-minigame-dynamics-ui D4). 스틱 실기 뒤 이 상수만 고친다 */
+export const PERFECT_DIFF = 5;
 /** 눈금 옆 내 세기 글자(약·중·강)끼리 이만큼은 떨어져야 글자를 다 보인다. 더 붙으면 겹치므로 뒤의 글자를 뺀다 */
 export const MARK_LABEL_GAP = 12;
 /** 마지막 타 뒤 결과로 넘어가기까지 */
@@ -159,6 +161,16 @@ export function worstShot<T extends Pick<MatchShot, 'diff'>>(shots: readonly T[]
     if (worst === null || Math.abs(shot.diff) > Math.abs(worst.diff)) worst = shot;
   }
   return worst;
+}
+
+/** 숫자 맞추기 한 타의 정확도 단계. 화면이 이 값으로 색을 고른다: 딱 맞음(연보라) · 가까움(메인 색) · 그 밖(흰빛) */
+export type ShotGrade = 'perfect' | 'near' | 'far';
+
+/** 차이(친 값 − 목표) → 정확도 단계. 절댓값이 5 이하면 `perfect`, 12 이하면 `near`, 그 밖은 `far` */
+export function shotGrade(diff: number): ShotGrade {
+  const amount = Math.abs(diff);
+  if (amount <= PERFECT_DIFF) return 'perfect';
+  return amount <= NEAR_DIFF ? 'near' : 'far';
 }
 
 /** 타격 차이 문구. `sentence`는 플레이 화면(「6 약했어요」), `short`는 결과 행(「6 약함」) */
