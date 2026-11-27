@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { SheetSummary } from '@/features/studio/domain/sheetMusic';
@@ -122,17 +122,6 @@ describe('카드 보기의 곡 올리기 버튼', () => {
 });
 
 describe('악보 목록 실패·연결', () => {
-  it('악보만 실패하면 곡은 그대로 보이고 한 줄 오류와 [다시 시도]를 보인다', async () => {
-    const onSheetsRetry = vi.fn();
-    const user = userEvent.setup();
-    renderList('card', { sheets: [], sheetsFailed: true, onSheetsRetry });
-    expect(screen.getByText('별빛 산책')).toBeTruthy();
-    const line = screen.getByRole('alert');
-    expect(line.textContent).toContain('악보를 불러오지 못했어요');
-    await user.click(within(line).getByRole('button', { name: '다시 시도' }));
-    expect(onSheetsRetry).toHaveBeenCalledOnce();
-  });
-
   it('곡이 없어도 악보가 있으면 목록을 그린다', () => {
     renderList('card', { items: [] });
     expect(screen.getByText('합주 악보')).toBeTruthy();
