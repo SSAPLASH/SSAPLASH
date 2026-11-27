@@ -16,6 +16,7 @@ import { SheetTitleDialog } from '@/features/studio/components/sheet/SheetTitleD
 import { useFreeAccompaniment } from '@/components/song/useFreeAccompaniment';
 import { useShell } from '@/components/shell/nav/useShell';
 import { Button } from '@/components/ui/action/Button';
+import { InlineError } from '@/components/ui/feedback/InlineError';
 import { PageHeader } from '@/components/ui/layout/PageHeader';
 import { Segmented } from '@/components/ui/form/Segmented';
 import { MySongList, type StudioView } from '@/features/studio/components/songs/MySongList';
@@ -537,6 +538,12 @@ export function StudioPage() {
       <div className="studio-body">
         <div className="studio-main-col">
           <div className="studio-toolbar">
+            {/* 악보 목록만 읽지 못했으면 곡은 그대로 두고 보기 전환과 같은 줄 왼쪽에 한 줄로 알린다. 곡 목록이 아직 없거나 실패했으면 그 화면이 대신한다 */}
+            {sheetsStatus === 'error' && status === 'ready' && (
+              <InlineError plain className="studio-sheet-loadfail" onRetry={() => void loadSheets()}>
+                악보를 불러오지 못했어요
+              </InlineError>
+            )}
             <Segmented<StudioView>
               label="보기 방식"
               value={view}
@@ -562,8 +569,6 @@ export function StudioPage() {
             onEdit={openEdit}
             onCoverError={onCoverError}
             sheets={sheets}
-            sheetsFailed={sheetsStatus === 'error'}
-            onSheetsRetry={() => void loadSheets()}
             onSheetMenu={onSheetMenu}
             onSheetCoverError={() => void loadSheets()}
             onSongSheet={onSongSheet}

@@ -755,8 +755,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 보기 전환 줄 왼쪽에 놓인다(줄 높이는 툴바가 맞춘다) */
 .studio-sheet-loadfail {
-  margin: 0 0 var(--space-m);
   font-size: 14px;
 }
 

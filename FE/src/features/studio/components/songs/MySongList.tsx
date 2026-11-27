@@ -14,7 +14,6 @@ import type { SheetMenuKind } from '@/features/studio/components/sheet/SheetMenu
 import type { SongEditKind, SongSheetKind } from './SongMenu';
 import '@/features/studio/components/studio.css';
 import { ErrorState } from '@/components/ui/feedback/ErrorState';
-import { InlineError } from '@/components/ui/feedback/InlineError';
 
 /** 내 곡 보기 모드 */
 export type StudioView = 'card' | 'list';
@@ -38,9 +37,6 @@ interface Props {
   onCoverError?: () => void;
   /** 악보 목록. 없으면 곡만 그린다 */
   sheets?: SheetSummary[];
-  /** 악보 목록만 읽지 못했다. 곡은 그대로 두고 목록 위에 한 줄을 보인다 */
-  sheetsFailed?: boolean;
-  onSheetsRetry?: () => void;
   /** 악보 썸네일을 불러오지 못했을 때(서명 URL 만료). 악보 목록을 다시 읽는다 */
   onSheetCoverError?: () => void;
   /** 악보 항목 ⋯ 메뉴 선택 */
@@ -91,8 +87,6 @@ export function MySongList({
   onEdit,
   onCoverError,
   sheets,
-  sheetsFailed = false,
-  onSheetsRetry,
   onSheetMenu,
   onSheetCoverError,
   onSongSheet,
@@ -128,19 +122,10 @@ export function MySongList({
   }
 
   const merged = active && !items.some((s) => s.id === active.songId) ? [tempSong(active), ...items] : items;
-  const sheetsLine = sheetsFailed ? (
-    <InlineError plain className="studio-sheet-loadfail" onRetry={onSheetsRetry}>
-      악보를 불러오지 못했어요
-    </InlineError>
-  ) : null;
+  // 악보 목록만 실패한 줄은 보기 전환 줄(StudioPage의 studio-toolbar)에 있다
   if (merged.length === 0 && (sheets?.length ?? 0) === 0) {
-    if (!empty) return sheetsLine;
-    return (
-      <>
-        {sheetsLine}
-        <LibraryEmpty view={view} sheetsEnabled={sheets !== undefined} />
-      </>
-    );
+    if (!empty) return null;
+    return <LibraryEmpty view={view} sheetsEnabled={sheets !== undefined} />;
   }
   const sorted = sortMineSongs(merged);
   // 진행 단계를 아는 활성 작업은 ActiveJobCard 한 줄로 맨 위에 두고, 목록에서는 뺀다
@@ -151,7 +136,6 @@ export function MySongList({
 
   return (
     <>
-      {sheetsLine}
       {jobShown && <ActiveJobCard job={active} progress={progress} />}
       {entries.length > 0 &&
         (view === 'card' ? (
