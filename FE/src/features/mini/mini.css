@@ -96,10 +96,6 @@
   gap: var(--space-m);
   padding-bottom: var(--space-s);
 }
-/* 큰 제목의 둘째 줄은 한 단계 낮춘다(목록에서만) */
-.mini-list .mini-headline > span:last-child {
-  color: var(--text-2);
-}
 .mini-list-body {
   display: flex;
   flex-direction: column;
@@ -139,8 +135,8 @@
   flex-direction: column;
   gap: var(--space-m);
   min-width: 0;
-  min-height: 280px;
-  padding: 20px 12px 20px 20px;
+  min-height: 240px;
+  padding: 18px 12px 18px 20px;
   box-sizing: border-box;
 }
 .mini-hero-tag {
@@ -168,21 +164,26 @@
 .mini-hero-rule {
   margin: 0;
   color: var(--mini-ink-2);
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.5;
 }
 .mini-hero-art {
   margin-top: auto;
-  padding-top: var(--space-m);
+  padding-top: var(--space-s);
+}
+/* 큰 카드의 그림은 높이를 낮춰 카드 높이를 줄인다(가로는 비율대로 따라간다) */
+.mini-hero-art > .mini-art {
+  width: auto;
+  height: 92px;
 }
 /* 오른쪽 칸. 모서리 = 바깥 모서리(34) − 안쪽 여백(12) */
 .mini-hero-side {
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-m);
   min-width: 0;
-  padding: var(--space-l);
+  padding: 16px var(--space-l);
   box-sizing: border-box;
   background: color-mix(in srgb, var(--mini-ink) 8%, transparent);
   border-radius: 22px;
@@ -195,19 +196,23 @@
 .mini-hero-label {
   margin: 0;
   color: var(--mini-ink-2);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
 }
 .mini-hero-desc {
   margin: 0;
-  font-size: 17px;
+  /* 게임을 바꿔도 큰 카드 높이가 그대로이도록 설명 두 줄 자리를 늘 잡아 둔다 */
+  min-height: calc(2em * 1.55);
+  font-size: 19px;
   line-height: 1.55;
   word-break: keep-all;
 }
+/* 기록 줄도 가장 많은 게임(두 줄) 자리를 늘 잡아 둔다. 한 줄 = 위아래 여백 12 + 값 41 + 선 1 */
 .mini-hero-rows {
   display: flex;
   flex-direction: column;
+  min-height: calc(2 * (12px + 41px + 1px));
   margin: 0;
 }
 .mini-hero-row {
@@ -217,14 +222,14 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 12px;
-  padding: 10px 0;
+  padding: 6px 0;
   border-top: 1px solid color-mix(in srgb, var(--mini-ink) 16%, transparent);
 }
 .mini-hero-row-label {
   min-width: 0;
   word-break: keep-all;
   color: var(--mini-ink-2);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.4;
 }
 .mini-hero-row-value {
@@ -245,13 +250,13 @@
 .mini-hero-unit {
   color: var(--mini-ink-2);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 500;
   letter-spacing: 0;
 }
 .mini-hero-empty {
   color: var(--mini-ink-2);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 41px;
 }
 /* [시작]: 공용 Button의 모양은 그대로 두고 이 자리에서만 캡슐·잉크 면으로 바꾼다(D11) */

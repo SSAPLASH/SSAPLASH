@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // 라이브러리 빈 화면(설계 QA-studio-empty-state): 곡·악보가 없으면 본문 업로드 양식 없이 같은 틀에 빈 안내만, 항목이 생기면 사라진다
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -129,5 +129,22 @@ describe('라이브러리 목록 캐시 (설계 TECH-351)', () => {
     expect(screen.getByText(HINT)).toBeTruthy();
     expect(listAllSongs).toHaveBeenCalledTimes(1);
     expect(listSheets).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('악보 목록만 실패', () => {
+  it('곡은 그대로 두고 [카드|목록]과 같은 줄에 한 줄 오류와 [다시 시도]를 보인다', async () => {
+    vi.mocked(listAllSongs).mockResolvedValue([song]);
+    vi.mocked(listSheets).mockRejectedValueOnce(new Error('boom')).mockResolvedValue({ items: [sheet], hasNext: false });
+    const user = userEvent.setup();
+    renderPage();
+    expect(await screen.findByText('별빛 산책')).toBeTruthy();
+    const line = await screen.findByRole('alert');
+    expect(line.textContent).toContain('악보를 불러오지 못했어요');
+    // 보기 전환 줄 안에 있다
+    expect(line.closest('.studio-toolbar')?.querySelector('[role="radiogroup"]')).toBeTruthy();
+    await user.click(within(line).getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('합주 악보')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

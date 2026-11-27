@@ -181,7 +181,7 @@ describe('미니게임 목록: 구성', () => {
 
   it('큰 제목 두 줄과 설명 한 줄이 그대로 보인다', () => {
     open();
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('가볍게 한 판.기록은 진지하게.');
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('가볍게 한 판?');
     expect(screen.getByText('한 판에 30초면 충분해요. 혼자 기록을 깨거나, 친구와 번갈아 겨뤄 보세요.')).toBeTruthy();
   });
 
