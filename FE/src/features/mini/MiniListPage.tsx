@@ -66,10 +66,7 @@ export function MiniListPage() {
         ← 리듬 게임
       </Link>
       <header className="mini-list-head">
-        <h2 className="mini-headline">
-          <span>가볍게 한 판.</span>
-          <span>기록은 진지하게.</span>
-        </h2>
+        <h2 className="mini-headline">가볍게 한 판?</h2>
         <p className="mini-lede">한 판에 30초면 충분해요. 혼자 기록을 깨거나, 친구와 번갈아 겨뤄 보세요.</p>
       </header>
       <div className="mini-list-body">
